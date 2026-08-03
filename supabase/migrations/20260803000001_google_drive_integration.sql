@@ -175,9 +175,9 @@ select cron.schedule(
   '0 20 1 * *',
   $$
   select net.http_post(
-    url     := 'https://<project-ref>.supabase.co/functions/v1/export-monthly-data',
+    url     := 'https://jywydhtiorslayghcycf.supabase.co/functions/v1/export-monthly-data',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer <anon-key>',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5d3lkaHRpb3JzbGF5Z2hjeWNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NjU1OTMsImV4cCI6MjEwMDE0MTU5M30.3i5bfXiXJhf3mDRUn0D2NUuB_7sGYjwYCxWA6UlXxpI',
       'Content-Type',  'application/json'
     ),
     body    := '{}'::jsonb
@@ -191,9 +191,9 @@ select cron.schedule(
   '30 20 1 * *',
   $$
   select net.http_post(
-    url     := 'https://<project-ref>.supabase.co/functions/v1/export-attendance-reports',
+    url     := 'https://jywydhtioreyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5d3lkaHRpb3JzbGF5Z2hjeWNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NjU1OTMsImV4cCI6MjEwMDE0MTU5M30.3i5bfXiXJhf3mDRUn0D2NUuB_7sGYjwYCxWA6UlXxpI.supabase.co/functions/v1/export-attendance-reports',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer <anon-key>',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5d3lkaHRpb3JzbGF5Z2hjeWNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NjU1OTMsImV4cCI6MjEwMDE0MTU5M30.3i5bfXiXJhf3mDRUn0D2NUuB_7sGYjwYCxWA6UlXxpI',
       'Content-Type',  'application/json'
     ),
     body    := '{}'::jsonb
@@ -207,9 +207,9 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url     := 'https://<project-ref>.supabase.co/functions/v1/process-pending-uploads',
+    url     := 'https://jywydhtiorslayghcycf.supabase.co/functions/v1/process-pending-uploads',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer <anon-key>',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5d3lkaHRpb3JzbGF5Z2hjeWNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NjU1OTMsImV4cCI6MjEwMDE0MTU5M30.3i5bfXiXJhf3mDRUn0D2NUuB_7sGYjwYCxWA6UlXxpI',
       'Content-Type',  'application/json'
     ),
     body    := '{}'::jsonb
