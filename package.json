@@ -1,0 +1,12 @@
+{
+  "name": "repairshop-workspace",
+  "private": true,
+  "workspaces": [
+    "admin-panel",
+    "RepairShopApp",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "supabase": "^2.109.1"
+  }
+}
