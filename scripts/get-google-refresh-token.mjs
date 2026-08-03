@@ -102,7 +102,7 @@ const server = http.createServer(async (req, res) => {
   server.close();
 });
 
-server.listen(9876, () => {
+server.listen(9876, async () => {
   // Optionally auto-open if the 'open' package is available
   try {
     const { default: open } = await import('open');
