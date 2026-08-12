@@ -60,6 +60,7 @@ export interface Attendance {
   approved_by?: string | null;
 }
 
+/** @deprecated Legacy flat-table type. Use InventoryWithProduct for new code. */
 export interface InventoryItem {
   id: string;
   item_name: string;
@@ -68,6 +69,108 @@ export interface InventoryItem {
   unit?: string | null;
   low_stock_threshold: number;
   last_updated: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// New normalized schema types (Phase 1 migration)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type TaxMode   = 'inclusive' | 'exclusive';
+export type TaxRegime = 'intra_state' | 'inter_state' | 'legacy';
+export type InvoiceStatus = 'draft' | 'paid' | 'cancelled';
+export type PaymentMethod = 'Cash' | 'Card' | 'UPI' | 'Bank Transfer' | 'Other';
+
+/** mirrors public.products */
+export interface Product {
+  id: string;
+  name: string;
+  sku?: string | null;
+  hsn_sac?: string | null;
+  unit: string;
+  cgst_rate: number;
+  sgst_rate: number;
+  igst_rate: number;
+  tax_mode: TaxMode;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** mirrors public.inventory (new normalized table) */
+export interface InventoryRow {
+  id: string;
+  product_id: string;
+  quantity_cached: number;
+  purchase_rate: number;
+  selling_rate: number;
+  low_stock_threshold: number;
+  minimum_stock_level: number;
+  location?: string | null;
+  last_updated: string;
+}
+
+/** Flattened JOIN of inventory + products — used in all admin list/form UIs */
+export interface InventoryWithProduct {
+  // inventory fields
+  id: string;            // inventory.id
+  product_id: string;
+  quantity_cached: number;
+  purchase_rate: number;
+  selling_rate: number;
+  low_stock_threshold: number;
+  minimum_stock_level: number;
+  location?: string | null;
+  last_updated: string;
+  // products fields (joined)
+  products: Product;
+}
+
+/** mirrors public.invoice_items */
+export interface InvoiceItem {
+  id: string;
+  invoice_id: string;
+  product_id?: string | null;
+  item_name: string;
+  quantity: number;
+  selling_rate: number;
+  taxable_amount: number;
+  cgst_rate: number;
+  cgst_amount: number;
+  sgst_rate: number;
+  sgst_amount: number;
+  igst_rate: number;
+  igst_amount: number;
+  discount_amount: number;
+  line_total: number;
+}
+
+/** mirrors public.invoices */
+export interface Invoice {
+  id: string;
+  invoice_code: string;
+  customer_name: string;
+  customer_contact?: string | null;
+  customer_email?: string | null;
+  customer_gstin?: string | null;
+  tax_regime: TaxRegime;
+  subtotal: number;
+  total_cgst: number;
+  total_sgst: number;
+  total_igst: number;
+  total_tax: number;
+  discount: number;
+  round_off: number;
+  grand_total: number;
+  payment_method?: PaymentMethod | null;
+  status: InvoiceStatus;
+  notes?: string | null;
+  job_id?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  paid_at?: string | null;
+  // optional join
+  invoice_items?: InvoiceItem[];
+  created_by_user?: { name: string } | null;
 }
 
 export interface JobTypeCatalogItem {

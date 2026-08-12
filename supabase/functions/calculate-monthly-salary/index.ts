@@ -156,6 +156,9 @@ serve(async (req: Request) => {
     const absent_day_deduction        = rates?.absent_day_deduction > 0 ? rates.absent_day_deduction : (monthly_salary > 0 ? Math.round(monthly_salary / 30) : 0);
     const allowed_leave_days          = rates?.allowed_leave_days ?? 2;
     const ot_rate_per_hour            = rates?.ot_rate_per_hour ?? 0;
+    const halfday_deduction_rate      = rates?.halfday_deduction ?? 80;
+    const penalty_tier1_amount        = rates?.penalty_tier1_amount ?? 30;
+    const penalty_tier2_amount        = rates?.penalty_tier2_amount ?? 60;
 
     // ── 6. Fetch holidays ────────────────────────────────────────────────────
     const { data: holidaysRows } = await adminClient
@@ -206,7 +209,7 @@ serve(async (req: Request) => {
         const lateMinutes       = Math.max(0, checkInMinsIST - preferred_checkin_mins);
 
         if (lateMinutes > 0) {
-          late_penalty_today = lateMinutes <= 60 ? 30 : 60;
+          late_penalty_today = lateMinutes <= 60 ? penalty_tier1_amount : penalty_tier2_amount;
         }
       }
 
@@ -217,7 +220,7 @@ serve(async (req: Request) => {
         const earlyMinutes      = Math.max(0, preferred_checkout_mins - checkOutMinsIST);
 
         if (earlyMinutes > 0) {
-          early_penalty_today = earlyMinutes <= 60 ? 30 : 60;
+          early_penalty_today = earlyMinutes <= 60 ? penalty_tier1_amount : penalty_tier2_amount;
         }
         
         // Overtime only counts past 19:00
@@ -228,8 +231,9 @@ serve(async (req: Request) => {
         }
       }
 
-      // Combine and cap at 60 max per day
-      const daily_penalty = Math.min(late_penalty_today + early_penalty_today, 60);
+      // Combine and cap at max penalty_tier2_amount per day
+      const max_daily_penalty = penalty_tier2_amount;
+      const daily_penalty = Math.min(late_penalty_today + early_penalty_today, max_daily_penalty);
 
       // Distribute proportionally if capped, to track late vs early separately for the breakdown
       const raw_sum = late_penalty_today + early_penalty_today;
@@ -264,7 +268,7 @@ serve(async (req: Request) => {
     const leave_deduction    = chargeable_leaves  * absent_day_deduction;
 
     // ── 9. Half-day deduction ────────────────────────────────────────────────
-    const halfday_deduction_total = halfday_count * 80;
+    const halfday_deduction_total = halfday_count * halfday_deduction_rate;
 
     // ── 10. OT pay ────────────────────────────────────────────────────────────
     const ot_pay = ot_hours * ot_rate_per_hour;

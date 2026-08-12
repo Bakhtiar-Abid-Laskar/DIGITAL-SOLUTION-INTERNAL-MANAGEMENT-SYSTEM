@@ -8,5 +8,8 @@
   ],
   "devDependencies": {
     "supabase": "^2.109.1"
+  },
+  "dependencies": {
+    "next": "^16.2.12"
   }
 }

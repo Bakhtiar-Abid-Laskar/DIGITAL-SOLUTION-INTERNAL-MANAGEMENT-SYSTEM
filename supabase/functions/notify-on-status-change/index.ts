@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
+import { sendPushNotification } from '../_shared/notifications.ts'
 
 declare const Deno: any;
 
@@ -9,7 +10,7 @@ serve(async (req: Request) => {
 
   try {
     const signature = req.headers.get('webhook-signature')
-    const webhookSecret = Deno.env.get('SUPABASE_WEBHOOK_SECRET')
+    const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET')
     
     if (!signature || !webhookSecret || signature !== webhookSecret) {
       return new Response(JSON.stringify({ error: 'Unauthorized: Invalid webhook signature' }), {
@@ -34,91 +35,79 @@ serve(async (req: Request) => {
       const newJob = payload.record
       const oldJob = payload.old_record
       
-      // Only proceed if status actually changed
-      if (newJob.status === oldJob.status) {
-        return new Response(JSON.stringify({ message: 'Status unchanged' }), {
+      const statusChanged = newJob.status !== oldJob.status
+      const techChanged = newJob.technician_id !== oldJob.technician_id
+
+      if (!statusChanged && !techChanged) {
+        return new Response(JSON.stringify({ message: 'No relevant fields changed' }), {
           headers: { 'Content-Type': 'application/json' },
           status: 200,
         })
       }
 
-      console.log(`Job ${newJob.job_code} status changed: ${oldJob.status} -> ${newJob.status}`)
-
-      // 1. Notify Receptionists & Admins
-      const { data: staffUsers } = await supabase
-        .from('users')
-        .select('id, expo_push_token, role')
-        .in('role', ['admin', 'receptionist'])
-        .not('expo_push_token', 'is', null)
-
-      if (staffUsers && staffUsers.length > 0) {
-        const pushMessages = staffUsers.map((user: any) => ({
-          to: user.expo_push_token,
-          sound: 'default',
-          title: `Job Status Update`,
-          body: `Job ${newJob.job_code} is now ${newJob.status}.`,
-          data: { screen: 'JobDetail', jobId: newJob.id },
-        }))
-
-        // Send push notifications in parallel
-        await Promise.all(pushMessages.map(async (msg: any) => {
-          try {
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-              body: JSON.stringify(msg),
-            })
-          } catch (e) {
-            console.error('Failed to send push:', e)
-          }
-        }))
-
-        // We can just log one summary row for the group notification, or one per user
-        // Let's log one general record for receptionist update
-        await supabase.from('notifications').insert({
-          job_id: newJob.id,
-          channel: 'push',
-          message: `Job ${newJob.job_code} status updated to ${newJob.status}`,
-          status: 'sent',
-          sent_at: new Date().toISOString()
-        })
-      }
-
-      // 2. Notify Customer if Completed
-      if (newJob.status === 'Completed') {
-        const twilioSid = Deno.env.get('TWILIO_SID')
-        const twilioToken = Deno.env.get('TWILIO_TOKEN')
-        const twilioFrom = Deno.env.get('TWILIO_WHATSAPP_FROM')
+      // -- Branch A: Job Reassignment --
+      if (techChanged && newJob.technician_id) {
+        console.log(`Job ${newJob.job_code} reassigned to ${newJob.technician_id}`)
         
-        if (twilioSid && twilioToken && twilioFrom && newJob.customer_contact) {
-          console.log(`Sending WhatsApp completion to ${newJob.customer_contact}`)
-          const message = `Hello ${newJob.customer_name}, great news! Your device (${newJob.device_type}) is repaired and ready for pickup. Job code: ${newJob.job_code}.`
+        const { data: newTech } = await supabase
+          .from('users')
+          .select('expo_push_token, name')
+          .eq('id', newJob.technician_id)
+          .single()
           
-          const contact = newJob.customer_contact.startsWith('+') ? newJob.customer_contact : `+91${newJob.customer_contact}`
-          const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`
-          const twilioBody = new URLSearchParams()
-          twilioBody.append('To', `whatsapp:${contact}`)
-          twilioBody.append('From', `whatsapp:${twilioFrom}`)
-          twilioBody.append('Body', message)
-
-          const waResponse = await fetch(twilioUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Authorization': `Basic ${btoa(`${twilioSid}:${twilioToken}`)}`
-            },
-            body: twilioBody.toString()
-          })
-          
-          await supabase.from('notifications').insert({
-            job_id: newJob.id,
-            channel: 'whatsapp',
-            message: message,
-            status: waResponse.ok ? 'sent' : 'failed',
-            sent_at: new Date().toISOString()
+        if (newTech && newTech.expo_push_token) {
+          // Open Question: Should the previous technician also get an "unassigned" push?
+          await sendPushNotification(supabase, {
+            userId: newJob.technician_id,
+            pushToken: newTech.expo_push_token,
+            title: 'Job Reassigned',
+            body: `Job ${newJob.job_code} has been reassigned to you.`,
+            data: { screen: 'JobDetail', jobId: newJob.id },
+            jobId: newJob.id,
           })
         }
       }
+
+      // -- Branch B: Status Changed --
+      if (statusChanged) {
+        console.log(`Job ${newJob.job_code} status changed: ${oldJob.status} -> ${newJob.status}`)
+
+        let techName = 'Unknown Technician'
+        if (newJob.technician_id) {
+          const { data: tech } = await supabase.from('users').select('name').eq('id', newJob.technician_id).single()
+          if (tech) techName = tech.name
+        }
+
+        const isWaitingForMaterials = newJob.status === 'Waiting for Materials'
+
+        // 1. Notify Receptionists & Admins
+        const { data: staffUsers } = await supabase
+          .from('users')
+          .select('id, expo_push_token, role')
+          .in('role', ['admin', 'receptionist'])
+          .not('expo_push_token', 'is', null)
+
+        if (staffUsers && staffUsers.length > 0) {
+          // Send push notifications in parallel
+          await Promise.all(staffUsers.map(async (user: any) => {
+            const title = isWaitingForMaterials ? 'Materials Needed' : 'Job Status Update'
+            const body = isWaitingForMaterials 
+              ? `Tech ${techName} needs parts for Job ${newJob.job_code}. Please check inventory.`
+              : `Job ${newJob.job_code} is now ${newJob.status}.`
+              
+            await sendPushNotification(supabase, {
+              userId: user.id,
+              pushToken: user.expo_push_token,
+              title: title,
+              body: body,
+              data: { screen: 'JobDetail', jobId: newJob.id },
+              jobId: newJob.id,
+            })
+          }))
+        }
+      } // End of Status Changed Branch
+
+
 
       return new Response(JSON.stringify({ success: true, message: 'Status notifications processed' }), {
         headers: { 'Content-Type': 'application/json' },

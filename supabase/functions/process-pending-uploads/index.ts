@@ -145,6 +145,58 @@ Deno.serve(async (req: Request) => {
           .from('onsite_visits')
           .update({ [linkColumn]: driveLink })
           .eq('id', onsiteVisitId);
+
+      } else if (item.type === 'invoice' || item.type === 'receipt') {
+        // Two sub-cases:
+        //   A. driveAlreadyUploaded = true → Drive upload already succeeded during
+        //      generate-invoice but the billing DB update failed. Only write DB.
+        //   B. Full re-upload → Drive upload itself failed; re-encode HTML and upload.
+
+        const { jobId, driveAlreadyUploaded, driveLink: existingDriveLink, driveFileId,
+                docType, filename, htmlContent, year, month } = payload;
+
+        if (!jobId) throw new Error('Missing jobId in invoice pending_upload payload');
+
+        if (driveAlreadyUploaded && existingDriveLink) {
+          // Sub-case A: Drive file already exists — just write the link to billing
+          const { error: updateError } = await supabaseAdmin
+            .from('billing')
+            .update({ drive_link: existingDriveLink, drive_file_id: driveFileId })
+            .eq('job_id', jobId);
+
+          if (updateError) throw new Error(`billing update error: ${updateError.message}`);
+          driveLink = existingDriveLink;
+          linkColumn = 'drive_link';
+
+        } else {
+          // Sub-case B: Re-upload the HTML to Drive
+          if (!htmlContent) throw new Error('No htmlContent in payload — cannot retry upload');
+          if (!filename) throw new Error('No filename in payload — cannot retry upload');
+
+          const mName = monthName(Number(month));
+          const folderId = await ensureFolderPath(
+            token, ['Invoices', String(year), mName]
+          );
+
+          const htmlBytes = new TextEncoder().encode(htmlContent as string);
+          const { fileId, webViewLink } = await uploadFileToDrive(token, {
+            name: filename as string,
+            mimeType: 'text/html',
+            parentId: folderId,
+            data: htmlBytes,
+          });
+
+          driveLink = webViewLink;
+          linkColumn = 'drive_link';
+
+          // Write drive link to billing row
+          const { error: updateError } = await supabaseAdmin
+            .from('billing')
+            .update({ drive_link: webViewLink, drive_file_id: fileId })
+            .eq('job_id', jobId);
+
+          if (updateError) throw new Error(`billing update error: ${updateError.message}`);
+        }
       }
 
       // Success — remove from queue
