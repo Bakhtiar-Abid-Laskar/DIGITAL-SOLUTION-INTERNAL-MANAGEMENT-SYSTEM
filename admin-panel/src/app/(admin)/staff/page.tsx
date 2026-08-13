@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { User, useDebounceValue } from '@repairshop/shared';
-import { Check, Ban, CalendarDays, Users, Plus, Search } from "lucide-react";
+import { Check, Ban, CalendarDays, Users, Plus, Search, Trash2 } from "lucide-react";
 import Link from 'next/link';
 import { AddStaffModal } from "@/components/staff/AddStaffModal";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -110,6 +110,32 @@ export default function StaffPage() {
         const { error } = await supabase.from('users').update({ is_active: false }).eq('id', id);
         if (!error) fetchStaff();
         setConfirmModal(null);
+      }
+    });
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Staff Permanently',
+      message: `Are you absolutely sure you want to permanently delete ${name}? This action cannot be undone. Any past jobs or payments associated with them will remain in the system but will no longer show their name.`,
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase.functions.invoke('admin-delete-user', {
+            body: { userId: id }
+          });
+          
+          if (error) throw new Error(error.message);
+          
+          showToast(`Successfully deleted ${name}`, 'success');
+          fetchStaff();
+        } catch (err: any) {
+          console.error(err);
+          showToast(`Failed to delete user: ${err.message}`, 'error');
+        } finally {
+          setConfirmModal(null);
+        }
       }
     });
   };
@@ -254,6 +280,15 @@ export default function StaffPage() {
                           <Check size={16} />
                         </button>
                       )}
+                      
+                      <button 
+                        onClick={() => handleDelete(user.id, user.name)}
+                        className="p-2 text-admin-urgent-fg bg-admin-urgent-bg hover:bg-admin-urgent hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
+                        title="Delete Permanently"
+                        aria-label="Delete Permanently"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))
