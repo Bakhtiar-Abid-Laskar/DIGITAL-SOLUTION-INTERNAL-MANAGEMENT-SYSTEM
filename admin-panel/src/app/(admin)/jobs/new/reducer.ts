@@ -5,7 +5,7 @@ export interface CreateJobFormState {
   customer_contact: string;
   customer_email: string;
   customer_gstin: string;
-  device_type: 'Laptop' | 'PC' | 'Other';
+  device_type: string;
   reported_issue: string;
   remarks: string;
   job_type: 'Inhouse' | 'Onsite';
@@ -22,6 +22,7 @@ export interface CreateJobState {
   technicians: User[];
   catalogItems: JobTypeCatalogItem[];
   catalogLoading: boolean;
+  deviceTypes: string[];
   createdJob: Job | null;
   form: CreateJobFormState;
   errors: Record<string, string>;
@@ -29,7 +30,7 @@ export interface CreateJobState {
 
 export type CreateJobAction =
   | { type: 'SET_CATALOG_LOADING'; loading: boolean }
-  | { type: 'FETCH_SUCCESS'; technicians: User[]; catalogItems: JobTypeCatalogItem[] }
+  | { type: 'FETCH_SUCCESS'; technicians: User[]; catalogItems: JobTypeCatalogItem[]; deviceTypes: string[] }
   | { type: 'SET_FORM_FIELD'; field: keyof CreateJobFormState; value: any }
   | { type: 'SET_CATALOG_ITEM'; payload: Partial<CreateJobFormState> }
   | { type: 'SET_ERRORS'; errors: Record<string, string> }
@@ -59,6 +60,7 @@ export const initialState: CreateJobState = {
   technicians: [],
   catalogItems: [],
   catalogLoading: false,
+  deviceTypes: [],
   createdJob: null,
   form: initialFormState,
   errors: {}
@@ -69,7 +71,7 @@ export function createJobReducer(state: CreateJobState, action: CreateJobAction)
     case 'SET_CATALOG_LOADING':
       return { ...state, catalogLoading: action.loading };
     case 'FETCH_SUCCESS':
-      return { ...state, technicians: action.technicians, catalogItems: action.catalogItems, catalogLoading: false };
+      return { ...state, technicians: action.technicians, catalogItems: action.catalogItems, deviceTypes: action.deviceTypes, catalogLoading: false };
     case 'SET_FORM_FIELD':
       return { ...state, form: { ...state.form, [action.field]: action.value } };
     case 'SET_CATALOG_ITEM':

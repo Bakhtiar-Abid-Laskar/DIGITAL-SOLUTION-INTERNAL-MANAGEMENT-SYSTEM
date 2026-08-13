@@ -48,7 +48,20 @@ export default function JobDetailScreen() {
         .single();
 
       if (jobError) throw jobError;
-      setJob({ ...jobData, technician_name: jobData.technician?.name });
+
+      const { data: jobTechsData } = await supabase
+        .from('job_technicians')
+        .select('*, technician:technician_id(name)')
+        .eq('job_id', jobId);
+
+      const allTechNames = [
+        jobData.technician?.name,
+        ...(jobTechsData || []).map((jt: any) => jt.technician?.name)
+      ].filter(Boolean);
+      
+      const uniqueTechNames = Array.from(new Set(allTechNames)).join(', ');
+
+      setJob({ ...jobData, technician_name: uniqueTechNames || 'Unassigned' });
 
       const { data: matsData, error: matsError } = await supabase
         .from('job_materials')
@@ -73,14 +86,30 @@ export default function JobDetailScreen() {
     }, [jobId])
   );
 
-  const handleReassign = async (technicianId: string) => {
+  const handleReassign = async (technicianIds: string[]) => {
     try {
-      const { error } = await supabase
+      const primaryId = technicianIds.length > 0 ? technicianIds[0] : null;
+      
+      const { error: updateError } = await supabase
         .from('jobs')
-        .update({ technician_id: technicianId })
+        .update({ technician_id: primaryId })
         .eq('id', jobId);
         
-      if (error) throw error;
+      if (updateError) throw updateError;
+      
+      // Clear old secondary techs
+      await supabase.from('job_technicians').delete().eq('job_id', jobId);
+      
+      // Insert new secondary techs
+      if (technicianIds.length > 1) {
+        const additionalTechs = technicianIds.slice(1).map(id => ({
+          job_id: jobId,
+          technician_id: id
+        }));
+        const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+        if (additionalError) throw additionalError;
+      }
+      
       
       setFeedbackMsg('Technician reassigned successfully.');
       setTimeout(() => setFeedbackMsg(null), 3000);
@@ -204,7 +233,7 @@ export default function JobDetailScreen() {
       <TechnicianPicker
         visible={showTechPicker}
         onClose={() => setShowTechPicker(false)}
-        onSelect={(id) => { setShowTechPicker(false); handleReassign(id); }}
+        onSelect={(ids) => { setShowTechPicker(false); handleReassign(ids); }}
       />
     </View>
   );

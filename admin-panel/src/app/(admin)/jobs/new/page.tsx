@@ -26,7 +26,7 @@ export default function CreateJobPage() {
     const fetchData = async () => {
       dispatch({ type: 'SET_CATALOG_LOADING', loading: true });
       try {
-        const [techsRes, catalogRes] = await Promise.all([
+        const [techsRes, catalogRes, deviceTypesRes] = await Promise.all([
           supabase
             .from('users')
             .select('*')
@@ -37,14 +37,16 @@ export default function CreateJobPage() {
             .from('job_types')
             .select('*')
             .eq('is_active', true)
-            .order('title', { ascending: true })
+            .order('title', { ascending: true }),
+          supabase.rpc('get_unique_device_types')
         ]);
 
         if (techsRes.data && catalogRes.data) {
           dispatch({ 
             type: 'FETCH_SUCCESS', 
             technicians: techsRes.data as User[], 
-            catalogItems: catalogRes.data as JobTypeCatalogItem[] 
+            catalogItems: catalogRes.data as JobTypeCatalogItem[],
+            deviceTypes: (deviceTypesRes.data || []).map((d: any) => d.device_type)
           });
         }
       } catch (err) {
@@ -186,7 +188,12 @@ export default function CreateJobPage() {
             onSelectServiceCatalog={handleSelectServiceCatalog} 
           />
           
-          <DeviceIssueCard form={state.form} errors={state.errors} onChange={handleChange} />
+          <DeviceIssueCard 
+            form={state.form} 
+            errors={state.errors} 
+            deviceTypes={state.deviceTypes}
+            onChange={handleChange} 
+          />
           
           <AssignmentCard 
             form={state.form} 

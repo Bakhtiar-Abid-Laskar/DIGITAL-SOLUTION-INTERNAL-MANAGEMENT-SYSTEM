@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from "@/components/common/Card";
-import { Select } from "@/components/common/Select";
+import { Input } from "@/components/common/Input";
 import { Textarea } from "@/components/common/Textarea";
 import { Laptop } from "lucide-react";
 import { CreateJobFormState } from '@/app/(admin)/jobs/new/reducer';
@@ -8,10 +8,11 @@ import { CreateJobFormState } from '@/app/(admin)/jobs/new/reducer';
 interface DeviceIssueCardProps {
   form: CreateJobFormState;
   errors: Record<string, string>;
+  deviceTypes: string[];
   onChange: (field: keyof CreateJobFormState, value: any) => void;
 }
 
-export function DeviceIssueCard({ form, errors, onChange }: DeviceIssueCardProps) {
+export function DeviceIssueCard({ form, errors, deviceTypes, onChange }: DeviceIssueCardProps) {
   return (
     <Card className="border border-admin-border md:col-span-2">
       <div className="p-4 border-b border-admin-border flex items-center gap-2 bg-admin-bg-subtle/50 rounded-t-2xl">
@@ -21,14 +22,17 @@ export function DeviceIssueCard({ form, errors, onChange }: DeviceIssueCardProps
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-admin-text-secondary mb-1">Device Category *</label>
-          <Select 
+          <Input 
+            list="device-types-datalist"
             value={form.device_type}
             onChange={(e) => onChange('device_type', e.target.value)}
-          >
-            <option value="Laptop">Laptop</option>
-            <option value="PC">Desktop PC</option>
-            <option value="Other">Other Electronic Device</option>
-          </Select>
+            placeholder="e.g. Laptop, Smartwatch..."
+          />
+          <datalist id="device-types-datalist">
+            {deviceTypes.map(dt => (
+              <option key={dt} value={dt} />
+            ))}
+          </datalist>
         </div>
 
         <div>

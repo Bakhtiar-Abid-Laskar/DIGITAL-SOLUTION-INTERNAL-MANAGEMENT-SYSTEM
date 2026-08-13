@@ -38,12 +38,12 @@ export default function JobAssignmentScreen() {
       loading: false,
       showTechPicker: false,
       createdJob: null as any,
-      technicianId: '',
-      techName: '',
+      technicianIds: [] as string[],
+      techNames: [] as string[],
     }
   );
 
-  const { loading, showTechPicker, createdJob, technicianId, techName } = state;
+  const { loading, showTechPicker, createdJob, technicianIds, techNames } = state;
 
   const submitJob = async () => {
     setState({ loading: true });
@@ -66,10 +66,19 @@ export default function JobAssignmentScreen() {
         priority:         formState.priority,
         status:           'Received',
         receptionist_id:  user?.id,
-        technician_id:    technicianId || null,
+        technician_id:    technicianIds.length > 0 ? technicianIds[0] : null,
       }).select().single();
 
       if (insertError) throw insertError;
+
+      if (technicianIds.length > 1) {
+        const additionalTechs = technicianIds.slice(1).map(id => ({
+          job_id: newJob.id,
+          technician_id: id
+        }));
+        const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+        if (additionalError) throw additionalError;
+      }
 
       setState({ createdJob: newJob });
     } catch (error: any) {
@@ -193,8 +202,8 @@ export default function JobAssignmentScreen() {
           style={styles.techSelectBtn}
           onPress={() => setState({ showTechPicker: true })}
         >
-          <Text style={techName ? styles.techTextSelected : styles.techTextPlaceholder}>
-            {techName || 'Unassigned (Tap to select)'}
+          <Text style={techNames.length > 0 ? styles.techTextSelected : styles.techTextPlaceholder}>
+            {techNames.length > 0 ? techNames.join(', ') : 'Unassigned (Tap to select)'}
           </Text>
           <ChevronRight size={20} color={colors.textMuted} />
         </AppPressable>
@@ -216,9 +225,10 @@ export default function JobAssignmentScreen() {
 
       <TechnicianPicker
         visible={showTechPicker}
+        initialSelectedIds={technicianIds}
         onClose={() => setState({ showTechPicker: false })}
-        onSelect={(id, name) => {
-          setState({ technicianId: id, techName: name, showTechPicker: false });
+        onSelect={(ids, names) => {
+          setState({ technicianIds: ids, techNames: names, showTechPicker: false });
         }}
       />
 

@@ -33,11 +33,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const fetchData = useCallback(async (cancelled = false) => {
     if (!cancelled) dispatch({ type: 'FETCH_START' });
     try {
-      const [jobRes, matRes, billRes, techRes] = await Promise.all([
+      const [jobRes, matRes, billRes, techRes, deviceTypesRes] = await Promise.all([
         supabase.from('jobs').select('*, technician:users!jobs_technician_id_fkey(name, phone), job_technicians(*, technician:users!job_technicians_technician_id_fkey(name, phone))').eq('id', id).single(),
         supabase.from('job_materials').select('*').eq('job_id', id),
         supabase.from('billing').select('*').eq('job_id', id).single(),
-        supabase.from('users').select('*').eq('role', 'technician').eq('is_active', true)
+        supabase.from('users').select('*').eq('role', 'technician').eq('is_active', true),
+        supabase.rpc('get_unique_device_types')
       ]);
 
       if (cancelled) return;
@@ -49,7 +50,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           job: jobRes.data, 
           materials: matRes.data || [], 
           technicians: techRes.data || [], 
-          billing: billRes.data 
+          billing: billRes.data,
+          deviceTypes: (deviceTypesRes.data || []).map((d: any) => d.device_type)
         } 
       });
     } catch (err: any) {
@@ -166,6 +168,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             setIsEditing={(val) => dispatch({ type: 'SET_EDITING', isEditing: val })}
             onJobUpdated={(job) => dispatch({ type: 'UPDATE_JOB', job })}
             billing={state.billing}
+            deviceTypes={state.deviceTypes}
           />
 
           <JobMaterialsCard

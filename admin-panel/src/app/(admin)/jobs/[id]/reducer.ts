@@ -7,6 +7,7 @@ export interface JobDetailState {
   billing: any;
   loading: boolean;
   error: string | null;
+  deviceTypes: string[];
   
   // Edit State
   isEditing: boolean;
@@ -36,7 +37,7 @@ export interface JobDetailState {
 
 export type JobDetailAction =
   | { type: 'FETCH_START' }
-  | { type: 'FETCH_SUCCESS'; payload: { job: Job; materials: JobMaterial[]; technicians: User[]; billing: any } }
+  | { type: 'FETCH_SUCCESS'; payload: { job: Job; materials: JobMaterial[]; technicians: User[]; billing: any; deviceTypes: string[] } }
   | { type: 'FETCH_ERROR'; error: string }
   | { type: 'SET_EDITING'; isEditing: boolean }
   | { type: 'UPDATE_EDIT_FORM'; payload: Partial<Job> }
@@ -60,6 +61,7 @@ export const initialState: JobDetailState = {
   billing: null,
   loading: true,
   error: null,
+  deviceTypes: [],
   
   isEditing: false,
   editForm: {},
@@ -89,6 +91,7 @@ export function jobDetailReducer(state: JobDetailState, action: JobDetailAction)
         materials: action.payload.materials,
         technicians: action.payload.technicians,
         billing: action.payload.billing,
+        deviceTypes: action.payload.deviceTypes,
         notes: action.payload.job.work_notes || '',
         billingForm: {
           labour_charge: action.payload.billing?.labour_charge || 0,

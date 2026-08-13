@@ -18,9 +18,10 @@ interface JobInfoCardProps {
   setIsEditing: (val: boolean) => void;
   onJobUpdated: (job: Job) => void;
   billing: any;
+  deviceTypes: string[];
 }
 
-export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUpdated, billing }: JobInfoCardProps) {
+export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUpdated, billing, deviceTypes }: JobInfoCardProps) {
   const { showToast } = useToast();
   const [editForm, setEditForm] = useState<Partial<Job>>(job);
 
@@ -92,7 +93,13 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
             </div>
             <div className="space-y-4">
               <h4 className="font-medium text-admin-text-primary border-b border-admin-border pb-2">Device & Issue</h4>
-              <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-admin-text-secondary">Device Type</label><Input  value={editForm.device_type || ''} onChange={(e) => setEditForm({ ...editForm, device_type: e.target.value as any })} /></div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-admin-text-secondary">Device Type</label>
+                <Input list="edit-device-types" value={editForm.device_type || ''} onChange={(e) => setEditForm({ ...editForm, device_type: e.target.value as any })} />
+                <datalist id="edit-device-types">
+                  {deviceTypes?.map(dt => <option key={dt} value={dt} />)}
+                </datalist>
+              </div>
               <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-admin-text-secondary">Reported Issue</label><Textarea  rows={3} value={editForm.reported_issue || ''} onChange={(e) => setEditForm({ ...editForm, reported_issue: e.target.value })} /></div>
             </div>
           </div>

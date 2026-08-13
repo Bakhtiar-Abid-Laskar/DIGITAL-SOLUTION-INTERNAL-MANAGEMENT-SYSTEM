@@ -14,7 +14,7 @@ export interface PushNotificationState {
 
 export const usePushNotifications = (): PushNotificationState => {
   const isExpoGo = Constants.appOwnership === 'expo';
-  const { session } = useAuth();
+  const { session, role } = useAuth();
   const userId = session?.user?.id;
 
   if (!isExpoGo) {
@@ -157,11 +157,17 @@ const PUSH_TOKEN_RETRY_DELAY_MS = 2000;
 
       responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
+        
+        if (!navigationRef.isReady()) return;
+
         if (data?.screen === 'JobDetail' && data?.jobId) {
-          if (navigationRef.isReady()) {
-            // Need to route correctly depending on the role (or just route to JobDetail if it's uniquely named or available in the current stack)
+          if (role === 'receptionist') {
+            navigationRef.current?.navigate('JobDetail', { jobId: data.jobId });
+          } else if (role === 'technician') {
             navigationRef.current?.navigate('UpdateWork', { jobId: data.jobId });
           }
+        } else if (data?.screen === 'AttendanceList') {
+          console.log('Ignored navigation to AttendanceList (Admin Web Panel only screen).');
         }
       });
     } catch (e) {
@@ -178,7 +184,7 @@ const PUSH_TOKEN_RETRY_DELAY_MS = 2000;
         responseListener.current.remove();
       }
     };
-  }, [userId, isExpoGo]);
+  }, [userId, role, isExpoGo]);
 
   return { expoPushToken, notification };
 };
