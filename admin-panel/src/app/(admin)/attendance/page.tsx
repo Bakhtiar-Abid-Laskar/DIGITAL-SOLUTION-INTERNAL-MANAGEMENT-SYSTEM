@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Attendance, User, getSignedUrlCached, useDebounceValue } from '@repairshop/shared';
-import { CalendarDays, Search, CheckCircle, XCircle, MapPin, Clock, Image as ImageIcon, MapPinOff } from "lucide-react";
+import { CalendarDays, Search, CheckCircle, XCircle, MapPin, Clock, Image as ImageIcon, MapPinOff, Download } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Input } from "@/components/common/Input";
@@ -14,6 +14,8 @@ import { useToast } from "@/components/common/ToastProvider";
 import { TableSkeleton } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
+import { StaffAttendanceDrawer } from "@/components/attendance/StaffAttendanceDrawer";
+import { exportAttendanceToCSV } from "@/utils/csv";
 
 type AttendanceRecord = Attendance & {
   users: { name: string; role: string; id: string };
@@ -41,6 +43,8 @@ export default function AttendancePage() {
   const { showToast } = useToast();
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchRecords = useCallback(async (cancelled = false) => {
     if (!cancelled) setLoading(true);
@@ -61,7 +65,19 @@ export default function AttendancePage() {
       else if (reviewFilter === "Rejected") query = query.eq('review_status', 'rejected');
 
       if (debouncedSearchQuery) {
-        query = query.ilike('users.name', `%${debouncedSearchQuery}%`);
+        const { data: matchedUsers } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('name', `%${debouncedSearchQuery}%`);
+        
+        const ids = matchedUsers?.map(u => u.id) || [];
+        if (ids.length === 0) {
+          setRecords([]);
+          setTotalPages(1);
+          setLoading(false);
+          return;
+        }
+        query = query.in('user_id', ids);
       }
 
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -104,7 +120,7 @@ export default function AttendancePage() {
     return () => { cancelled = true; };
   }, [fetchRecords]);
 
-  const handleReviewAction = async (id: string, newStatus: 'approved' | 'rejected') => {
+  const handleReviewAction = async (id: string, newStatus: 'approved' | 'rejected' | 'pending') => {
     try {
       const { error } = await supabase
         .from('attendance')
@@ -116,6 +132,48 @@ export default function AttendancePage() {
       setRecords(prev => prev.map(r => r.id === id ? { ...r, review_status: newStatus } : r));
     } catch (err: any) {
       showToast(`Failed to update review status: ${err.message}`, 'error');
+    }
+  };
+
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      let query = supabase
+        .from('attendance')
+        .select(`
+          *,
+          users!attendance_user_id_fkey(name, role, id)
+        `)
+        .order('date', { ascending: false });
+
+      if (statusFilter !== "All") query = query.eq('status', statusFilter);
+      if (reviewFilter === "Pending") query = query.eq('review_status', 'pending');
+      else if (reviewFilter === "Approved") query = query.eq('review_status', 'approved');
+      else if (reviewFilter === "Rejected") query = query.eq('review_status', 'rejected');
+
+      if (debouncedSearchQuery) {
+        const { data: matchedUsers } = await supabase
+          .from('users')
+          .select('id')
+          .ilike('name', `%${debouncedSearchQuery}%`);
+        const ids = matchedUsers?.map(u => u.id) || [];
+        if (ids.length > 0) {
+          query = query.in('user_id', ids);
+        } else {
+           showToast('No records to export', 'error');
+           setExporting(false);
+           return;
+        }
+      }
+
+      const { data, error } = await query.limit(1000);
+      if (error) throw error;
+      
+      exportAttendanceToCSV(data || [], 'repairshop_attendance_filtered.csv');
+    } catch (err: any) {
+      showToast('Export failed', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -167,6 +225,13 @@ export default function AttendancePage() {
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
           </Select>
+          <Button variant="outline" onClick={() => exportAttendanceToCSV(records, 'repairshop_attendance_page.csv')} disabled={records.length === 0}>
+            Export Page
+          </Button>
+          <Button variant="outline" onClick={handleExportAll} disabled={exporting}>
+             <Download size={16} className="mr-2" />
+             {exporting ? 'Exporting...' : 'Export All'}
+          </Button>
         </div>
       </Card>
 
@@ -198,9 +263,21 @@ export default function AttendancePage() {
                   </tr>
                 ) : (
                   records.map((record) => (
-                    <tr key={record.id} className="border-b border-[var(--border-subtle)] hover:bg-[var(--surface-hover)]">
+                    <tr 
+                      key={record.id} 
+                      className={`border-b hover:bg-[var(--surface-hover)] ${
+                        !record.at_location && record.review_status === 'pending'
+                          ? 'bg-amber-500/5 border-l-2 border-l-amber-400 border-b-[var(--border-subtle)]'
+                          : 'border-[var(--border-subtle)]'
+                      }`}
+                    >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-[var(--text-primary)]">{record.users.name}</div>
+                        <button 
+                          onClick={() => setSelectedStaff({ id: record.users.id, name: record.users.name, role: record.users.role })}
+                          className="font-medium text-admin-accent hover:underline text-left"
+                        >
+                          {record.users.name}
+                        </button>
                         <div className="text-xs text-[var(--text-secondary)]">{record.users.role}</div>
                       </td>
                       <td className="px-4 py-3">
@@ -236,11 +313,21 @@ export default function AttendancePage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {record.at_location ? (
-                          <Badge variant="success">At Location</Badge>
-                        ) : (
-                          <Badge variant="danger">Out of Bounds</Badge>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant={record.at_location ? 'success' : 'danger'}>
+                            {record.at_location ? 'At Location' : 'Out of Bounds'}
+                          </Badge>
+                          {record.gps_lat && record.gps_lng && (
+                            <a
+                              href={`https://www.google.com/maps?q=${record.gps_lat},${record.gps_lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-admin-accent underline flex items-center gap-1 mt-1 hover:opacity-80"
+                            >
+                              <MapPin size={10} /> View Map
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {record.review_status === 'pending' ? (
@@ -249,12 +336,20 @@ export default function AttendancePage() {
                             <Button size="sm" variant="danger" onClick={() => handleReviewAction(record.id, 'rejected')}>Deny</Button>
                           </div>
                         ) : (
-                          <Badge 
-                            variant={record.review_status === 'approved' ? 'success' : 'danger'} 
-                            className="capitalize"
-                          >
-                            {record.review_status || 'Approved'}
-                          </Badge>
+                          <div className="flex flex-col items-start gap-1">
+                            <Badge 
+                              variant={record.review_status === 'approved' ? 'success' : 'danger'} 
+                              className="capitalize"
+                            >
+                              {record.review_status || 'Approved'}
+                            </Badge>
+                            <button 
+                              onClick={() => handleReviewAction(record.id, 'pending')}
+                              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline underline-offset-2 flex items-center gap-1"
+                            >
+                              <Clock size={10} /> Re-review
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -292,6 +387,12 @@ export default function AttendancePage() {
           </div>
         </div>
       )}
+
+      {/* Staff Drawer */}
+      <StaffAttendanceDrawer 
+        staff={selectedStaff} 
+        onClose={() => setSelectedStaff(null)} 
+      />
     </div>
   );
 }
