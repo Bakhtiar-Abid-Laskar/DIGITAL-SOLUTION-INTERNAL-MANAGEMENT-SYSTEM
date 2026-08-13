@@ -46,10 +46,12 @@ export default function AdminJobDetailScreen() {
 
       if (jobError) throw jobError;
 
-      const { data: jobTechsData } = await supabase
+      const { data: jobTechsData, error: jtError } = await supabase
         .from('job_technicians')
-        .select('*, technician:technician_id(name)')
+        .select('*, technician:users!job_technicians_technician_id_fkey(name)')
         .eq('job_id', jobId);
+
+      if (jtError) throw jtError;
 
       const allTechNames = [
         jobData.technician?.name,
