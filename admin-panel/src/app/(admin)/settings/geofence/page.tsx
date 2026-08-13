@@ -15,7 +15,8 @@ const GeofenceMap = dynamic(() => import('@/components/settings/GeofenceMap'), {
 export default function GeofenceSettingsPage() {
   const [setting, setSetting] = useState<GeofenceSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [radius, setRadius] = useState(100); // default 100m — more forgiving than 50m
+  const [radius, setRadius] = useState(100);
+  const [savingRadius, setSavingRadius] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -67,6 +68,25 @@ export default function GeofenceSettingsPage() {
     }
   };
 
+  // Save ONLY the radius without changing lat/lng
+  const handleSaveRadiusOnly = async () => {
+    if (!setting?.id) return;
+    setSavingRadius(true);
+    try {
+      const { error } = await supabase
+        .from('geofence_settings')
+        .update({ radius })
+        .eq('id', setting.id);
+      if (error) throw error;
+      showToast(`Radius updated to ${radius}m successfully!`, 'success');
+      fetchSetting();
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      setSavingRadius(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-5xl">
       <PageHeader
@@ -106,7 +126,7 @@ export default function GeofenceSettingsPage() {
 
       {/* ── Radius Control ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-4 p-4 bg-admin-bg border border-admin-border rounded-xl">
-        <div>
+        <div className="flex-1">
           <label className="text-xs font-medium text-admin-text-secondary uppercase tracking-wide block mb-1">
             Check-in Radius
           </label>
@@ -114,18 +134,27 @@ export default function GeofenceSettingsPage() {
             <input
               type="range"
               min={50}
-              max={500}
+              max={2000}
               step={25}
               value={radius}
               onChange={e => setRadius(Number(e.target.value))}
-              className="w-40 accent-admin-accent"
+              className="w-48 accent-admin-accent"
             />
-            <span className="text-admin-text-primary font-semibold w-16">{radius} m</span>
+            <span className="text-admin-text-primary font-semibold w-20">{radius} m</span>
           </div>
+          <p className="text-xs text-admin-text-muted mt-1">
+            50m = very strict · 150m = practical · 500m+ = lenient
+          </p>
         </div>
-        <p className="text-xs text-admin-text-muted">
-          50m is strict (needs exact GPS). 100–150m is practical for most shops.
-        </p>
+        {setting?.id && (
+          <button
+            onClick={handleSaveRadiusOnly}
+            disabled={savingRadius || radius === setting.radius}
+            className="px-4 py-2 bg-admin-accent text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-opacity whitespace-nowrap"
+          >
+            {savingRadius ? 'Saving…' : radius === setting?.radius ? 'Radius Saved ✓' : 'Save Radius Only'}
+          </button>
+        )}
       </div>
       
       <div className="bg-admin-bg-subtle/50 p-6 rounded-2xl border border-admin-border">
