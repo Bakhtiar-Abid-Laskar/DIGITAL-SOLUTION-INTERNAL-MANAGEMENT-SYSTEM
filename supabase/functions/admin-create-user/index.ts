@@ -5,10 +5,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 
 declare const Deno: any;
 
-const allowedOrigin = Deno.env.get('ADMIN_URL') || 'http://localhost:3000';
-
 const corsHeaders = {
-  'Access-Control-Allow-Origin': allowedOrigin,
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
