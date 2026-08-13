@@ -32,3 +32,4 @@ ref/twilio_2FA_recovery_code.txt
 # Firebase Admin SDK credentials
 *firebase-adminsdk*.json
 digitalsolution-76a79-firebase-adminsdk-fbsvc-772fd6fd3f.json
+google-services.json
