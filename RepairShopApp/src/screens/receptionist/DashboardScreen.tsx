@@ -113,7 +113,7 @@ export default function DashboardScreen() {
   const quickActions: QuickAction[] = [
     { id: 'new_job', label: 'New Job', icon: Plus, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
     { id: 'new_sale', label: 'New Sale', icon: DollarSign, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
-    { id: 'sales_list', label: 'Sales List', icon: FileText, bgColor: QUICK_ACTION_COLORS.greenTile?.bg || '#E6F4EA', iconColor: QUICK_ACTION_COLORS.greenTile?.fg || '#137333', onPress: () => navigation.navigate('SalesList') },
+    { id: 'sales', label: 'Sales', icon: FileText, bgColor: QUICK_ACTION_COLORS.greenTile?.bg || '#E6F4EA', iconColor: QUICK_ACTION_COLORS.greenTile?.fg || '#137333', onPress: () => navigation.navigate('SalesList') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
     { id: 'customers', label: 'Customers', icon: Users, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('Customers') },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, bgColor: QUICK_ACTION_COLORS.redTile.bg, iconColor: QUICK_ACTION_COLORS.redTile.fg, onPress: () => navigation.navigate('AnalyticsScreen') },

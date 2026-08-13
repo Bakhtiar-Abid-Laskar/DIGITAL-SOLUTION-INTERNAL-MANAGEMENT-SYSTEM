@@ -92,7 +92,7 @@ export default function AdminTabs() {
               <DollarSign color={colors.accentTeal} size={24} />
             </View>
             <View>
-              <Text style={typography.h3}>Sales List</Text>
+              <Text style={typography.h3}>Sales</Text>
               <Text style={typography.caption}>View all completed jobs and sales</Text>
             </View>
           </AppPressable>

@@ -127,7 +127,7 @@ export default function SalesListScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Sales & Completed Jobs" showBack={false} />
+      <AppHeader title="Sales" showBack={true} />
       
       {loading ? (
         <View style={styles.center}>
