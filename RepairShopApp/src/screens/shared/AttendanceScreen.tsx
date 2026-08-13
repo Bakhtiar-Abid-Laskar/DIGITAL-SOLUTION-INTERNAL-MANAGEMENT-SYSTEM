@@ -366,6 +366,7 @@ export default function AttendanceScreen() {
                           storagePath={getAttendanceStoragePath(user?.id || '', todayStr, 'checkout')}
                           onCaptureComplete={(data) => handleCaptureComplete('checkout', data)}
                           buttonLabel="Take Checkout Selfie"
+                          validateLocation={validateLocation}
                         />
                       </View>
                     )}
@@ -382,6 +383,7 @@ export default function AttendanceScreen() {
                       storagePath={getAttendanceStoragePath(user?.id || '', todayStr, 'checkin')}
                       onCaptureComplete={(data) => handleCaptureComplete('checkin', data)}
                       buttonLabel="Take Selfie for Attendance"
+                      validateLocation={validateLocation}
                     />
                     <View style={styles.secondaryActionsRow}>
                       <Button
