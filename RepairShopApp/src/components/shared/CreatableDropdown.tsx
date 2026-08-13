@@ -125,7 +125,7 @@ export default function CreatableDropdown({ label, options, selectedValue, onSel
       <Modal visible={modalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <AppPressable style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
-            <AppPressable style={styles.modalContent} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
               <View style={styles.modalHeader}>
                 <View style={styles.searchInputContainer}>
                   <Search size={18} color={colors.textMuted} style={styles.searchIcon} />
@@ -149,7 +149,7 @@ export default function CreatableDropdown({ label, options, selectedValue, onSel
                   <Text style={styles.emptyText}>Start typing to add a new option.</Text>
                 }
               />
-            </AppPressable>
+            </View>
           </AppPressable>
         </KeyboardAvoidingView>
       </Modal>
