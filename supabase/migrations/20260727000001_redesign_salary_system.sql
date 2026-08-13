@@ -31,18 +31,16 @@ create table if not exists public.holidays (
 -- RLS for holidays table (Admin manage, staff read)
 alter table public.holidays enable row level security;
 
+drop policy if exists "Holidays viewable by authenticated users" on public.holidays;
 create policy "Holidays viewable by authenticated users"
   on public.holidays for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "Holidays manageable by admin" on public.holidays;
 create policy "Holidays manageable by admin"
   on public.holidays for all
-  using (
-    exists (
-      select 1 from public.users
-      where id = auth.uid() and role = 'admin' and is_active = true
-    )
-  );
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- 4. Create public.customer_reviews table
 create table if not exists public.customer_reviews (
@@ -57,10 +55,12 @@ create table if not exists public.customer_reviews (
 -- RLS for customer_reviews table
 alter table public.customer_reviews enable row level security;
 
+drop policy if exists "Customer reviews viewable by authenticated users" on public.customer_reviews;
 create policy "Customer reviews viewable by authenticated users"
   on public.customer_reviews for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "Customer reviews manageable by admin" on public.customer_reviews;
 create policy "Customer reviews manageable by admin"
   on public.customer_reviews for all
   using (

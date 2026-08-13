@@ -53,33 +53,47 @@ ALTER TABLE public.ui_payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ui_roles ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to UI config tables
+DROP POLICY IF EXISTS "Allow public read ui_job_statuses" ON public.ui_job_statuses;
 CREATE POLICY "Allow public read ui_job_statuses" ON public.ui_job_statuses FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_priorities" ON public.ui_priorities;
 CREATE POLICY "Allow public read ui_priorities" ON public.ui_priorities FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_service_locations" ON public.ui_service_locations;
 CREATE POLICY "Allow public read ui_service_locations" ON public.ui_service_locations FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_payment_statuses" ON public.ui_payment_statuses;
 CREATE POLICY "Allow public read ui_payment_statuses" ON public.ui_payment_statuses FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_sale_statuses" ON public.ui_sale_statuses;
 CREATE POLICY "Allow public read ui_sale_statuses" ON public.ui_sale_statuses FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_payment_methods" ON public.ui_payment_methods;
 CREATE POLICY "Allow public read ui_payment_methods" ON public.ui_payment_methods FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read ui_roles" ON public.ui_roles;
 CREATE POLICY "Allow public read ui_roles" ON public.ui_roles FOR SELECT USING (true);
 
 -- Allow admin write access (just as a baseline for future usage, though typically handled via GUI or seed)
+DROP POLICY IF EXISTS "Allow admin write ui_job_statuses" ON public.ui_job_statuses;
 CREATE POLICY "Allow admin write ui_job_statuses" ON public.ui_job_statuses FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_priorities" ON public.ui_priorities;
 CREATE POLICY "Allow admin write ui_priorities" ON public.ui_priorities FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_service_locations" ON public.ui_service_locations;
 CREATE POLICY "Allow admin write ui_service_locations" ON public.ui_service_locations FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_payment_statuses" ON public.ui_payment_statuses;
 CREATE POLICY "Allow admin write ui_payment_statuses" ON public.ui_payment_statuses FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_sale_statuses" ON public.ui_sale_statuses;
 CREATE POLICY "Allow admin write ui_sale_statuses" ON public.ui_sale_statuses FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_payment_methods" ON public.ui_payment_methods;
 CREATE POLICY "Allow admin write ui_payment_methods" ON public.ui_payment_methods FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
+DROP POLICY IF EXISTS "Allow admin write ui_roles" ON public.ui_roles;
 CREATE POLICY "Allow admin write ui_roles" ON public.ui_roles FOR ALL TO authenticated USING (
     EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
@@ -130,3 +144,4 @@ INSERT INTO public.ui_roles (id, color_hex, sort_order) VALUES
 ('receptionist', '#F59E0B', 2),
 ('technician', '#3B82F6', 3)
 ON CONFLICT (id) DO NOTHING;
+

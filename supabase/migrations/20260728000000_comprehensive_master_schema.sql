@@ -457,6 +457,7 @@ create policy "Allow authenticated users access to avatars"
   using (bucket_id = 'avatars')
   with check (bucket_id = 'avatars');
 
+drop policy if exists "Allow public view avatars" on storage.objects;
 create policy "Allow public view avatars"
   on storage.objects for select to public
   using (bucket_id = 'avatars');

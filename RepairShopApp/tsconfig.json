@@ -1,0 +1,18 @@
+{
+  "extends": "expo/tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@repairshop/shared": ["./src/lib/shared/index.ts"],
+      "@repairshop/shared/*": ["./src/lib/shared/*"]
+    }
+  },
+  "exclude": [
+    "supabase"
+  ],
+  "include": [
+    "src/**/*",
+    "index.ts"
+  ]
+}

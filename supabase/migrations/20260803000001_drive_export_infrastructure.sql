@@ -97,6 +97,7 @@ alter table public.export_jobs enable row level security;
 alter table public.pending_uploads enable row level security;
 
 -- export_jobs: only admins can read/write (used in admin panel export history)
+drop policy if exists "Admins can manage export_jobs" on public.export_jobs;
 create policy "Admins can manage export_jobs"
   on public.export_jobs
   for all
@@ -106,6 +107,7 @@ create policy "Admins can manage export_jobs"
 
 -- pending_uploads: service role only (managed exclusively by Edge Functions)
 -- No authenticated user should ever read or write this table directly.
+drop policy if exists "No direct access to pending_uploads" on public.pending_uploads;
 create policy "No direct access to pending_uploads"
   on public.pending_uploads
   for all
@@ -122,3 +124,5 @@ create or replace view public.export_jobs_latest as
     error_message, started_at, completed_at
   from public.export_jobs
   order by type, started_at desc;
+
+

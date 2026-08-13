@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+
+  /* ── Canvas & Surfaces ─────────────────────────────────────────────── */
+  --color-admin-bg-base: #F8FAFC;       /* modern off-white canvas */
+  --color-admin-bg-surface: #FFFFFF;    /* cards, topbar, modals */
+  --color-admin-bg-subtle: #F1F5F9;     /* table headers, modal strips, input backgrounds */
+  --color-admin-bg-hover: #E2E8F0;      /* row hover states */
+  --color-admin-bg-dark: #0F172A;       /* modal backdrops */
+
+  /* ── Brand / Primary Accent — Purple ──────────────────────────────── */
+  --color-admin-accent: #6366F1;
+  --color-admin-accent-dim: rgba(99, 102, 241, 0.10);
+  --color-admin-accent-dark: #4F46E5;
+
+  /* ── Text ──────────────────────────────────────────────────────────── */
+  --color-admin-text-primary: #0F172A;
+  --color-admin-text-secondary: #475569;
+  --color-admin-text-muted: #64748B;
+
+  /* ── Borders ───────────────────────────────────────────────────────── */
+  --color-admin-border: #E2E8F0;
+  --color-admin-border-strong: #CBD5E1;
+
+  /* ── Sidebar (High Contrast Dark Slate + Accent Active) ────────────── */
+  --color-admin-sidebar-bg: #0F172A;
+  --color-admin-sidebar-text: #94A3B8;
+  --color-admin-sidebar-active: #FFFFFF;
+  --color-admin-sidebar-active-bg: rgba(99, 102, 241, 0.18);
+  --color-admin-sidebar-accent-border: #6366F1;
+
+  /* ── Status / Semantic Colors ─────────────────────────────────────── */
+  --color-admin-danger: #EF4444;
+  --color-admin-danger-dim: #FEE2E2;
+  --color-admin-success: #10B981;
+  --color-admin-success-dim: #D1FAE5;
+  --color-admin-warning: #F59E0B;
+  --color-admin-warning-dim: #FEF3C7;
+
+  --color-admin-pending-bg: #FEF3C7;
+  --color-admin-pending-fg: #D97706;
+  --color-admin-progress-bg: #E0F2FE;
+  --color-admin-progress-fg: #0284C7;
+  --color-admin-completed-bg: #D1FAE5;
+  --color-admin-completed-fg: #059669;
+  --color-admin-urgent-bg: #FEE2E2;
+  --color-admin-urgent-fg: #DC2626;
+
+  /* ── Radius System ─────────────────────────────────────────────────── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* ── Shadows ───────────────────────────────────────────────────────── */
+  --shadow-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card:   0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-modal:  0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Animation keyframes ─────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@layer utilities {
+  .animate-fade-in  { animation: fade-in 150ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-scale-in { animation: scale-in 150ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  
+  .skeleton-pulse {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-admin-bg-subtle);
+    border-radius: 6px;
+  }
+  
+  .skeleton-pulse::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.4) 20%,
+      rgba(255, 255, 255, 0.6) 60%,
+      rgba(255, 255, 255, 0)
+    );
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  .table-sticky-header th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--color-admin-bg-subtle);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
+}
+

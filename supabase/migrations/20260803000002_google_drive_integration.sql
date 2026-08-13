@@ -89,6 +89,7 @@ alter table public.export_jobs    enable row level security;
 alter table public.pending_uploads enable row level security;
 
 -- export_jobs: admin read/write only (shown in admin panel export history)
+drop policy if exists "Admins can manage export_jobs" on public.export_jobs;
 create policy "Admins can manage export_jobs"
   on public.export_jobs
   for all
@@ -97,6 +98,7 @@ create policy "Admins can manage export_jobs"
   with check (public.is_admin());
 
 -- pending_uploads: no direct authenticated access — managed by Edge Functions only
+drop policy if exists "No direct access to pending_uploads" on public.pending_uploads;
 create policy "No direct access to pending_uploads"
   on public.pending_uploads
   for all
@@ -219,3 +221,4 @@ select cron.schedule(
 
 -- Verify after applying:
 -- select jobname, schedule, active from cron.job;
+

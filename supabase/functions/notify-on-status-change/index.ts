@@ -105,6 +105,30 @@ serve(async (req: Request) => {
             })
           }))
         }
+
+        // 2. Notify ALL assigned Technicians
+        const { data: jobTechs } = await supabase
+          .from('job_technicians')
+          .select('technician:users(id, expo_push_token)')
+          .eq('job_id', newJob.id)
+          .is('removed_at', null)
+
+        if (jobTechs && jobTechs.length > 0) {
+          const techTokens = jobTechs
+            .map((jt: any) => jt.technician)
+            .filter((t: any) => t && t.expo_push_token)
+          
+          await Promise.all(techTokens.map(async (tech: any) => {
+            await sendPushNotification(supabase, {
+              userId: tech.id,
+              pushToken: tech.expo_push_token,
+              title: 'Job Status Updated',
+              body: `Job ${newJob.job_code} status is now ${newJob.status}.`,
+              data: { screen: 'JobDetail', jobId: newJob.id },
+              jobId: newJob.id,
+            })
+          }))
+        }
       } // End of Status Changed Branch
 
 

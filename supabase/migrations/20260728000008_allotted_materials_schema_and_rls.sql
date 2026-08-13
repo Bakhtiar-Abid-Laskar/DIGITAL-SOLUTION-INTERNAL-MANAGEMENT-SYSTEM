@@ -56,12 +56,14 @@ drop policy if exists "job_materials_update_technician" on public.job_materials;
 drop policy if exists "job_materials_delete_technician" on public.job_materials;
 
 -- Admin & Receptionist: Full SELECT access to all job materials
+drop policy if exists "job_materials_admin_receptionist_all" on public.job_materials;
 create policy "job_materials_admin_receptionist_all" on public.job_materials
   for all to authenticated
   using (public.is_admin() or public.is_receptionist())
   with check (public.is_admin() or public.is_receptionist());
 
 -- Technician: SELECT rows where technician_id = auth.uid() or assigned to job
+drop policy if exists "job_materials_technician_select" on public.job_materials;
 create policy "job_materials_technician_select" on public.job_materials
   for select to authenticated
   using (
@@ -73,6 +75,7 @@ create policy "job_materials_technician_select" on public.job_materials
   );
 
 -- Technician: INSERT materials for assigned jobs or own technician_id
+drop policy if exists "job_materials_technician_insert" on public.job_materials;
 create policy "job_materials_technician_insert" on public.job_materials
   for insert to authenticated
   with check (
@@ -85,6 +88,7 @@ create policy "job_materials_technician_insert" on public.job_materials
   );
 
 -- Technician: UPDATE/DELETE materials for assigned jobs or own technician_id
+drop policy if exists "job_materials_technician_update" on public.job_materials;
 create policy "job_materials_technician_update" on public.job_materials
   for update to authenticated
   using (
@@ -95,6 +99,7 @@ create policy "job_materials_technician_update" on public.job_materials
     )
   );
 
+drop policy if exists "job_materials_technician_delete" on public.job_materials;
 create policy "job_materials_technician_delete" on public.job_materials
   for delete to authenticated
   using (
@@ -107,9 +112,11 @@ create policy "job_materials_technician_delete" on public.job_materials
 
 -- 5. Ensure inventory SELECT policy allows all authenticated staff to search for autocomplete
 drop policy if exists "inventory_select_all_staff" on public.inventory;
+drop policy if exists "inventory_select_all_staff" on public.inventory;
 create policy "inventory_select_all_staff" on public.inventory
   for select to authenticated
   using (true);
 
 -- 6. Reload schema cache
 notify pgrst, 'reload schema';
+

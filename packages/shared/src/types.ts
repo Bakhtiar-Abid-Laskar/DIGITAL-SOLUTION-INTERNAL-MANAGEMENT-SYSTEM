@@ -34,6 +34,7 @@ export interface Job {
   created_at: string;
   completed_at?: string | null;
   technician?: { name: string } | null;
+  job_technicians?: { technician_id: string; removed_at?: string | null; technician?: { name: string } }[];
 }
 
 export interface JobMaterial {
@@ -197,4 +198,13 @@ export interface CustomerReview {
   score: number;
   comments?: string | null;
   created_at: string;
+}
+export interface GeofenceSettings {
+  id: string;
+  lat: number;
+  lng: number;
+  radius: number;
+  created_at: string;
+  updated_at: string;
+  updated_by?: string | null;
 }

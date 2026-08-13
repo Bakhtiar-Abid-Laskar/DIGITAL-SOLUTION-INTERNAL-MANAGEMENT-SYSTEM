@@ -1,0 +1,158 @@
+.page {
+  padding: 24px;
+  max-width: 1100px;
+}
+
+.pageHeader { margin-bottom: 24px; }
+.pageTitle { font-size: 28px; font-weight: 700; color: var(--color-admin-text-primary); margin-bottom: 4px; }
+.pageSubtitle { color: var(--color-admin-text-secondary); font-size: 15px; }
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summaryCard {
+  background: var(--color-admin-bg-surface);
+  border: 1px solid var(--color-admin-border);
+  border-top: 4px solid var(--color-admin-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.summaryIcon { display: flex; align-items: center; margin-bottom: 8px; }
+.summaryLabel { font-size: 12px; color: var(--color-admin-text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 6px; }
+.summaryValue { font-size: 22px; font-weight: 700; }
+
+.card {
+  background: var(--color-admin-bg-surface);
+  border: 1px solid var(--color-admin-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-admin-text-primary);
+  margin-bottom: 16px;
+}
+
+.filtersRow {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px; }
+.fieldRow { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.label { font-size: 13px; font-weight: 500; color: var(--color-admin-text-secondary); }
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-admin-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-admin-text-primary);
+  width: 100%;
+  background: var(--color-admin-bg-surface);
+}
+
+.input:focus { outline: none; border-color: var(--color-admin-accent); }
+
+.select {
+  padding: 10px 12px;
+  border: 1px solid var(--color-admin-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-admin-text-primary);
+  background: var(--color-admin-bg-surface);
+  width: 100%;
+  cursor: pointer;
+}
+
+.error { color: var(--color-admin-danger); font-size: 13px; margin-top: 4px; }
+.successMsg {
+  color: var(--color-admin-success); font-size: 13px;
+  background: var(--color-admin-success-dim); border: 1px solid var(--color-admin-success);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+}
+
+.btnPrimary {
+  padding: 10px 20px;
+  background: var(--color-admin-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btnPrimary:hover { background: var(--color-admin-accent-dark); }
+.btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--color-admin-bg-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-admin-text-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--color-admin-border);
+}
+
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-admin-bg-hover);
+  color: var(--color-admin-text-secondary);
+}
+
+.table tr:hover td { background: var(--color-admin-bg-hover); }
+
+.typeBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.accessDenied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.accessDeniedIcon { font-size: 60px; margin-bottom: 16px; }
+.accessDenied h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.accessDenied p { color: #6b7280; }
+
+.loadingState { padding: 48px; text-align: center; color: #9ca3af; }
+
+@media (max-width: 900px) {
+  .summaryGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .summaryGrid { grid-template-columns: 1fr 1fr; }
+  .fieldRow { flex-direction: column; }
+}

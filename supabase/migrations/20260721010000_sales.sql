@@ -69,11 +69,13 @@ for each row execute function public.recalculate_sale_totals();
 alter table public.sales enable row level security;
 alter table public.sale_items enable row level security;
 
+drop policy if exists "Admins and Receptionists have full access to sales" on public.sales;
 create policy "Admins and Receptionists have full access to sales" on public.sales
   for all to authenticated
   using (public.is_admin() or public.is_receptionist())
   with check (public.is_admin() or public.is_receptionist());
 
+drop policy if exists "Admins and Receptionists have full access to sale_items" on public.sale_items;
 create policy "Admins and Receptionists have full access to sale_items" on public.sale_items
   for all to authenticated
   using (

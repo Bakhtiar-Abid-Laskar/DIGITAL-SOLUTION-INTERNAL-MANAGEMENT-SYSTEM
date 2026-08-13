@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Digital Solution",
+    "slug": "RepairShopApp",
+    "scheme": "repairshop",
+    "version": "1.0.0",
+    "cli": {
+      "appVersionSource": "remote"
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.repairshop.app",
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "NSCameraUsageDescription": "RepairShop uses the camera to capture attendance selfies and onsite visit photos.",
+        "NSLocationWhenInUseUsageDescription": "RepairShop uses your location to verify attendance check-in/check-out and onsite visit locations."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "package": "com.repairshop.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "RepairShop uses the camera to capture attendance selfies and onsite visit photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "RepairShop uses your location to verify attendance check-in/check-out and onsite visit locations.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9406caf9-490a-4041-b397-5cd0c9a62c8a"
+      }
+    }
+  }
+}

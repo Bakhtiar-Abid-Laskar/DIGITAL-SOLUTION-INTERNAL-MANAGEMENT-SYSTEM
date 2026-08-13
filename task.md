@@ -1,0 +1,27 @@
+# Tier 6+ React Doctor Fixes Task List
+
+- `[ ]` 1. Group 1: State & Effect Management (Medium Risk)
+  - `[ ]` `react-doctor/prefer-useReducer` (11 components)
+  - `[ ]` `react-doctor/effect-needs-cleanup` (3 hooks/contexts)
+  - `[ ]` `react-doctor/no-effect-with-fresh-deps` & `no-adjust-state-on-prop-change` & `rules-of-hooks` (5 components)
+- `[ ]` 2. Group 2: UI Accessibility & Forms (Low Risk)
+  - `[ ]` `react-doctor/control-has-associated-label` (23 components)
+  - `[ ]` `react-doctor/no-placeholder-only-field` (16 instances)
+  - `[ ]` `react-doctor/prefer-html-dialog` (2 components)
+  - `[ ]` `react-doctor/no-static-element-interactions` (2 components)
+- `[ ]` 3. Group 3: Performance & Best Practices (Low Risk)
+  - `[ ]` `react-doctor/no-loading-flag-reset-outside-finally` (4 components)
+  - `[ ]` `react-doctor/prefer-dynamic-import` (3 charts)
+  - `[ ]` `react-doctor/no-locale-format-in-render` (2 components)
+  - `[ ]` `react-doctor/prefer-module-scope-pure-function` (3 components)
+  - `[ ]` `react-doctor/no-async-event-handler-without-reentry-guard` (2 components)
+- `[ ]` 4. Group 4: React Native Specific (Low Risk)
+  - `[ ]` `react-doctor/rn-no-scrollview-mapped-list` (1 component)
+  - `[ ]` `react-doctor/rn-no-inline-flatlist-renderitem` & `rn-list-callback-per-row` & `rn-no-inline-object-in-list-item` (1 component)
+  - `[ ]` `react-doctor/rn-prefer-expo-image` (suppress in 2 components)
+- `[ ]` 5. Group 5: Supabase Security (Critical)
+  - `[ ]` `react-doctor/supabase-client-owned-authz-field` (2 components)
+  - `[ ]` `react-doctor/supabase-table-missing-rls` (create `002_enable_rls.sql`)
+- `[ ]` 6. Verification
+  - `[ ]` Run `npx react-doctor@latest --verbose`
+  - `[ ]` Run `npx tsc --noEmit` and `npm run build`
