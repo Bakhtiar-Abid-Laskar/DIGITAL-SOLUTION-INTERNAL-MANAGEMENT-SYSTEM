@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Modal, Dimensions, Pressable } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -74,7 +74,11 @@ export default function BottomSheet({ visible, onClose, children }: BottomSheetP
 
   return (
     <Modal visible={showModal} transparent={true} animationType="none" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      {/* GestureHandlerRootView MUST live inside the Modal because React Native
+          mounts Modals in a separate native view tree — the outer root
+          GestureHandlerRootView in App.tsx does NOT cover portal/Modal content. */}
+      <GestureHandlerRootView style={styles.flex}>
+        <View style={styles.overlay}>
         <Pressable onPress={onClose} style={StyleSheet.absoluteFill}>
           <Animated.View style={[styles.backdrop, animatedBackdropStyle]} />
         </Pressable>
@@ -87,12 +91,16 @@ export default function BottomSheet({ visible, onClose, children }: BottomSheetP
           </GestureDetector>
           {children}
         </Animated.View>
-      </View>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',

@@ -1,6 +1,7 @@
 import 'react-native-gesture-handler';
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
 import { AppConfigProvider } from './src/context/AppConfigContext';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -29,18 +30,20 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
-          <ToastProvider>
-            <AuthProvider>
-              <AppConfigProvider>
-                <RootNavigator />
-              </AppConfigProvider>
-            </AuthProvider>
-          </ToastProvider>
-        </SafeAreaProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <SafeAreaProvider>
+            <ToastProvider>
+              <AuthProvider>
+                <AppConfigProvider>
+                  <RootNavigator />
+                </AppConfigProvider>
+              </AuthProvider>
+            </ToastProvider>
+          </SafeAreaProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
