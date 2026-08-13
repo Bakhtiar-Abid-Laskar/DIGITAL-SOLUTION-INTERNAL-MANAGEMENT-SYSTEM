@@ -1,6 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Modal, Dimensions, Pressable } from 'react-native';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  Modal,
+  Dimensions,
+  Pressable,
+  PanResponder,
+  Animated as RNAnimated,
+} from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,6 +17,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, radius, spacing } from '../../tokens';
 
+// NOTE: GestureDetector from react-native-gesture-handler has been intentionally
+// removed from this component. React Native Modals mount in a separate native
+// view tree, making GestureHandlerRootView coverage unreliable across Expo Go
+// and EAS builds. Swipe-to-dismiss is implemented using the built-in PanResponder
+// which works identically across all environments with zero native linking issues.
+
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -18,89 +31,98 @@ interface BottomSheetProps {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 100;
+const DISMISS_VELOCITY = 500;
 
 export default function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
   const [showModal, setShowModal] = useState(visible);
 
-  if (visible && !showModal) {
-    setShowModal(true);
-  }
-
-  const translateY = useSharedValue(SCREEN_HEIGHT);
-  const opacity = useSharedValue(0);
-
-  const handleCloseRef = useRef(onClose);
+  // Sync showModal when visible flips to true
   useEffect(() => {
-    handleCloseRef.current = onClose;
-  }, [onClose]);
+    if (visible) setShowModal(true);
+  }, [visible]);
 
-  const panGesture = Gesture.Pan()
-    .onChange((event) => {
-      if (event.translationY > 0) {
-        translateY.value = event.translationY;
-      }
-    })
-    .onEnd((event) => {
-      if (event.translationY > DISMISS_THRESHOLD || event.velocityY > 500) {
-        runOnJS(handleCloseRef.current)();
-      } else {
-        translateY.value = withSpring(0, { damping: 26, stiffness: 400, overshootClamping: true });
-      }
-    });
+  const translateY    = useSharedValue(SCREEN_HEIGHT);
+  const opacity       = useSharedValue(0);
 
+  // dragY is a plain RN Animated value used by PanResponder (not Reanimated).
+  // We apply it as a second transform so Reanimated's spring entrance doesn't
+  // interfere with the live drag.
+  const dragY = useRef(new RNAnimated.Value(0)).current;
+
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // ─── Entrance / Exit animation (Reanimated spring) ───────────────────────
   useEffect(() => {
     if (visible) {
+      dragY.setValue(0);
       translateY.value = withSpring(0, { damping: 26, stiffness: 400, overshootClamping: true });
-      opacity.value = withTiming(0.4, { duration: 300 });
+      opacity.value    = withTiming(0.4, { duration: 300 });
     } else {
       translateY.value = withSpring(SCREEN_HEIGHT, { damping: 26, stiffness: 400, overshootClamping: true });
-      opacity.value = withTiming(0, { duration: 250 }, (finished) => {
-        if (finished) {
-          runOnJS(setShowModal)(false);
-        }
+      opacity.value    = withTiming(0, { duration: 250 }, (finished) => {
+        if (finished) runOnJS(setShowModal)(false);
       });
     }
   }, [visible]);
 
-  const animatedBackdropStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
+  // ─── Swipe-to-dismiss (built-in PanResponder — no native linking needed) ──
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) dragY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > DISMISS_THRESHOLD || g.vy * 1000 > DISMISS_VELOCITY) {
+          dragY.setValue(0);
+          onCloseRef.current();
+        } else {
+          RNAnimated.spring(dragY, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 26,
+            stiffness: 400,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
-  const animatedSheetStyle = useAnimatedStyle(() => ({
+  const animatedBackdropStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const animatedSheetStyle    = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
   if (!showModal) return null;
 
   return (
-    <Modal visible={showModal} transparent={true} animationType="none" onRequestClose={onClose}>
-      {/* GestureHandlerRootView MUST live inside the Modal because React Native
-          mounts Modals in a separate native view tree — the outer root
-          GestureHandlerRootView in App.tsx does NOT cover portal/Modal content. */}
-      <GestureHandlerRootView style={styles.flex}>
-        <View style={styles.overlay}>
+    <Modal visible={showModal} transparent animationType="none" onRequestClose={onClose}>
+      <View style={styles.overlay}>
         <Pressable onPress={onClose} style={StyleSheet.absoluteFill}>
           <Animated.View style={[styles.backdrop, animatedBackdropStyle]} />
         </Pressable>
 
         <Animated.View style={[styles.sheet, animatedSheetStyle]}>
-          <GestureDetector gesture={panGesture}>
-            <Animated.View style={styles.handleContainer}>
-              <View style={styles.handle} />
-            </Animated.View>
-          </GestureDetector>
-          {children}
+          {/* Drag handle — PanResponder attached here */}
+          <RNAnimated.View
+            style={[styles.handleContainer, { transform: [{ translateY: dragY }] }]}
+            {...panResponder.panHandlers}
+          >
+            <View style={styles.handle} />
+          </RNAnimated.View>
+
+          {/* Content is NOT wrapped in the drag responder so taps still work */}
+          <RNAnimated.View style={{ transform: [{ translateY: dragY }] }}>
+            {children}
+          </RNAnimated.View>
         </Animated.View>
-        </View>
-      </GestureHandlerRootView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
