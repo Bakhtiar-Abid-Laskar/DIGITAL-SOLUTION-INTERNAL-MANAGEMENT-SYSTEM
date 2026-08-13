@@ -16,6 +16,7 @@ L.Icon.Default.mergeOptions({
 interface GeofenceMapProps {
   initialSetting: GeofenceSettings | null;
   onSave: (lat: number, lng: number) => Promise<void>;
+  radius?: number;
 }
 
 /** Inner component: listens for flyTo commands via a ref-based approach */
@@ -51,7 +52,7 @@ function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) =
   return null;
 }
 
-export default function GeofenceMap({ initialSetting, onSave }: GeofenceMapProps) {
+export default function GeofenceMap({ initialSetting, onSave, radius = 100 }: GeofenceMapProps) {
   const [position, setPosition] = useState<[number, number] | null>(
     initialSetting ? [initialSetting.lat, initialSetting.lng] : null
   );
@@ -323,7 +324,7 @@ export default function GeofenceMap({ initialSetting, onSave }: GeofenceMapProps
               <Marker position={position} />
               <Circle
                 center={position}
-                radius={50}
+                radius={radius}
                 pathOptions={{ color: 'var(--admin-accent)', fillColor: 'var(--admin-accent)', fillOpacity: 0.2 }}
               />
             </>
@@ -343,7 +344,7 @@ export default function GeofenceMap({ initialSetting, onSave }: GeofenceMapProps
               Search, enter coordinates, or click the map to set the shop location.
             </p>
           )}
-          <p className="text-xs text-admin-text-secondary mt-1">Radius is strictly enforced at 50 meters.</p>
+          <p className="text-xs text-admin-text-secondary mt-1">Allowed radius: {radius} m.</p>
         </div>
         <button
           onClick={handleSave}
