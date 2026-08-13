@@ -77,8 +77,8 @@ export default function ReassignTechnicianModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-admin-bg-dark/80 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-fade-in">
-      <div className="bg-admin-bg-surface rounded-xl shadow-modal w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-admin-bg-dark/80 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-0 sm:p-4 animate-fade-in">
+      <div className="bg-admin-bg-surface sm:rounded-xl rounded-t-2xl shadow-modal w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-admin-border flex justify-between items-center bg-admin-bg-subtle shrink-0">
           <h3 className="font-bold text-admin-text-primary">Assign Technicians</h3>
           <button onClick={onClose} className="text-admin-text-muted hover:text-admin-text-primary">
@@ -136,8 +136,8 @@ export default function ReassignTechnicianModal({
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-admin-border bg-admin-bg-subtle flex justify-end gap-3 shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+        <div className="px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 border-t border-admin-border bg-admin-bg-subtle flex justify-end gap-3 shrink-0">
+          <Button variant="outline" onClick={onClose} disabled={loading} className="min-h-[44px]">
             Cancel
           </Button>
           <Button 

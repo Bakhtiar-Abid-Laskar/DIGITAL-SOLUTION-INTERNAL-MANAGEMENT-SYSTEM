@@ -20,6 +20,13 @@ export const metadata: Metadata = {
   },
 };
 
+import type { Viewport } from 'next';
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 import { ToastProvider } from "@/components/common/ToastProvider";
 
 export default function RootLayout({

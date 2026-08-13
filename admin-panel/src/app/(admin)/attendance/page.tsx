@@ -239,7 +239,7 @@ export default function AttendancePage() {
         <TableSkeleton cols={6} rows={5} />
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto table-scroll-shadow">
             <table className="w-full text-sm text-left">
               <thead className="text-xs uppercase bg-[var(--surface-sunken)] text-[var(--text-secondary)] border-b border-[var(--border-subtle)]">
                 <tr>

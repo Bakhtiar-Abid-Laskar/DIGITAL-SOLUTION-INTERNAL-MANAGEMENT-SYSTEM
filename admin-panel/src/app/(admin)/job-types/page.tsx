@@ -120,7 +120,7 @@ export default function JobTypesPage() {
       </Card>
 
       <Card className="flex-1 flex flex-col overflow-hidden">
-        <div className="overflow-x-auto flex-1">
+        <div className="overflow-x-auto flex-1 table-scroll-shadow">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border">
               <tr>

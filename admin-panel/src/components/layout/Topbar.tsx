@@ -135,7 +135,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       <div className="flex items-center gap-3 flex-1 overflow-hidden">
         <button 
           onClick={onMenuClick}
-          className="p-2 text-admin-text-secondary hover:text-admin-text-primary transition-colors lg:hidden shrink-0 rounded-lg hover:bg-admin-bg-subtle"
+          className="p-2 text-admin-text-secondary hover:text-admin-text-primary transition-colors lg:hidden shrink-0 rounded-lg hover:bg-admin-bg-subtle min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Open navigation menu"
         >
           <Menu size={22} />
@@ -150,7 +150,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         <div className="relative" ref={notifRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 text-admin-text-secondary hover:text-admin-accent transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent rounded-lg hover:bg-admin-bg-subtle"
+            className="p-2 text-admin-text-secondary hover:text-admin-accent transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent rounded-lg hover:bg-admin-bg-subtle min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Notifications"
           >
             <Bell size={19} />
@@ -192,7 +192,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             size="icon" 
             onClick={() => setShowLogoutConfirm(!showLogoutConfirm)} 
             aria-label="Logout" 
-            className="text-admin-text-secondary hover:text-admin-danger hover:bg-admin-danger-dim/30 focus-visible:ring-admin-danger rounded-lg"
+            className="text-admin-text-secondary hover:text-admin-danger hover:bg-admin-danger-dim/30 focus-visible:ring-admin-danger rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <LogOut size={19} />
           </Button>

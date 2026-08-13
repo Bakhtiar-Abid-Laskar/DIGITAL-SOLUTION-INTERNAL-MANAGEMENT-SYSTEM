@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Briefcase, Users, Package, Boxes, BarChart3, Wallet, FileText, Settings, Tag, Tags, Wrench, X, Receipt, Truck, ShoppingCart, CalendarDays } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { useEffect } from 'react';
 
 const NAV_ITEMS = [
   { label: 'Overview', href: '/', icon: LayoutDashboard },
@@ -28,6 +29,17 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile } = useAuth();
+
+  // Close on Escape key for accessibility
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && onClose) {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   return (
     <>
@@ -74,7 +86,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   if (window.innerWidth < 1024 && onClose) onClose();
                 }}
                 className={cn(
-                  "flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 ease-in-out text-sm font-medium border-l-4",
+                  "flex items-center gap-3 px-3.5 py-3 rounded-lg transition-all duration-150 ease-in-out text-sm font-medium border-l-4",
                   isActive 
                     ? "bg-admin-sidebar-active-bg text-admin-sidebar-active border-admin-sidebar-accent-border shadow-sm" 
                     : "text-slate-300 border-transparent hover:bg-white/10 hover:text-white"

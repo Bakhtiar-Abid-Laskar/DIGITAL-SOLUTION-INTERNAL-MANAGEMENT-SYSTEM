@@ -71,12 +71,12 @@ export function ConfirmationModal({
   }, [onCancel]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-admin-bg-dark/80 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-admin-bg-dark/80 backdrop-blur-sm animate-fade-in">
       <dialog 
         ref={modalRef as any}
         open
         aria-labelledby="modal-title"
-        className="bg-admin-bg-surface border border-admin-border rounded-xl max-w-sm w-full p-6 animate-scale-in m-auto relative top-1/2 -translate-y-1/2 backdrop:bg-admin-bg-dark/80 backdrop:backdrop-blur-sm"
+        className="bg-admin-bg-surface border border-admin-border sm:rounded-xl rounded-t-2xl max-w-sm w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 animate-scale-in m-0 relative backdrop:bg-admin-bg-dark/80 backdrop:backdrop-blur-sm"
       >
         <div className="flex items-center gap-3 mb-4">
           <div className={`p-2 rounded-full ${isDestructive ? 'bg-admin-danger/10 text-admin-danger' : 'bg-admin-accent/10 text-admin-accent'}`}>
@@ -86,8 +86,8 @@ export function ConfirmationModal({
         </div>
         <p className="text-admin-text-secondary text-sm mb-6">{message}</p>
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={onCancel}>{cancelText}</Button>
-          <Button variant={isDestructive ? 'danger' : 'primary'} onClick={onConfirm}>
+          <Button variant="ghost" onClick={onCancel} className="min-h-[44px]">{cancelText}</Button>
+          <Button variant={isDestructive ? 'danger' : 'primary'} onClick={onConfirm} className="min-h-[44px]">
             {confirmText}
           </Button>
         </div>

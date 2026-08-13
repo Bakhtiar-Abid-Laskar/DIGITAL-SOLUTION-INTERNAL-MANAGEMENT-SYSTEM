@@ -219,7 +219,7 @@ export default function SalesPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto flex-1">
+            <div className="overflow-x-auto flex-1 table-scroll-shadow">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-admin-bg-surface text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border text-xs uppercase tracking-wider">
                   <tr>

@@ -296,7 +296,7 @@ export default function OverviewPage() {
             View All &rarr;
           </Link>
         </CardHeader>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto table-scroll-shadow">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-admin-bg-subtle text-admin-text-secondary border-y border-admin-border">
               <tr>

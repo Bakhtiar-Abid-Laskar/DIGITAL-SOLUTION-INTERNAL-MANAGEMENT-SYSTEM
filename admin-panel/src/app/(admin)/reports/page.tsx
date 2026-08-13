@@ -288,7 +288,7 @@ export default function ReportsPage() {
                   <CardHeader>
                     <CardTitle>Technician Breakdown</CardTitle>
                   </CardHeader>
-                  <div className="overflow-x-auto flex-1">
+                  <div className="overflow-x-auto flex-1 table-scroll-shadow">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                       <thead className="bg-admin-bg-subtle text-admin-text-secondary border-y border-admin-border">
                         <tr>
@@ -342,7 +342,7 @@ export default function ReportsPage() {
               <TableSkeleton />
             ) : (
               <>
-                <div className="overflow-x-auto flex-1">
+                <div className="overflow-x-auto flex-1 table-scroll-shadow">
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border">
                       <tr>
@@ -444,7 +444,7 @@ export default function ReportsPage() {
                   <CardHeader>
                     <CardTitle>Recent Invoices</CardTitle>
                   </CardHeader>
-                  <div className="overflow-x-auto flex-1">
+                  <div className="overflow-x-auto flex-1 table-scroll-shadow">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                       <thead className="bg-admin-bg-subtle text-admin-text-secondary border-y border-admin-border">
                         <tr>

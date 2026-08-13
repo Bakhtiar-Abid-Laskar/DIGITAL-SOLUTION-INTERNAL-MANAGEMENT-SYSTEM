@@ -367,7 +367,7 @@ export default function CreateSalePage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto table-scroll-shadow">
               <table className="w-full text-left text-sm">
                 <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border">
                   <tr>
