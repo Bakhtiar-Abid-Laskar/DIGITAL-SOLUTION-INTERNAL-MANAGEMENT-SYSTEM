@@ -1,7 +1,7 @@
 export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed';
 export type JobPriority = 'Normal' | 'High' | 'Urgent';
 export type JobType = 'Inhouse' | 'Onsite';
-export type DeviceType = 'Laptop' | 'PC' | 'Other';
+export type DeviceType = string;
 
 export interface Job {
   id: string;

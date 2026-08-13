@@ -17,6 +17,7 @@ import SectionLabel from '../../components/common/SectionLabel';
 import Button from '../../components/common/Button';
 import SegmentedControl from '../../components/shared/SegmentedControl';
 import Dropdown from '../../components/shared/Dropdown';
+import CreatableDropdown from '../../components/shared/CreatableDropdown';
 import ScreenScrollView from '../../components/common/ScreenScrollView';
 import { useAppConfig } from '../../context/AppConfigContext';
 import { colors, radius, spacing, typography } from '../../tokens';
@@ -34,6 +35,7 @@ export default function CustomerIntakeScreen() {
 
   const [catalogItems, setCatalogItems] = useState<JobTypeCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [deviceTypes, setDeviceTypes] = useState<{label: string, value: string}[]>([]);
 
   const [form, setForm] = useState<NewJobFormValues>({
     customer_name: '',
@@ -70,6 +72,13 @@ export default function CustomerIntakeScreen() {
           console.error('Error fetching job types catalog:', error.message);
         } else if (isMounted && data) {
           setCatalogItems(data as JobTypeCatalogItem[]);
+        }
+
+        const { data: dtData, error: dtError } = await supabase.rpc('get_unique_device_types');
+        if (dtError) {
+          console.error('Error fetching device types:', dtError.message);
+        } else if (isMounted && dtData) {
+          setDeviceTypes(dtData.map((d: any) => ({ label: d.device_type, value: d.device_type })));
         }
       } finally {
         if (isMounted) setCatalogLoading(false);
@@ -215,18 +224,17 @@ export default function CustomerIntakeScreen() {
           </View>
           <View style={styles.card}>
             <Text style={styles.fieldLabel}>Device Type</Text>
-            <Dropdown
-              options={[
+            <CreatableDropdown
+              options={deviceTypes.length > 0 ? deviceTypes : [
                 { label: 'PC', value: 'PC' },
                 { label: 'Laptop', value: 'Laptop' },
                 { label: 'Printer', value: 'Printer' },
                 { label: 'Camera', value: 'Camera' },
-                { label: 'Mobile', value: 'Mobile' },
-                { label: 'Others', value: 'Others' }
+                { label: 'Mobile', value: 'Mobile' }
               ]}
               selectedValue={form.device_type}
               onSelect={(val) => updateForm('device_type', val)}
-              placeholder="Select Device Type"
+              placeholder="Search or add a device type..."
               icon={<Laptop size={18} color={colors.textMuted} />}
             />
 
