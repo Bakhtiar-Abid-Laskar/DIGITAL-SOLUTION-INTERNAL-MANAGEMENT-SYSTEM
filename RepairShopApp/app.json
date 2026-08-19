@@ -36,7 +36,7 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.repairshop.app",
-      "googleServicesFile": "$GOOGLE_SERVICES_JSON"
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
