@@ -1,18 +1,21 @@
-// index.ts — Supabase Edge Function: generate-invoice
-// Accepts POST with InvoiceDoc, returns { html, totals, driveLink? }
-// Both web admin and mobile app call this same endpoint.
+// index.ts — Supabase Edge Function: generate-invoice (SVG edition)
+// Replaces the old HTML template system entirely.
+// Renders invoices using digitalsolution_bill_templete.svg as the visual source of truth.
 //
-// Drive behaviour:
-//   - When jobId is present → renders HTML, uploads it to Google Drive under
-//     Invoices/{YYYY}/{Month}/, writes drive_link + drive_file_id to billing row.
-//   - On Drive/DB failure → queues a row in pending_uploads so the retry worker
-//     can finish the job. The HTML response is always returned regardless.
-//   - When jobId is absent (preview-only) → Drive upload is skipped silently.
+// Supported sources (all 3 doc types):
+//   docType = 'final'   → job completion invoice (invoices + invoice_items tables)
+//   docType = 'receipt' → job receipt (billing_legacy / jobs tables)
+//   docType = 'sale'    → counter sale (sales + sale_items tables)
+//
+// Returns { html: string, driveLink: string | null }
+//   html      → complete SVG-in-HTML string; client passes to expo-print or window.print()
+//   driveLink → Google Drive webViewLink for the stored HTML file (if jobId/saleId provided)
+//
+// Drive folder structure: Invoices/{YYYY}/{Month}/
+// Drive filename: invoice-RS-2026-0001.html  or  sale-SALE-2026-0001.html
 
-import { validateInvoiceDoc } from './schema.ts';
-import { calculateTotals } from './calc.ts';
-import { renderHtml } from './template.ts';
-import { LETTERHEAD_B64 } from './assets.ts';
+import { renderSvgInvoice } from './svgTemplate.ts';
+import type { SvgLineItem, SvgTotals, SvgInvoiceInput } from './svgTemplate.ts';
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { getAccessToken } from '../_shared/googleAuth.ts';
@@ -27,9 +30,233 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// ─── Request payload types ────────────────────────────────────────────────────
+
+type DocType = 'final' | 'receipt' | 'sale';
+
+type InvoiceRequest = {
+  docType: DocType;
+  // For 'final' and 'receipt': provide invoiceId or jobId to fetch from DB.
+  // For 'sale': provide saleId to fetch from DB.
+  // Alternatively, provide inline data (for preview/ad-hoc calls):
+  invoiceId?: string;    // invoices.id (UUID)
+  jobId?: string;        // jobs.id (UUID) — used for 'receipt' and Drive naming
+  saleId?: string;       // sales.id (UUID)
+  // Optional inline override — if provided, DB fetch is skipped and these are used directly
+  inline?: SvgInvoiceInput;
+};
+
+// ─── DB fetch helpers ─────────────────────────────────────────────────────────
+
+async function fetchInvoiceData(
+  supabase: any,
+  invoiceId: string
+): Promise<SvgInvoiceInput> {
+  const { data: inv, error: invErr } = await supabase
+    .from('invoices')
+    .select('*, invoice_items(*)')
+    .eq('id', invoiceId)
+    .single();
+
+  if (invErr || !inv) throw new Error(`Invoice not found: ${invErr?.message}`);
+
+  const items: SvgLineItem[] = (inv.invoice_items || []).map((it: any, idx: number) => {
+    const qty = Number(it.quantity) || 1;
+    const rate = Number(it.selling_rate) || 0;
+    return {
+      sn: idx + 1,
+      description: it.item_name || '—',
+      serialNumber: it.serial_number || undefined,
+      qty,
+      rate,
+      amount: qty * rate,
+    };
+  });
+
+  const totals: SvgTotals = {
+    subtotal: Number(inv.subtotal) || 0,
+    discount: Number(inv.discount) || 0,
+    tax: Number(inv.total_tax) || 0,
+    total: Number(inv.grand_total) || 0,
+  };
+
+  return {
+    invoiceNo: inv.invoice_code || '—',
+    invoiceDate: inv.created_at || new Date().toISOString(),
+    customerName: inv.customer_name || 'Walk-in Customer',
+    customerAddress: '—',   // invoices table has no address field; use phone as fallback
+    customerPhone: inv.customer_contact || '—',
+    customerEmail: inv.customer_email || '',
+    customerGstin: inv.customer_gstin || undefined,
+    items,
+    totals,
+  };
+}
+
+async function fetchJobReceiptData(
+  supabase: any,
+  jobId: string
+): Promise<SvgInvoiceInput> {
+  const { data: job, error: jobErr } = await supabase
+    .from('jobs')
+    .select('*, billing_legacy(*), job_materials(*)')
+    .eq('id', jobId)
+    .single();
+
+  if (jobErr || !job) throw new Error(`Job not found: ${jobErr?.message}`);
+
+  const billing = job.billing_legacy?.[0] || {};
+  const materials: SvgLineItem[] = (job.job_materials || []).map((m: any, idx: number) => {
+    const qty = Number(m.quantity) || 1;
+    const rate = Number(m.unit_cost) || 0;
+    return {
+      sn: idx + 1,
+      description: m.material_name || '—',
+      qty,
+      rate,
+      amount: qty * rate,
+    };
+  });
+
+  // Add labour as a line item if set
+  if (Number(billing.labour_charge) > 0) {
+    materials.push({
+      sn: materials.length + 1,
+      description: 'Labour / Service Charge',
+      qty: 1,
+      rate: Number(billing.labour_charge),
+      amount: Number(billing.labour_charge),
+    });
+  }
+
+  const partsTotal = Number(billing.parts_total) || 0;
+  const labourCharge = Number(billing.labour_charge) || 0;
+  const subtotal = partsTotal + labourCharge;
+  const taxPct = Number(billing.tax_percent) || 0;
+  const tax = subtotal * taxPct / 100;
+  const discount = Number(billing.discount) || 0;
+  const total = Number(billing.grand_total) || (subtotal + tax - discount);
+
+  return {
+    invoiceNo: job.job_code || jobId.slice(0, 8).toUpperCase(),
+    invoiceDate: job.created_at || new Date().toISOString(),
+    customerName: job.customer_name || 'Walk-in Customer',
+    customerAddress: job.customer_address || '—',
+    customerPhone: job.customer_contact || '—',
+    customerEmail: job.customer_email || '',
+    customerGstin: undefined,
+    items: materials.length > 0 ? materials : [{
+      sn: 1, description: 'Service / Repair', qty: 1,
+      rate: subtotal, amount: subtotal,
+    }],
+    totals: { subtotal, discount, tax, total },
+  };
+}
+
+async function fetchSaleData(
+  supabase: any,
+  saleId: string
+): Promise<SvgInvoiceInput> {
+  const { data: sale, error: saleErr } = await supabase
+    .from('sales')
+    .select('*, sale_items(*)')
+    .eq('id', saleId)
+    .single();
+
+  if (saleErr || !sale) throw new Error(`Sale not found: ${saleErr?.message}`);
+
+  const items: SvgLineItem[] = (sale.sale_items || []).map((it: any, idx: number) => {
+    const qty = Number(it.quantity) || 1;
+    const rate = Number(it.unit_price) || 0;
+    return {
+      sn: idx + 1,
+      description: it.item_name || '—',
+      serialNumber: it.serial_number || undefined,
+      qty,
+      rate,
+      amount: qty * rate,
+    };
+  });
+
+  const subtotal = Number(sale.subtotal) || items.reduce((s, i) => s + i.amount, 0);
+  const tax = subtotal * (Number(sale.tax_percent) || 0) / 100;
+  const discount = Number(sale.discount) || 0;
+  const total = Number(sale.grand_total) || (subtotal + tax - discount);
+
+  return {
+    invoiceNo: sale.invoice_number || sale.sale_code || '—',
+    invoiceDate: sale.created_at || new Date().toISOString(),
+    customerName: sale.customer_name || 'Walk-in Customer',
+    customerAddress: '—',
+    customerPhone: sale.customer_contact || '—',
+    customerEmail: '',
+    customerGstin: sale.customer_gstin || undefined,
+    items,
+    totals: { subtotal, discount, tax, total },
+  };
+}
+
+// ─── Drive upload helper ──────────────────────────────────────────────────────
+
+async function uploadToDrive(
+  html: string,
+  invoiceDate: string,
+  docType: DocType,
+  refCode: string
+): Promise<{ driveLink: string; fileId: string }> {
+  const token = await getAccessToken();
+
+  const invoiceDateObj = new Date(invoiceDate);
+  const year = String(invoiceDateObj.getFullYear());
+  const month = monthName(invoiceDateObj.getMonth() + 1);
+  const folderId = await ensureFolderPath(token, ['Invoices', year, month]);
+
+  const safeRef = sanitizeFilenameSegment(refCode);
+  const filename = `${docType}-${safeRef}.html`;
+
+  const htmlBytes = new TextEncoder().encode(html);
+  const { fileId, webViewLink } = await uploadFileToDrive(token, {
+    name: filename,
+    mimeType: 'text/html',
+    parentId: folderId,
+    data: htmlBytes,
+  });
+
+  return { driveLink: webViewLink, fileId };
+}
+
+// ─── Write drive link back to DB ──────────────────────────────────────────────
+
+async function persistDriveLink(
+  supabase: any,
+  docType: DocType,
+  jobId: string | undefined,
+  saleId: string | undefined,
+  invoiceId: string | undefined,
+  driveLink: string,
+  fileId: string
+): Promise<void> {
+  if (docType === 'final' && invoiceId) {
+    // invoices table does not have a drive_link column yet — write to billing_legacy if jobId exists
+    if (jobId) {
+      await supabase
+        .from('billing_legacy')
+        .update({ drive_link: driveLink, drive_file_id: fileId })
+        .eq('job_id', jobId);
+    }
+  } else if (docType === 'receipt' && jobId) {
+    await supabase
+      .from('billing_legacy')
+      .update({ drive_link: driveLink, drive_file_id: fileId })
+      .eq('job_id', jobId);
+  }
+  // sales table: no drive_link column — silently skip (can be added later)
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+
 // @ts-ignore
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
@@ -41,9 +268,9 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  let raw: unknown;
+  let body: InvoiceRequest;
   try {
-    raw = await req.json();
+    body = await req.json() as InvoiceRequest;
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
       status: 400,
@@ -51,137 +278,106 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Validate
-  const validation = validateInvoiceDoc(raw);
-  if (!validation.ok) {
-    return new Response(JSON.stringify({ error: 'Validation failed', details: validation.errors }), {
+  if (!body.docType || !['final', 'receipt', 'sale'].includes(body.docType)) {
+    return new Response(JSON.stringify({ error: 'docType must be final | receipt | sale' }), {
       status: 400,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
-  const doc = validation.value;
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
 
-  // Compute item totals (price * unit) for display
-  const itemsWithTotals = doc.items.map(item => ({
-    ...item,
-    total: item.price * item.unit,
-  }));
+  // ── Fetch invoice data ────────────────────────────────────────────────────
+  let invoiceInput: SvgInvoiceInput;
+  try {
+    if (body.inline) {
+      invoiceInput = body.inline;
+    } else if (body.docType === 'final' && body.invoiceId) {
+      invoiceInput = await fetchInvoiceData(supabase, body.invoiceId);
+    } else if (body.docType === 'receipt' && body.jobId) {
+      invoiceInput = await fetchJobReceiptData(supabase, body.jobId);
+    } else if (body.docType === 'sale' && body.saleId) {
+      invoiceInput = await fetchSaleData(supabase, body.saleId);
+    } else {
+      return new Response(JSON.stringify({
+        error: 'Provide invoiceId (final), jobId (receipt), saleId (sale), or inline data',
+      }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+  } catch (fetchErr: any) {
+    return new Response(JSON.stringify({ error: fetchErr.message }), {
+      status: 422,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 
-  // Server-side calculation — client-submitted totals are never trusted
-  const totals = calculateTotals(itemsWithTotals, doc.taxRatePct, doc.discount);
+  // ── Render SVG invoice ────────────────────────────────────────────────────
+  let html: string;
+  try {
+    html = renderSvgInvoice(invoiceInput);
+  } catch (renderErr: any) {
+    console.error('[generate-invoice] Render failed:', renderErr.message);
+    return new Response(JSON.stringify({ error: `Render failed: ${renderErr.message}` }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 
-  // Use Base64 inline image for guaranteed rendering on mobile expo-print
-  const letterheadUrl = LETTERHEAD_B64;
-
-  // QR code is lightweight — client handles resolution
-  const qrUrl = '/upi-qr.png';
-
-  const html = renderHtml({
-    docType: doc.docType,
-    invoiceNo: doc.invoiceNo,
-    jobId: doc.jobId,
-    date: doc.date,
-    customer: doc.customer,
-    items: itemsWithTotals,
-    totals,
-    letterheadUrl,
-    qrUrl,
-  });
-
-  // ─── Google Drive Upload ──────────────────────────────────────────────────
-  // Only runs when jobId is supplied (real billing, not preview-only).
-  // A failure here NEVER breaks the response — we always return the HTML.
+  // ── Google Drive upload ───────────────────────────────────────────────────
+  // Only runs when a reference ID is supplied. Failures never break the response.
   let driveLink: string | null = null;
+  const hasRef = body.jobId || body.saleId || body.invoiceId;
 
-  if (doc.jobId) {
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
+  if (hasRef) {
     try {
-      const token = await getAccessToken();
+      const refCode = invoiceInput.invoiceNo;
+      const { driveLink: dl, fileId } = await uploadToDrive(
+        html,
+        invoiceInput.invoiceDate,
+        body.docType,
+        refCode
+      );
+      driveLink = dl;
 
-      // Build Drive folder: Invoices/{YYYY}/{Month}/
-      const invoiceDate = new Date(doc.date);
-      const year = String(invoiceDate.getFullYear());
-      const month = monthName(invoiceDate.getMonth() + 1);
-      const folderId = await ensureFolderPath(token, ['Invoices', year, month]);
-
-      // Filename: e.g. "invoice-rs-2026-0001.html" or "receipt-rs-2026-0001.html"
-      const safeRef = doc.invoiceNo
-        ? sanitizeFilenameSegment(doc.invoiceNo)
-        : sanitizeFilenameSegment(doc.jobId);
-      const filename = `${doc.docType}-${safeRef}.html`;
-
-      const htmlBytes = new TextEncoder().encode(html);
-      const { fileId, webViewLink } = await uploadFileToDrive(token, {
-        name: filename,
-        mimeType: 'text/html',
-        parentId: folderId,
-        data: htmlBytes,
+      await persistDriveLink(
+        supabase,
+        body.docType,
+        body.jobId,
+        body.saleId,
+        body.invoiceId,
+        dl,
+        fileId
+      ).catch((e: any) => {
+        console.warn('[generate-invoice] DB persist failed (non-fatal):', e.message);
       });
-
-      driveLink = webViewLink;
-
-      // Write drive link back to the billing row for this job.
-      // Uses job_id lookup (UUID) — idempotent if called multiple times.
-      // .select('id') lets us detect a 0-row match (billing row not yet created).
-      const { data: updatedRows, error: updateError } = await supabaseAdmin
-        .from('billing')
-        .update({ drive_link: webViewLink, drive_file_id: fileId })
-        .eq('job_id', doc.jobId)
-        .select('id');
-
-      if (updateError || !updatedRows || updatedRows.length === 0) {
-        // Either a DB error or the billing row doesn't exist yet.
-        // Queue the drive link so the retry worker can write it later.
-        const reason = updateError?.message ?? '0 billing rows matched for job_id';
-        console.error('[generate-invoice] billing update failed:', reason);
-        await supabaseAdmin.from('pending_uploads').insert({
-          type: doc.docType === 'receipt' ? 'receipt' : 'invoice',
-          reference_id: doc.jobId,   // job UUID; retry matches by jobId
-          reference_table: 'billing',
-          payload_json: {
-            jobId: doc.jobId,
-            driveFileId: fileId,
-            driveLink: webViewLink,
-            driveAlreadyUploaded: true,   // Drive upload succeeded — only DB write needed
-          },
-        });
-      }
     } catch (driveErr: any) {
-      // Drive upload itself failed — queue the HTML so the retry worker can
-      // re-upload and then write drive_link to billing.
-      console.error('[generate-invoice] Drive upload failed:', driveErr.message);
-      try {
-        const invoiceDate = new Date(doc.date);
-        const safeRef = doc.invoiceNo
-          ? sanitizeFilenameSegment(doc.invoiceNo)
-          : sanitizeFilenameSegment(doc.jobId);
-        await supabaseAdmin.from('pending_uploads').insert({
-          type: doc.docType === 'receipt' ? 'receipt' : 'invoice',
-          reference_id: doc.jobId,
-          reference_table: 'billing',
-          payload_json: {
-            jobId: doc.jobId,
-            docType: doc.docType,
-            filename: `${doc.docType}-${safeRef}.html`,
-            htmlContent: html,                        // stored for retry re-upload
-            year: invoiceDate.getFullYear(),
-            month: invoiceDate.getMonth() + 1,        // 1-indexed
-          },
-        });
-      } catch (queueErr: any) {
-        // Last resort — log and continue. The invoice print still works.
-        console.error('[generate-invoice] failed to queue pending upload:', queueErr.message);
+      console.error('[generate-invoice] Drive upload failed (non-fatal):', driveErr.message);
+      // Queue for retry if billing_legacy job is involved
+      if (body.jobId) {
+        try {
+          await supabase.from('pending_uploads').insert({
+            type: body.docType,
+            reference_id: body.jobId,
+            reference_table: 'billing_legacy',
+            payload_json: {
+              jobId: body.jobId,
+              docType: body.docType,
+              filename: `${body.docType}-${sanitizeFilenameSegment(invoiceInput.invoiceNo)}.html`,
+              htmlContent: html,
+              year: new Date(invoiceInput.invoiceDate).getFullYear(),
+              month: new Date(invoiceInput.invoiceDate).getMonth() + 1,
+            },
+          });
+        } catch (queueErr: any) {
+          console.error('[generate-invoice] Failed to queue pending upload:', queueErr.message);
+        }
       }
     }
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
-  return new Response(JSON.stringify({ html, totals, driveLink }), {
+  return new Response(JSON.stringify({ html, driveLink }), {
     status: 200,
     headers: { ...CORS, 'Content-Type': 'application/json' },
   });
