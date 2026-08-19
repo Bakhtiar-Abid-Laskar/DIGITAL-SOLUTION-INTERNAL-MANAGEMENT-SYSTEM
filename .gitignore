@@ -3,20 +3,24 @@ node_modules/
 dist/
 build/
 .expo/
+coverage/
 *.log
 .env
 .env.local
 .env.*.local
+*.tsbuildinfo
+diagnostics*.json
+lint-baseline.txt
 
 # ─── SECRET FILES — NEVER COMMIT ───────────────────────────────────────────
 # Firebase service-account private keys (rotate immediately if already committed)
 *-adminsdk-*.json
 digitalsolution-76a79-firebase-adminsdk-fbsvc-772fd6fd3f.json
 
-# Firebase Android client config (contains API key — restrict by package name)
-# Technically safe in APK but keep out of git as defence-in-depth
-google-services.json
-GoogleService-Info.plist
+# Firebase Android client config — scoped to root only.
+# The RepairShopApp/google-services.json is tracked intentionally for EAS Build.
+/google-services.json
+/GoogleService-Info.plist
 
 # Twilio 2FA recovery codes
 ref/twilio_2FA_recovery_code.txt
@@ -32,4 +36,4 @@ ref/twilio_2FA_recovery_code.txt
 # Firebase Admin SDK credentials
 *firebase-adminsdk*.json
 digitalsolution-76a79-firebase-adminsdk-fbsvc-772fd6fd3f.json
-google-services.json
+/google-services.json

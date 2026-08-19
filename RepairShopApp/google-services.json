@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "942617918361",
+    "project_id": "digitalsolution-76a79",
+    "storage_bucket": "digitalsolution-76a79.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:942617918361:android:c4d6f8d6b97e2b6fb7b108",
+        "android_client_info": {
+          "package_name": "com.repairshop.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlwg17mmy5ToclLB_gmERDhqM1EpioqVg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

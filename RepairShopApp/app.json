@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Digital Solution",
-    "slug": "RepairShopApp",
+    "slug": "digitalsolution",
     "scheme": "repairshop",
     "version": "1.0.0",
     "cli": {
@@ -29,10 +29,14 @@
         "CAMERA",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.repairshop.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "$GOOGLE_SERVICES_JSON"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -66,8 +70,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "9406caf9-490a-4041-b397-5cd0c9a62c8a"
+        "projectId": "9e74d61a-0e68-4312-a3ce-4114cf44a72d"
       }
-    }
+    },
+    "owner": "bakhtiarabid02"
   }
 }
