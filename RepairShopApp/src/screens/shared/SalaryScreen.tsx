@@ -155,6 +155,7 @@ export default function SalaryScreen() {
   const [histLoading,  setHistLoading]  = useState(false);
 
   const [leaveDate,    setLeaveDate]    = useState('');
+  const [leaveEndDate, setLeaveEndDate] = useState('');
   const [leaveReason,  setLeaveReason]  = useState('');
   const [leaveSaving,  setLeaveSaving]  = useState(false);
   const [myLeaves,     setMyLeaves]     = useState<any[]>([]);
@@ -227,6 +228,25 @@ export default function SalaryScreen() {
   useEffect(() => { fetchHistory(); },        [fetchHistory]);
   useEffect(() => { fetchLeaves(); },         [fetchLeaves]);
 
+  // Realtime subscription for leave updates
+  useEffect(() => {
+    if (!user) return;
+    const sub = supabase.channel(`leaves-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'employee_leave',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        fetchLeaves();
+        fetchCurrentRecord();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [user, fetchLeaves, fetchCurrentRecord]);
+
   const handleDownload = async (r: SalaryRecord) => {
     if (!user) return;
     setDownloadingId(r.id);
@@ -260,19 +280,40 @@ export default function SalaryScreen() {
     setLeaveSaving(true);
     let errorObj = null;
     try {
-      const { error } = await supabase.from('employee_leave').insert({
-        user_id: user.id, leave_date: leaveDate, status: 'pending',
-        reason: leaveReason.trim() || null,
-      });
+      const start = new Date(leaveDate);
+      const end = leaveEndDate ? new Date(leaveEndDate) : new Date(leaveDate);
+      
+      if (end < start) {
+        Alert.alert('Invalid Date Range', 'End date cannot be before start date.');
+        setLeaveSaving(false);
+        return;
+      }
+
+      const leaveRecordsToInsert = [];
+      const current = new Date(start);
+      while (current <= end) {
+        const currentDateStr = current.toISOString().slice(0, 10);
+        leaveRecordsToInsert.push({
+          user_id: user.id, 
+          leave_date: currentDateStr, 
+          status: 'pending',
+          reason: leaveReason.trim() || null,
+        });
+        current.setDate(current.getDate() + 1);
+      }
+
+      const { error } = await supabase.from('employee_leave').insert(leaveRecordsToInsert);
       errorObj = error;
     } finally {
       setLeaveSaving(false);
     }
     if (errorObj) {
-      Alert.alert('Error', errorObj.message);
+      Alert.alert('Error', errorObj.message || 'Failed to submit leave request.');
     } else {
-      Alert.alert('Leave Requested', 'Your leave request has been submitted for approval.');
-      setLeaveDate(''); setLeaveReason('');
+      Alert.alert('Success', 'Leave request submitted successfully.');
+      setLeaveDate('');
+      setLeaveEndDate('');
+      setLeaveReason('');
       fetchLeaves();
     }
   };
@@ -337,9 +378,11 @@ export default function SalaryScreen() {
             <Text style={styles.sectionTitle}>Apply for Leave</Text>
             <LeaveApplicationCard
               leaveDate={leaveDate}
+              leaveEndDate={leaveEndDate}
               leaveReason={leaveReason}
               leaveSaving={leaveSaving}
-              onChangleDate={setLeaveDate}
+              onChangeDate={setLeaveDate}
+              onChangeEndDate={setLeaveEndDate}
               onChangeReason={setLeaveReason}
               onSubmit={handleApplyLeave}
             />

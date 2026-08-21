@@ -16,65 +16,64 @@ import { useToast } from '../../context/ToastContext';
 
 export interface SelfieCaptureProps {
   label: string;
-  onCaptureComplete: (data: { uri: string; path: string; gpsLat: number; gpsLng: number; lowAccuracy?: boolean; atLocation?: boolean }) => void;
-  storageBucket: string;
-  storagePath: string; // e.g., 'user_id/date/checkin.jpg'
+  onCaptureComplete: (data: { uri: string; driveFileId: string; driveLink: string; gpsLat: number; gpsLng: number; lowAccuracy?: boolean; atLocation?: boolean }) => void;
+  uploadEndpoint: string;
+  uploadPayload: Record<string, string>;
   isDone?: boolean;
   doneMessage?: string;
   buttonLabel?: string;
   validateLocation?: (lat: number, lng: number) => Promise<{ proceed: boolean, atLocation: boolean }>;
-  // Drive upload props (optional — omit to skip Drive upload)
-  driveUpload?: {
-    staffId: string;
-    staffName: string;
-    attendanceId: string; // must be set after the attendance row is created
-    type: 'checkin' | 'checkout';
-  };
+  facing?: 'front' | 'back';
 }
 
-/**
- * Sends the WebP selfie to the upload-attendance-selfie Edge Function.
- * Called fire-and-forget — errors are logged but do NOT surface to the user.
- */
-const uploadSelfieToDrive = async (
+const uploadToDrive = async (
   webpUri: string,
-  opts: NonNullable<SelfieCaptureProps['driveUpload']>
-): Promise<void> => {
+  endpoint: string,
+  payload: Record<string, string>
+): Promise<{ fileId: string; link: string }> => {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
+  if (!session) throw new Error('Not authenticated');
 
-  const localRes = await fetch(webpUri);
-  if (!localRes.ok) throw new Error('Failed to fetch local image blob');
-  const blob = await localRes.blob();
   const form = new FormData();
-  form.append('staffId', opts.staffId);
-  form.append('staffName', opts.staffName);
-  form.append('attendanceId', opts.attendanceId);
-  form.append('timestamp', new Date().toISOString());
-  form.append('type', opts.type);
-  form.append('image', blob, 'selfie.webp');
+  for (const key of Object.keys(payload)) {
+    form.append(key, payload[key]);
+  }
+  form.append('image', {
+    uri: webpUri,
+    name: 'photo.webp',
+    type: 'image/webp',
+  } as any);
 
   const supabaseUrl = (supabase as any).supabaseUrl as string;
-  const res = await fetch(`${supabaseUrl}/functions/v1/upload-attendance-selfie`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${session.access_token}` },
     body: form,
   });
+  
   if (!res.ok) {
-    console.error('Edge function upload failed:', res.status, res.statusText);
+    const errText = await res.text();
+    throw new Error(`Drive upload failed: ${res.status} ${errText}`);
   }
+  
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || 'Drive upload failed');
+  }
+  
+  return { fileId: data.fileId, link: data.link };
 };
 
 export default function SelfieCapture({
   label,
   onCaptureComplete,
-  storageBucket,
-  storagePath,
+  uploadEndpoint,
+  uploadPayload,
   isDone = false,
   doneMessage = 'Photo Captured',
   buttonLabel = 'Take Selfie',
-  driveUpload,
   validateLocation,
+  facing = 'front',
 }: SelfieCaptureProps) {
   const { requirePermission: requireCamera } = useCameraPermission();
   const { requirePermission: requireLocation } = useLocationPermission();
@@ -108,30 +107,15 @@ export default function SelfieCapture({
     setIsCameraActive(true);
   };
 
-  const uploadPhoto = async (uri: string, path: string): Promise<void> => {
-    // Convert to WebP on-device before uploading (Phase 7: Drive integration)
+  const uploadPhoto = async (uri: string): Promise<{ fileId: string; link: string }> => {
+    // Convert to WebP on-device before uploading
     const webpResult = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 1280 } }], // cap long edge at 1280px
       { compress: 0.78, format: ImageManipulator.SaveFormat.WEBP }
     );
 
-    const formData = new FormData();
-    formData.append('file', {
-      uri: webpResult.uri,
-      name: 'photo.webp',
-      type: 'image/webp',
-    } as any);
-
-    const { error } = await supabase.storage.from(storageBucket).upload(path, formData, { upsert: true });
-    if (error) throw error;
-
-    // Fire-and-forget Drive upload (non-blocking — user workflow is never held up)
-    if (driveUpload?.attendanceId) {
-      uploadSelfieToDrive(webpResult.uri, driveUpload).catch(err =>
-        console.warn('[SelfieCapture] Background Drive upload failed:', err.message)
-      );
-    }
+    return await uploadToDrive(webpResult.uri, uploadEndpoint, uploadPayload);
   };
 
   const handleCapture = async () => {
@@ -184,11 +168,12 @@ export default function SelfieCapture({
 
       // Upload
       setLoadingState('uploading');
-      await uploadPhoto(compressedUri, storagePath);
+      const { fileId, link } = await uploadPhoto(compressedUri);
 
       onCaptureComplete({
         uri: photo.uri,
-        path: storagePath,
+        driveFileId: fileId,
+        driveLink: link,
         gpsLat: location.coords.latitude,
         gpsLng: location.coords.longitude,
         lowAccuracy: location.coords.accuracy ? location.coords.accuracy > 50 : false,
@@ -232,7 +217,7 @@ export default function SelfieCapture({
           <View style={styles.cameraWrapper}>
             <CameraView 
               style={[styles.cameraView, { aspectRatio: 3/4 }]} 
-              facing="front" 
+              facing={facing} 
               ref={cameraRef}
               onCameraReady={() => setIsCameraReady(true)}
             />

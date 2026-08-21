@@ -6,6 +6,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { getTodayDateString } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
+import { playNotificationSound } from '../../utils/playNotificationSound';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
 import { colors, QUICK_ACTION_COLORS, typography, spacing } from '../../tokens';
 import {
@@ -117,6 +118,7 @@ export default function TechnicianDashboardScreen() {
       .channel('tech-dashboard-jobs')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `technician_id=eq.${user.id}` }, () => {
         fetchDashboardData();
+        playNotificationSound();
       })
       .subscribe();
 

@@ -161,15 +161,15 @@ export default function MyJobsScreen() {
       // For onsite jobs, enforce the arrival → work → departure selfie sequence.
       const { data: visitData } = await supabase
         .from('onsite_visits')
-        .select('arrival_selfie_url, departure_selfie_url')
+        .select('arrival_selfie_drive_file_id, departure_selfie_drive_file_id')
         .eq('job_id', jobId)
         .eq('technician_id', user.id)
         .order('arrival_time', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      const hasArrivalSelfie = !!visitData?.arrival_selfie_url;
-      const hasDepartureSelfie = !!visitData?.departure_selfie_url;
+      const hasArrivalSelfie = !!visitData?.arrival_selfie_drive_file_id;
+      const hasDepartureSelfie = !!visitData?.departure_selfie_drive_file_id;
 
       if (!hasArrivalSelfie) {
         navigation.navigate('OnsiteVisit', { jobId });

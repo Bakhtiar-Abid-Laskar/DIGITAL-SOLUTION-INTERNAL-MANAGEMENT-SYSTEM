@@ -100,7 +100,7 @@ export default function NotificationsScreen() {
     Unread: 0,
     Important: 0});
 
-  const fetchTabCounts = async () => {
+  const fetchTabCounts = useCallback(async () => {
     if (!user) return;
     try {
       const [allRes, unreadRes, impRes1, impRes2] = await Promise.all([
@@ -117,9 +117,9 @@ export default function NotificationsScreen() {
     } catch (err) {
       console.error('Error fetching notification tab counts:', err);
     }
-  };
+  }, [user]);
 
-  const fetchNotifications = async (pageNum: number, replace: boolean) => {
+  const fetchNotifications = useCallback(async (pageNum: number, replace: boolean) => {
     if (!user || fetchingRef.current) return;
     fetchingRef.current = true;
 
@@ -158,7 +158,7 @@ export default function NotificationsScreen() {
       setRefreshing(false);
       setLoadingMore(false);
     }
-  };
+  }, [user, activeTab]);
 
   useFocusEffect(
     useCallback(() => {

@@ -17,14 +17,12 @@ import { formatCurrency } from '@repairshop/shared';
 
 interface Allotment {
   id: string;
-  product_id: string;
-  qty: number;
+  inventory_id: string;
+  item_name: string;
+  unit: string;
+  quantity: number;
   status: string;
-  created_at: string;
-  products?: {
-    name: string;
-    unit: string;
-  };
+  allotted_at: string;
 }
 
 export default function AllottedMaterialsScreen() {
@@ -47,34 +45,41 @@ export default function AllottedMaterialsScreen() {
     try {
       if (!isRefresh) setLoading(true);
       setError(null);
-      const { data, error: fetchError } = await supabase
+
+      // Filter by job_id when viewing a specific job's allotments.
+      // material_allotments columns: id, job_id, inventory_id, allotted_by, quantity, status, allotted_at, returned_at
+      // Join inventory to get item_name and unit (no direct products FK on material_allotments)
+      let query = supabase
         .from('material_allotments')
         .select(`
           id,
-          product_id,
-          qty,
+          inventory_id,
+          technician_id,
+          quantity,
           status,
-          created_at,
-          products (
-            name,
-            unit
-          )
+          allotted_at,
+          inventory ( item_name, unit )
         `)
-        .eq('technician_id', user.id)
         .eq('status', 'allotted')
-        .order('created_at', { ascending: false });
+        .order('allotted_at', { ascending: false });
 
+      if (jobId) {
+        query = query.eq('job_id', jobId);
+      } else if (user?.id) {
+        query = query.eq('technician_id', user.id);
+      }
+
+      const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
+
       setAllotments((data || []).map((item: any) => ({
         id: item.id,
-        product_id: item.product_id,
-        qty: Number(item.qty),
+        inventory_id: item.inventory_id,
+        item_name: item.inventory?.item_name ?? 'Unknown Material',
+        unit: item.inventory?.unit ?? '',
+        quantity: Number(item.quantity ?? 0),
         status: item.status,
-        created_at: item.created_at,
-        products: {
-          name: item.products?.name ?? '',
-          unit: item.products?.unit ?? '',
-        },
+        allotted_at: item.allotted_at,
       })));
     } catch (err: any) {
       setError(mapErrorToUserMessage(err));
@@ -93,7 +98,7 @@ export default function AllottedMaterialsScreen() {
   const handleUseOnJob = async () => {
     if (!selectedAllotment || !jobId) return;
     const qtyToUse = parseFloat(useQty);
-    if (isNaN(qtyToUse) || qtyToUse <= 0 || qtyToUse > selectedAllotment.qty) {
+    if (isNaN(qtyToUse) || qtyToUse <= 0 || qtyToUse > selectedAllotment.quantity) {
       alert('Invalid quantity');
       return;
     }
@@ -103,7 +108,7 @@ export default function AllottedMaterialsScreen() {
       const { error } = await supabase.rpc('use_material_allotment', {
         p_allotment_id: selectedAllotment.id,
         p_job_id: jobId,
-        p_qty: qtyToUse
+        p_quantity: qtyToUse  // correct param: p_quantity not p_qty
       });
       if (error) throw error;
       
@@ -124,13 +129,13 @@ export default function AllottedMaterialsScreen() {
           <Package size={20} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.materialName}>{item.products?.name}</Text>
+          <Text style={styles.materialName}>{item.item_name}</Text>
           <Text style={styles.metaText}>
-            Allotted: {new Date(item.created_at).toLocaleDateString()}
+            Allotted: {new Date(item.allotted_at).toLocaleDateString()}
           </Text>
         </View>
         <View style={styles.qtyBadge}>
-          <Text style={styles.qtyText}>{item.qty} {item.products?.unit}</Text>
+          <Text style={styles.qtyText}>{item.quantity} {item.unit}</Text>
         </View>
       </View>
       {jobId && (
@@ -138,7 +143,7 @@ export default function AllottedMaterialsScreen() {
           style={styles.useBtn} 
           onPress={() => {
             setSelectedAllotment(item);
-            setUseQty(String(item.qty));
+            setUseQty(String(item.quantity));
           }}
         >
           <CheckCircle size={16} color={colors.textInverse} style={{ marginRight: spacing.sm }} />
@@ -188,7 +193,7 @@ export default function AllottedMaterialsScreen() {
           <View style={{ padding: spacing.md }}>
             <Text style={{ ...typography.h2, marginBottom: spacing.lg }}>Use Allotment</Text>
             <Text style={{ ...typography.body, marginBottom: spacing.md }}>
-              How much of <Text style={{ fontWeight: 'bold' }}>{selectedAllotment.products?.name}</Text> do you want to use? (Max: {selectedAllotment.qty})
+              How much of <Text style={{ fontWeight: 'bold' }}>{selectedAllotment.item_name}</Text> do you want to use? (Max: {selectedAllotment.quantity})
             </Text>
             
             <TextInput 

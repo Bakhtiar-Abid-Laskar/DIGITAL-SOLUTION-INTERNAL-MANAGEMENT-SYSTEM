@@ -24,6 +24,7 @@ interface Props {
   subtotal: number;
   discountValue: number;
   taxPercent: number;
+  totalTax: number;
   totalAmount: number;
   onChange: (updates: Partial<FormState>) => void;
 }
@@ -32,7 +33,7 @@ const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: '
 
 export function SalePaymentForm({
   form, errors, saleStatuses, paymentMethods,
-  subtotal, discountValue, taxPercent, totalAmount, onChange,
+  subtotal, discountValue, taxPercent, totalTax, totalAmount, onChange,
 }: Props) {
   return (
     <>
@@ -80,7 +81,7 @@ export function SalePaymentForm({
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Tax Percent</Text>
+          <Text style={styles.fieldLabel}>Tax Percent (For Custom Items)</Text>
           <TextInput
             style={styles.input} placeholder="0" placeholderTextColor={colors.textMuted}
             keyboardType="numeric" value={form.tax_percent}
@@ -111,7 +112,7 @@ export function SalePaymentForm({
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Tax</Text>
-          <Text style={styles.summaryValue}>{taxPercent}%</Text>
+          <Text style={styles.summaryValue}>{taxPercent}% ({currency.format(totalTax)})</Text>
         </View>
         <View style={[styles.summaryRow, styles.summaryTotalRow]}>
           <Text style={styles.summaryTotalLabel}>Total</Text>

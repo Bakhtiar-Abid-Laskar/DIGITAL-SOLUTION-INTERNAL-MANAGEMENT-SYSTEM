@@ -108,27 +108,39 @@ export default function UpdateWorkScreen() {
     try {
       setState({ updating: true });
       const unconfirmed = materials.filter((m: any) => m.checkout_status === 'checked_out');
+
       if (selectedStatus === 'Completed' && unconfirmed.length > 0) {
-        const promises = unconfirmed.map(async (mat: any) => {
-          const usedQty = parseFloat(usageQuantities[mat.id]);
-          if (isNaN(usedQty) || usedQty < 0 || usedQty > (mat.qty_taken || mat.quantity)) {
-            throw new Error(`Invalid usage quantity for ${mat.material_name}.`);
+        const materialPayload = unconfirmed.map((mat: any) => {
+          const usedQty = parseFloat(usageQuantities[mat.id] ?? String(mat.added_qty ?? mat.qty_taken ?? mat.quantity));
+          const maxAllowed = Number(mat.added_qty ?? mat.qty_taken ?? mat.quantity);
+          if (isNaN(usedQty) || usedQty < 0 || usedQty > maxAllowed) {
+            throw new Error(`Invalid quantity for ${mat.material_name}. Must be between 0 and ${maxAllowed}.`);
           }
-          const { error } = await supabase.from('job_materials').update({
-            quantity: usedQty, checkout_status: 'confirmed',
-            usage_confirmed_at: new Date().toISOString()
-          }).eq('id', mat.id);
-          if (error) throw error;
+          return {
+            material_id: mat.id,
+            used_qty: usedQty,
+          };
         });
-        await Promise.all(promises);
+
+        // Call atomic completion RPC
+        const { error: rpcError } = await supabase.rpc('complete_job_materials', {
+          p_job_id: jobId,
+          p_materials: materialPayload,
+          p_work_notes: notes.trim() || null,
+          p_technician_id: user!.id,
+        });
+
+        if (rpcError) throw rpcError;
+      } else {
+        const updates: any = { work_notes: notes, status: selectedStatus };
+        if (selectedStatus === 'Completed') {
+          updates.completed_at = new Date().toISOString();
+        }
+        const { error } = await supabase.from('jobs').update(updates).eq('id', jobId).eq('technician_id', user!.id);
+        if (error) throw error;
       }
+
       setState({ confirmingMaterialsVisible: false });
-      const updates: any = { work_notes: notes, status: selectedStatus };
-      if (selectedStatus === 'Completed' && job.status !== 'Completed') {
-        updates.completed_at = new Date().toISOString();
-      }
-      const { error } = await supabase.from('jobs').update(updates).eq('id', jobId).eq('technician_id', user!.id);
-      if (error) throw error;
       showToast({ title: 'Success', message: 'Job updated successfully.', type: 'success' });
       await fetchJobData();
     } catch (err: any) {
@@ -181,12 +193,7 @@ export default function UpdateWorkScreen() {
               subMessage={!isCompleted ? 'Tap Add Item above to log parts or materials' : undefined} compact />
           ) : (
             <>
-              <MaterialList materials={materials} onDelete={confirmDeleteMaterial} canEdit={!isCompleted} />
-              <View style={styles.divider} />
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Materials Cost</Text>
-                <Text style={styles.totalValue}>{formatCurrency(totalCost)}</Text>
-              </View>
+              <MaterialList materials={materials} onDelete={confirmDeleteMaterial} canEdit={!isCompleted} hidePricing />
             </>
           )}
         </View>

@@ -14,12 +14,12 @@ import SelfieCapture from '../../components/shared/SelfieCapture';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { formatTime } from '@repairshop/shared';
-import { CheckCircle2, MapPin } from 'lucide-react-native';
+import { CheckCircle2, MapPin, Camera } from 'lucide-react-native';
 
 export default function OnsiteVisitScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
+  const { user, displayName } = useAuth();
   const jobId = route.params?.jobId;
   const { showToast } = useToast();
 
@@ -67,7 +67,7 @@ export default function OnsiteVisitScreen() {
     }, [jobId])
   );
 
-  const handleCaptureComplete = async (mode: 'arrival' | 'departure', data: { uri: string; path: string; gpsLat: number; gpsLng: number }) => {
+  const handleCaptureComplete = async (mode: 'arrival' | 'device' | 'departure', data: { uri: string; driveFileId: string; driveLink: string; gpsLat: number; gpsLng: number }) => {
     if (!user) return;
     try {
       setSaving(true);
@@ -77,9 +77,10 @@ export default function OnsiteVisitScreen() {
           job_id: jobId,
           technician_id: user.id,
           arrival_time: timestamp,
+          arrival_selfie_drive_file_id: data.driveFileId,
+          arrival_photo_drive_link: data.driveLink,
           arrival_gps_lat: data.gpsLat,
-          arrival_gps_lng: data.gpsLng,
-          arrival_selfie_url: data.path,
+          arrival_gps_lng: data.gpsLng
         };
         if (visit?.id) {
           const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit.id);
@@ -92,12 +93,20 @@ export default function OnsiteVisitScreen() {
         if (job && job.status === 'Received') {
           await supabase.from('jobs').update({ status: 'In Progress' }).eq('id', jobId);
         }
+      } else if (mode === 'device') {
+        const payload = {
+          device_photo_drive_file_id: data.driveFileId,
+          device_photo_drive_link: data.driveLink,
+        };
+        const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit!.id);
+        if (error) throw error;
       } else {
         const payload = {
           departure_time: timestamp,
+          departure_selfie_drive_file_id: data.driveFileId,
+          departure_photo_drive_link: data.driveLink,
           departure_gps_lat: data.gpsLat,
-          departure_gps_lng: data.gpsLng,
-          departure_selfie_url: data.path,
+          departure_gps_lng: data.gpsLng
         };
         const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit!.id);
         if (error) throw error;
@@ -131,8 +140,9 @@ export default function OnsiteVisitScreen() {
     </View>
   );
 
-  const arrivalDone = !!visit?.arrival_selfie_url;
-  const departureDone = !!visit?.departure_selfie_url;
+  const arrivalDone = !!visit?.arrival_selfie_drive_file_id;
+  const deviceDone = !!visit?.device_photo_drive_file_id;
+  const departureDone = !!visit?.departure_selfie_drive_file_id;
 
   return (
     <JobDetailShell job={job}>
@@ -151,8 +161,8 @@ export default function OnsiteVisitScreen() {
             <View style={styles.actionWrap}>
               <SelfieCapture
                 label=""
-                storageBucket="onsite-visits"
-                storagePath={`${jobId}/arrival_${Date.now()}.jpg`}
+                uploadEndpoint="upload-job-photo"
+                uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'arrival' }}
                 onCaptureComplete={(data) => handleCaptureComplete('arrival', data)}
                 buttonLabel="Start Visit Selfie"
               />
@@ -166,6 +176,42 @@ export default function OnsiteVisitScreen() {
               <Text style={styles.completedSubtitle}>
                 {formatTime(visit.arrival_time)} • GPS ({visit.arrival_gps_lat?.toFixed(4)}, {visit.arrival_gps_lng?.toFixed(4)})
               </Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* DEVICE PHOTO SECTION */}
+      <SectionLabel title="DEVICE PHOTO" />
+      <View style={[styles.card, !arrivalDone && styles.cardDisabled]}>
+        {!deviceDone ? (
+          <>
+            <View style={styles.instructionRow}>
+              <View style={[styles.iconBoxOutline, { borderColor: arrivalDone ? colors.primary : colors.border }]}>
+                <Camera size={20} color={arrivalDone ? colors.primary : colors.textMuted} />
+              </View>
+              <Text style={[styles.instructionText, !arrivalDone && { color: colors.textMuted }]}>
+                Take photo of the device (Optional)
+              </Text>
+            </View>
+            {arrivalDone && (
+              <View style={styles.actionWrap}>
+                <SelfieCapture
+                  label=""
+                  facing="back"
+                  uploadEndpoint="upload-job-photo"
+                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'device' }}
+                  onCaptureComplete={(data) => handleCaptureComplete('device', data)}
+                  buttonLabel="Take Device Photo"
+                />
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.completedState}>
+            <CheckCircle2 size={24} color={colors.success} />
+            <View style={styles.completedTextCol}>
+              <Text style={styles.completedTitle}>Device Photo Saved</Text>
             </View>
           </View>
         )}
@@ -188,8 +234,8 @@ export default function OnsiteVisitScreen() {
               <View style={styles.actionWrap}>
                 <SelfieCapture
                   label=""
-                  storageBucket="onsite-visits"
-                  storagePath={`${jobId}/departure_${Date.now()}.jpg`}
+                  uploadEndpoint="upload-job-photo"
+                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'departure' }}
                   onCaptureComplete={(data) => handleCaptureComplete('departure', data)}
                   buttonLabel="Take Completion Selfie"
                 />

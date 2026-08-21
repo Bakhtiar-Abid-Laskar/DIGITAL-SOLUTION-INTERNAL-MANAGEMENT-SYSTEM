@@ -10,6 +10,7 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -21,6 +22,7 @@ export default function Button({
   loading = false,
   disabled = false,
   style,
+  testID,
 }: ButtonProps) {
   const scale = useSharedValue(1);
 
@@ -71,9 +73,8 @@ export default function Button({
       onPressOut={handlePressOut}
       disabled={disabled || loading}
       style={[styles.baseButton, vStyles.button, disabled && styles.disabled, animatedStyle, style]}
-      accessible={true}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator color={vStyles.indicatorColor} size="small" />

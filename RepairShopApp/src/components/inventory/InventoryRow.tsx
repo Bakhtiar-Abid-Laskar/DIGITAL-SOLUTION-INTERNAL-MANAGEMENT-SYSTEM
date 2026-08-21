@@ -6,13 +6,26 @@ import { colors, radius, spacing, shadow, typography } from '../../tokens';
 
 export type InventoryItem = {
   id: string;
-  product_id: string;
   item_name: string;
   quantity: number;
-  cost_price: number;
   unit: string;
+  cost_price: number;
+  selling_rate?: number;
+  location?: string;
+  minimum_stock_level?: number;
   low_stock_threshold: number;
   last_updated: string;
+  product_id?: string;
+  products?: {
+    name: string;
+    sku: string;
+    unit: string;
+    hsn_sac: string;
+    tax_mode: string;
+    cgst_rate: number;
+    sgst_rate: number;
+    igst_rate: number;
+  };
 };
 
 function getCategoryIcon(name: string) {

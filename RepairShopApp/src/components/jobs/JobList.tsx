@@ -82,6 +82,30 @@ export default function JobList({
     />
   ), [onJobPress]);
 
+  const renderPriorityTab = useCallback(({ item: tab }: { item: TabDefinition }) => (
+    <AppPressable
+      style={[styles.chip, activePriorityTab === tab.value && styles.chipActive]}
+      onPress={() => onPriorityTabChange && onPriorityTabChange(tab.value)}
+    >
+      <Text style={[styles.chipText, activePriorityTab === tab.value && styles.chipTextActive]}>
+        {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
+      </Text>
+    </AppPressable>
+  ), [activePriorityTab, onPriorityTabChange]);
+
+  const renderStatusTab = useCallback(({ item: tab }: { item: TabDefinition }) => (
+    <AppPressable
+      style={[styles.chip, activeStatusTab === tab.value && styles.chipActive]}
+      onPress={() => onStatusTabChange(tab.value)}
+    >
+      <Text style={[styles.chipText, activeStatusTab === tab.value && styles.chipTextActive]}>
+        {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
+      </Text>
+    </AppPressable>
+  ), [activeStatusTab, onStatusTabChange]);
+
+  const renderSkeleton = useCallback(() => <SkeletonCard />, []);
+
   return (
     <View style={styles.container}>
       <AppHeader 
@@ -117,16 +141,7 @@ export default function JobList({
             contentContainerStyle={styles.chipsContent}
             data={priorityTabs}
             keyExtractor={tab => tab.value}
-            renderItem={({ item: tab }) => (
-              <AppPressable
-                style={[styles.chip, activePriorityTab === tab.value && styles.chipActive]}
-                onPress={() => onPriorityTabChange(tab.value)}
-              >
-                <Text style={[styles.chipText, activePriorityTab === tab.value && styles.chipTextActive]}>
-                  {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
-                </Text>
-              </AppPressable>
-            )}
+            renderItem={renderPriorityTab}
           />
         )}
 
@@ -138,16 +153,7 @@ export default function JobList({
           contentContainerStyle={styles.chipsContent}
           data={statusTabs}
           keyExtractor={tab => tab.value}
-          renderItem={({ item: tab }) => (
-            <AppPressable
-              style={[styles.chip, activeStatusTab === tab.value && styles.chipActive]}
-              onPress={() => onStatusTabChange(tab.value)}
-            >
-              <Text style={[styles.chipText, activeStatusTab === tab.value && styles.chipTextActive]}>
-                {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
-              </Text>
-            </AppPressable>
-          )}
+          renderItem={renderStatusTab}
         />
       </View>
 
@@ -156,7 +162,7 @@ export default function JobList({
           data={[0, 1, 2, 3]}
           keyExtractor={i => i.toString()}
           contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
-          renderItem={() => <SkeletonCard />}
+          renderItem={renderSkeleton}
         />
       ) : (
         <FlatList

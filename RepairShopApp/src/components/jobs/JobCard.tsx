@@ -77,7 +77,7 @@ const JobCard = React.memo(function JobCard({ job, onPress, index = 0, isTechnic
         {job.customer_name}
       </Text>
       <Text style={[styles.deviceLine, { color: colors.textSecondary }]} numberOfLines={1}>
-        {job.device_type}
+        {job.device_type_id}
         {job.reported_issue ? `  ·  ${job.reported_issue}` : ''}
       </Text>
 

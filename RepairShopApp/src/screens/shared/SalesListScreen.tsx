@@ -7,8 +7,9 @@ import AppHeader from '../../components/common/AppHeader';
 import { AppPressable } from '../../components/common/AppPressable';
 import EmptyState from '../../components/common/EmptyState';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
-import { formatDate } from '@repairshop/shared';
-import { Receipt, FileText } from 'lucide-react-native';
+import { formatDate, useDebounceValue } from '@repairshop/shared';
+import { Receipt, FileText, Search } from 'lucide-react-native';
+import { TextInput } from 'react-native';
 
 export type UnifiedSaleItem = {
   id: string;
@@ -26,60 +27,55 @@ export default function SalesListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<UnifiedSaleItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
 
   const fetchSales = async () => {
     try {
-      const [salesRes, jobsRes] = await Promise.all([
-        supabase
-          .from('sales')
-          .select('id, sale_code, customer_name, created_at, grand_total, status')
-          .order('created_at', { ascending: false })
-          .limit(50),
-        supabase
-          .from('jobs')
-          .select('id, job_code, customer_name, completed_at, status, billing(grand_total)')
-          .eq('status', 'Completed')
-          .order('completed_at', { ascending: false })
-          .limit(50)
-      ]);
+      // Unified query: all invoices (counter sales have job_id=null, job invoices have job_id set).
+      // The old sales + billing_legacy path is replaced — new writes go via create_invoice RPC.
+      let matchedSaleIds: string[] = [];
+      if (debouncedSearchQuery) {
+        const queryStr = `%${debouncedSearchQuery}%`;
+        const { data: itemMatches } = await supabase
+          .from('invoice_items')
+          .select('invoice_id')
+          .or(`serial_number.ilike.${queryStr},item_name.ilike.${queryStr}`);
+        if (itemMatches && itemMatches.length > 0) {
+          matchedSaleIds = itemMatches.map(i => i.invoice_id).filter(Boolean);
+        }
+      }
 
-      const salesData = salesRes.data || [];
-      const jobsData = jobsRes.data || [];
+      let query = supabase
+        .from('invoices')
+        .select('id, invoice_code, customer_name, created_at, grand_total, status, job_id')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-      const mappedSales: UnifiedSaleItem[] = salesData.map(s => ({
-        id: s.id,
-        source: 'Sale',
-        code: s.sale_code,
-        customer_name: s.customer_name || 'Unknown',
-        date: s.created_at,
-        amount: s.grand_total || 0,
-        status: s.status,
+      if (debouncedSearchQuery) {
+        const queryStr = `%${debouncedSearchQuery}%`;
+        let orString = `invoice_code.ilike.${queryStr},customer_name.ilike.${queryStr},customer_contact.ilike.${queryStr}`;
+        if (matchedSaleIds.length > 0) {
+          orString += `,id.in.(${matchedSaleIds.join(',')})`;
+        }
+        query = query.or(orString);
+      }
+
+      const { data: invoicesData, error } = await query;
+
+      if (error) throw error;
+
+      const mapped: UnifiedSaleItem[] = (invoicesData || []).map((inv: any) => ({
+        id:            inv.id,
+        source:        inv.job_id ? 'Job' : 'Sale',
+        code:          inv.invoice_code || '—',
+        customer_name: inv.customer_name || 'Unknown',
+        date:          inv.created_at,
+        amount:        Number(inv.grand_total) || 0,
+        status:        inv.status,
       }));
 
-      const mappedJobs: UnifiedSaleItem[] = jobsData.map(j => {
-        let grandTotal = 0;
-        if (Array.isArray(j.billing) && j.billing.length > 0) {
-          grandTotal = (j.billing[0] as any).grand_total || 0;
-        } else if (j.billing && !Array.isArray(j.billing)) {
-          grandTotal = (j.billing as any).grand_total || 0;
-        }
-
-        return {
-          id: j.id,
-          source: 'Job',
-          code: j.job_code,
-          customer_name: j.customer_name || 'Unknown',
-          date: j.completed_at || '',
-          amount: grandTotal,
-          status: j.status,
-        };
-      });
-
-      const combined = [...mappedSales, ...mappedJobs].sort((a, b) => {
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      });
-
-      setItems(combined);
+      setItems(mapped);
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,7 +86,7 @@ export default function SalesListScreen() {
 
   useEffect(() => {
     fetchSales();
-  }, []);
+  }, [debouncedSearchQuery]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -99,7 +95,7 @@ export default function SalesListScreen() {
 
   const renderItem = useCallback(({ item }: { item: UnifiedSaleItem }) => {
     return (
-      <AppPressable style={styles.card} onPress={() => {}}>
+      <AppPressable style={styles.card} onPress={() => navigation.navigate('SaleDetail', { invoiceId: item.id })}>
         <View style={styles.cardHeader}>
           <View style={styles.badgeRow}>
             {item.source === 'Sale' ? (
@@ -128,6 +124,19 @@ export default function SalesListScreen() {
   return (
     <View style={styles.container}>
       <AppHeader title="Sales" showBack={true} />
+      
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBox}>
+          <Search size={20} color={colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by code, customer, product, serial no..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </View>
       
       {loading ? (
         <View style={styles.center}>
@@ -161,6 +170,29 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    color: colors.textPrimary,
+    fontSize: 15,
   },
   listContent: {
     padding: spacing.md,

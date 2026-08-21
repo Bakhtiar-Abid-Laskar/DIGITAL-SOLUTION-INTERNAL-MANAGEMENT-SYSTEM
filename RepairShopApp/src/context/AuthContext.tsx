@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserRole, UserRow, fetchUserRow } from '../lib/auth';
@@ -11,6 +12,7 @@ interface AuthContextProps {
   isLoading: boolean;
   displayName: string;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthContextProps>({
   isLoading: true,
   displayName: '',
   signOut: async () => {},
+  refreshProfile: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -30,6 +33,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isActive, setIsActive] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [displayName, setDisplayName] = useState<string>('');
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (mounted) {
           await handleSessionUpdate(session);
@@ -63,9 +67,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, []);
+
+  // Re-sync profile when app returns to foreground (e.g. after admin activates/updates user)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        // App came to foreground — re-fetch profile to pick up any role/is_active changes
+        if (session?.user) {
+          const userRow = await fetchUserRow(session.user.id);
+          if (userRow) {
+            setRole(userRow.role);
+            setIsActive(userRow.is_active);
+            setDisplayName(userRow.name || session.user.email?.split('@')[0] || '');
+          }
+        }
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [session]);
 
   const handleSessionUpdate = async (newSession: Session | null) => {
     // Keep isLoading true while we resolve the user row so the navigator
@@ -96,6 +122,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Manual re-sync of profile — call after any mutation that may have changed the current user's row
+  const refreshProfile = useCallback(async () => {
+    if (session?.user) {
+      const userRow = await fetchUserRow(session.user.id);
+      if (userRow) {
+        setRole(userRow.role);
+        setIsActive(userRow.is_active);
+        setDisplayName(userRow.name || session.user.email?.split('@')[0] || '');
+      }
+    }
+  }, [session]);
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -111,8 +149,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const contextValue = useMemo(() => ({
-    user, session, role, isActive, isLoading, displayName, signOut
-  }), [user, session, role, isActive, isLoading, displayName]);
+    user, session, role, isActive, isLoading, displayName, signOut, refreshProfile
+  }), [user, session, role, isActive, isLoading, displayName, refreshProfile]);
 
   return (
     <AuthContext.Provider value={contextValue}>

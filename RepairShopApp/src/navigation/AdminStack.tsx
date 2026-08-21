@@ -15,6 +15,8 @@ import InventoryScreen from '../screens/shared/InventoryScreen';
 import CustomersScreen from '../screens/receptionist/CustomersScreen';
 import AllottedMaterialsScreen from '../screens/shared/AllottedMaterialsScreen';
 import SalesListScreen from '../screens/shared/SalesListScreen';
+import SaleDetailScreen from '../screens/shared/SaleDetailScreen';
+import PendingPaymentsScreen from '../screens/shared/PendingPaymentsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +40,8 @@ export default function AdminStack() {
       <Stack.Screen name="Customers" component={CustomersScreen} />
       <Stack.Screen name="AllottedMaterialsScreen" component={AllottedMaterialsScreen} />
       <Stack.Screen name="SalesList" component={SalesListScreen} />
+      <Stack.Screen name="SaleDetail" component={SaleDetailScreen} />
+      <Stack.Screen name="PendingPayments" component={PendingPaymentsScreen} />
     </Stack.Navigator>
   );
 }

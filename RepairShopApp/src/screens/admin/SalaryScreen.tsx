@@ -148,7 +148,7 @@ export default function SalaryScreen() {
             present_days: breakdown.present_days,
             halfday_count: breakdown.halfday_count,
             ot_hours: breakdown.ot_hours,
-            incentive_pay: breakdown.incentive_pay,
+            incentive_amount: breakdown.incentive_pay,
           })
           .eq('id', breakdown.salary_id);
         if (error) throw error;
@@ -157,17 +157,16 @@ export default function SalaryScreen() {
         const { error } = await supabase.from('salary').insert({
           user_id: breakdown.user_id,
           month: `${month}-01`,
-          base_pay: breakdown.base_pay,
-          incentive_pay: breakdown.incentive_pay,
+          monthly_salary_base: breakdown.base_pay,
+          incentive_amount: breakdown.incentive_pay,
           working_days: breakdown.working_days,
           present_days: breakdown.present_days,
           halfday_count: breakdown.halfday_count,
           leave_count: breakdown.leave_count,
+          allowed_leave_days: 0,
           ot_hours: breakdown.ot_hours,
           ot_rate_per_hour: breakdown.ot_rate_per_hour,
-          absent_day_deduction: breakdown.absent_day_deduction,
-          allowed_leave_days: 0,
-          absence_deduction: breakdown.absence_deduction,
+          absence_deduction_total: breakdown.absence_deduction,
           advance_deducted: breakdown.advance_deducted,
           gross_salary: breakdown.gross_salary,
           net_salary: breakdown.net_salary,

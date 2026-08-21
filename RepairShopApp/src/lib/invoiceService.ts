@@ -1,37 +1,48 @@
-// invoiceService.ts — Mobile App Invoice Service
-// Calls the generate-invoice Edge Function and renders the result via expo-print.
-// Both the receptionist and admin dashboards use this shared service.
+// invoiceService.ts — Mobile App Invoice Service (SVG edition)
+// Calls the generate-invoice Edge Function which now returns SVG-based HTML.
+// The HTML is rendered via expo-print (WebKit) to produce a pixel-perfect PDF
+// matching the digitalsolution_bill_templete.svg design.
 
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from './supabase';
 
-export type MobileDocType = 'sale' | 'final' | 'receipt';
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export type MobileLineItem = {
+export type MobileDocType = 'final' | 'receipt' | 'sale';
+
+export type MobileInvoiceRequest =
+  | { docType: 'final';   invoiceId: string }
+  | { docType: 'receipt'; jobId: string }
+  | { docType: 'sale';    saleId: string }
+  | { docType: MobileDocType; inline: InlineInvoiceData };
+
+export type InlineLineItem = {
+  sn: number;
   description: string;
-  hsn?: string;
-  price: number;
-  unit: number;
+  serialNumber?: string;
+  qty: number;
+  rate: number;
+  amount: number;
 };
 
-export type MobileInvoiceRequest = {
-  docType: MobileDocType;
-  invoiceNo?: string;
-  jobId?: string;
-  date: string;
-  customer: {
-    name: string;
-    gst?: string;
-    phone: string;
-    address: string;
-  };
-  items: MobileLineItem[];
-  taxRatePct?: number;
-  discount?: number;
+export type InlineInvoiceData = {
+  invoiceNo: string;
+  invoiceDate: string;
+  customerName: string;
+  customerAddress: string;
+  customerPhone: string;
+  customerEmail: string;
+  customerGstin?: string;
+  items: InlineLineItem[];
+  totals: { subtotal: number; discount: number; tax: number; total: number };
 };
 
-async function callEdgeFunction(req: MobileInvoiceRequest): Promise<{ html: string; driveLink: string | null }> {
+// ─── Core edge function call ──────────────────────────────────────────────────
+
+async function callEdgeFunction(
+  req: MobileInvoiceRequest
+): Promise<{ html: string; driveLink: string | null }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
@@ -53,45 +64,42 @@ async function callEdgeFunction(req: MobileInvoiceRequest): Promise<{ html: stri
   }
 
   const { html, driveLink } = await response.json() as { html: string; driveLink: string | null };
-
-  // Replace relative image paths with absolute admin-panel URLs
-  const adminOrigin = (process.env.EXPO_PUBLIC_ADMIN_ORIGIN || 'https://your-admin-domain.vercel.app');
-  const finalHtml = html
-    .replace(/src="\/upi-qr\.png"/g, `src="${adminOrigin}/upi-qr.png"`);
-
-  return { html: finalHtml, driveLink };
+  return { html, driveLink };
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
 /**
- * Print a document on-device via expo-print.
- * Opens the system print dialog (PDF save or physical print).
- * Returns driveLink if the invoice was saved to Google Drive.
+ * Opens the system print dialog (iOS/Android).
+ * The SVG invoice HTML is rendered to PDF on-device via WebKit.
+ * Returns driveLink if the invoice was backed up to Google Drive.
  */
-export async function printInvoice(req: MobileInvoiceRequest): Promise<{ driveLink: string | null }> {
+export async function printInvoice(
+  req: MobileInvoiceRequest
+): Promise<{ driveLink: string | null }> {
   const { html, driveLink } = await callEdgeFunction(req);
   await Print.printAsync({ html, useMarkupFormatter: false });
   return { driveLink };
 }
 
 /**
- * Share a document (WhatsApp, Drive, etc.) via expo-sharing.
- * Renders to PDF first using expo-print, then shares the file.
- * Returns driveLink if the invoice was saved to Google Drive.
+ * Saves the invoice as a PDF file and opens the native share sheet
+ * (WhatsApp, Drive, Email, etc.).
  */
-async function shareInvoice(req: MobileInvoiceRequest, filename?: string): Promise<{ driveLink: string | null }> {
+export async function shareInvoice(
+  req: MobileInvoiceRequest,
+  filename?: string
+): Promise<{ driveLink: string | null }> {
   const { html, driveLink } = await callEdgeFunction(req);
 
   const { uri } = await Print.printToFileAsync({ html });
 
-  const docLabel = req.docType === 'receipt'
-    ? `Receipt-${req.jobId || 'JOB'}`
-    : req.docType === 'sale'
-    ? `Invoice-${req.invoiceNo || 'SALE'}`
-    : `Invoice-${req.jobId || 'JOB'}`;
+  const docLabel = 'docType' in req
+    ? `Invoice-${req.docType}`
+    : 'Invoice';
 
   const destUri = uri.replace(/[^/]+$/, `${filename || docLabel}.pdf`);
 
-  // expo-sharing handles opening the native share sheet
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(destUri, {
@@ -99,7 +107,6 @@ async function shareInvoice(req: MobileInvoiceRequest, filename?: string): Promi
       dialogTitle: `Share ${docLabel}`,
     });
   } else {
-    // Fallback: just trigger print again
     await Print.printAsync({ html });
   }
 

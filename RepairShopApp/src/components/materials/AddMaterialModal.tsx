@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
 import Button from '../common/Button';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Camera, CheckCircle2, Trash2, Package } from 'lucide-react-native';
+import { Package } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { colors, radius, spacing, typography } from '../../tokens';
 import ModalShell from '../common/ModalShell';
 import { useToast } from '../../context/ToastContext';
-import { compressImage } from '../../utils/compressImage';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { MaterialCameraView } from './MaterialCameraView';
-import { Modal } from 'react-native';
 
 interface AddMaterialModalProps {
   visible: boolean;
@@ -50,8 +47,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
 
   const { name, selectedInventoryId, selectedProductId, quantity, unitCost, photoUri, suggestions, suggestionsLoading, showSuggestions, selectedStock, isCameraActive, loading } = state;
 
-  const [permission, requestPermission] = useCameraPermissions();
-  const [cameraRefState, setCameraRefState] = useState<any>(null);
+
   const { showToast } = useToast();
   const navigation = useNavigation<any>();
 
@@ -101,34 +97,9 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
 
   const handleClose = () => { reset(); onClose(); };
 
-  const takePhoto = async () => {
-    if (!permission?.granted) {
-      const { granted } = await requestPermission();
-      if (!granted) { showToast({ title: 'Permission Denied', message: 'Camera permission is required.', type: 'error' }); return; }
-    }
-    setState({ isCameraActive: true });
-  };
 
-  const capturePhoto = async (ref: any) => {
-    if (ref) {
-      try {
-        const photo = await ref.takePictureAsync({ base64: false });
-        if (photo) setState({ photoUri: photo.uri, isCameraActive: false });
-        else setState({ isCameraActive: false });
-      } catch (e: any) { showToast({ title: 'Camera Error', message: e.message, type: 'error' }); }
-    }
-  };
 
-  const uploadPhoto = async (uri: string): Promise<string> => {
-    const ext = uri.substring(uri.lastIndexOf('.') + 1) || 'jpg';
-    const path = `${jobId}/materials/${Date.now()}.${ext}`;
-    const compressedUri = await compressImage(uri);
-    const formData = new FormData();
-    formData.append('file', { uri: compressedUri, name: `material.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` } as any);
-    const { error } = await supabase.storage.from('onsite-visits').upload(path, formData, { upsert: true });
-    if (error) throw error;
-    return path;
-  };
+  const { user } = useAuth();
 
   const submit = async () => {
     if (!name.trim()) return showToast({ title: 'Error', message: 'Material name is required.', type: 'error' });
@@ -140,11 +111,19 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
     }
     setState({ loading: true });
     try {
-      let photo_url = null;
-      if (photoUri) photo_url = await uploadPhoto(photoUri);
       const { error } = await supabase.from('job_materials').insert({
-        job_id: jobId, material_name: name.trim(), qty_taken: q, quantity: q,
-        unit_cost: c, product_id: selectedProductId || null, photo_url, checkout_status: 'checked_out',
+        job_id: jobId,
+        material_name: name.trim(),
+        qty_taken: q,
+        quantity: q,
+        added_qty: q,
+        used_qty: q,
+        remaining_qty: 0,
+        unit_cost: c,
+        product_id: selectedProductId || null,
+        inventory_id: selectedInventoryId || null,
+        technician_id: user?.id || null,
+        checkout_status: 'checked_out',
       });
       if (error) throw error;
       showToast({ title: 'Success', message: 'Material added.', type: 'success' });
@@ -154,16 +133,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
     } finally { setState({ loading: false }); }
   };
 
-  if (isCameraActive) {
-    return (
-      <MaterialCameraView
-        visible={visible}
-        onCapture={capturePhoto}
-        onCancel={() => setState({ isCameraActive: false })}
-        onRef={setCameraRefState}
-      />
-    );
-  }
+
 
   return (
     <ModalShell visible={visible} onClose={handleClose}>
@@ -203,7 +173,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
                           <Text style={styles.suggestionName}>{item.item_name}</Text>
                           {isOutOfStock ? <Text style={{ color: colors.error, ...typography.caption, fontWeight: '700' }}>Out of Stock</Text> : null}
                         </View>
-                        <Text style={styles.suggestionMeta}>Stock: {item.quantity} {item.unit || 'Pcs'} | Cost: ₹{item.cost_price || 0}</Text>
+                        <Text style={styles.suggestionMeta}>Stock: {item.quantity} {item.unit || 'Pcs'}</Text>
                       </View>
                     </AppPressable>
                   );
@@ -213,37 +183,11 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
           ) : null}
         </View>
 
-        <View style={styles.row}>
-          <TextInput
-            style={[styles.input, { flex: 1, marginRight: spacing.sm }]}
-            placeholder="Qty Taken (Incl. Buffer) *" placeholderTextColor={colors.textMuted}
-            keyboardType="numeric" value={quantity} onChangeText={(val) => setState({ quantity: val })}
-          />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Unit Cost (₹) *" placeholderTextColor={colors.textMuted}
-            keyboardType="numeric" value={unitCost} onChangeText={(val) => setState({ unitCost: val })}
-          />
-        </View>
-
-        <View style={styles.photoSection}>
-          {photoUri ? (
-            <View style={styles.photoRow}>
-              <View style={styles.photoAttached}>
-                <CheckCircle2 size={16} color={colors.success} style={{ marginRight: spacing.xs }} />
-                <Text style={{ color: colors.success, ...typography.caption, fontWeight: '600' }}>Photo attached</Text>
-              </View>
-              <AppPressable onPress={() => setState({ photoUri: null })} style={styles.removePhotoBtn}>
-                <Trash2 size={16} color={colors.error} />
-              </AppPressable>
-            </View>
-          ) : (
-            <AppPressable style={styles.photoBtn} onPress={takePhoto}>
-              <Camera size={18} color={colors.navBackground} style={{ marginRight: spacing.sm }} />
-              <Text style={styles.photoBtnText}>Add Photo (Optional)</Text>
-            </AppPressable>
-          )}
-        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Qty Taken (Incl. Buffer) *" placeholderTextColor={colors.textMuted}
+          keyboardType="numeric" value={quantity} onChangeText={(val) => setState({ quantity: val })}
+        />
 
         {loading ? (
           <View style={styles.loadingContainer}>

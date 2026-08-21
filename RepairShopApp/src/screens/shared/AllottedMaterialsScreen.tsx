@@ -33,7 +33,7 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
   const [searchQuery, setSearchQuery] = useState('');
   const [returningId, setReturningId] = useState<string | null>(null);
 
-  const fetchAllotments = async (isRefresh = false) => {
+  const fetchAllotments = useCallback(async (isRefresh = false) => {
     if (!user) return;
     try {
       if (!isRefresh) setLoading(true);
@@ -43,53 +43,52 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
         .from('material_allotments')
         .select(`
           id,
+          job_id,
+          inventory_id,
+          product_id,
           technician_id,
-          qty,
+          allotted_by,
+          quantity,
           status,
-          created_at,
-          products ( id, name, unit ),
-          source_job_material:source_job_material_id (
-            id,
-            job_id,
-            jobs ( job_code, customer_name )
-          )
+          allotted_at,
+          returned_at,
+          returned_by,
+          notes,
+          technician:users!material_allotments_technician_id_fkey ( id, name ),
+          allotted_by_user:users!material_allotments_allotted_by_fkey ( id, name ),
+          inventory:inventory ( id, item_name, unit, cost_price ),
+          jobs:jobs ( id, job_code, customer_name, technician:users!jobs_technician_id_fkey(name) )
         `)
         .eq('status', 'allotted')
-        .order('created_at', { ascending: false });
+        .order('allotted_at', { ascending: false });
 
-      if (isScoped) {
+      if (isScoped && user?.id) {
         query = query.eq('technician_id', user.id);
       }
 
       const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
 
-      // For non-scoped (admin/receptionist) we also fetch technician names separately
-      let techMap: Record<string, string> = {};
-      if (!isScoped && data && data.length > 0) {
-        const techIds = [...new Set((data as any[]).map((r: any) => r.technician_id).filter(Boolean))];
-        if (techIds.length > 0) {
-          const { data: techData } = await supabase
-            .from('users')
-            .select('id, name')
-            .in('id', techIds);
-          (techData || []).forEach((t: any) => { techMap[t.id] = t.name; });
-        }
-      }
+      const formatted: AllottedMaterialRecord[] = (data || []).map((row: any) => {
+        const itemName = row.inventory?.item_name || row.notes || 'Unknown Material';
+        const techName = isScoped
+          ? 'You'
+          : (row.technician?.name || row.jobs?.technician?.name || row.allotted_by_user?.name || 'Unassigned');
 
-      const formatted: AllottedMaterialRecord[] = (data || []).map((row: any) => ({
-        id: row.id,
-        material_name: row.products?.name ?? 'Unknown Material',
-        quantity: Number(row.qty ?? 0),
-        unit_cost: 0,
-        created_at: row.created_at ?? new Date().toISOString(),
-        technician_id: row.technician_id,
-        technician_name: isScoped ? 'You' : (techMap[row.technician_id] ?? 'Unassigned'),
-        job_id: row.source_job_material?.job_id,
-        job_code: row.source_job_material?.jobs?.job_code,
-        customer_name: row.source_job_material?.jobs?.customer_name,
-        source: 'allotments' as const,
-      }));
+        return {
+          id: row.id,
+          material_name: itemName,
+          quantity: Number(row.quantity ?? 0),
+          unit_cost: Number(row.inventory?.cost_price ?? 0),
+          created_at: row.allotted_at ?? new Date().toISOString(),
+          technician_id: row.technician_id,
+          technician_name: techName,
+          job_id: row.job_id,
+          job_code: row.jobs?.job_code,
+          customer_name: row.jobs?.customer_name,
+          source: 'allotments' as const,
+        };
+      });
 
       setAllotments(formatted);
     } catch (err: any) {
@@ -99,12 +98,27 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user, isScoped]);
 
   useFocusEffect(
     useCallback(() => {
       fetchAllotments();
-    }, [user?.id, mode])
+
+      const channel = supabase
+        .channel('mobile_allotted_materials_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'material_allotments' },
+          () => {
+            fetchAllotments(true);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [fetchAllotments])
   );
 
   const handleRefresh = () => {
@@ -124,11 +138,12 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
           onPress: async () => {
             try {
               setReturningId(allotmentId);
-              const { error } = await supabase.rpc('return_material_allotment', {
+              const { data, error } = await supabase.rpc('return_allocated_material', {
                 p_allotment_id: allotmentId,
+                p_user_id: user?.id || null,
               });
               if (error) throw error;
-              showToast({ title: 'Success', message: 'Material returned to inventory.', type: 'success' });
+              showToast({ title: 'Success', message: 'Material returned to central stock.', type: 'success' });
               fetchAllotments(true);
             } catch (err: any) {
               showToast({ title: 'Error', message: err.message || 'Failed to return material.', type: 'error' });
@@ -139,124 +154,105 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
         },
       ]
     );
-  }, [fetchAllotments]);
+  }, [fetchAllotments, user?.id, showToast]);
 
-  const handleNotify = useCallback(async (technicianId: string) => {
+  const handleNotify = useCallback(async (allotmentId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('send-push-notification', {
-        body: {
-          technician_id: technicianId,
-          title: 'Return Materials Required',
-          body: 'Please return your leftover allotted materials to the store.',
-          data: { type: 'return_materials' },
-        },
+      const { data, error } = await supabase.rpc('notify_technician_allocated_material', {
+        p_allotment_id: allotmentId,
       });
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.success === false) throw new Error(data.message || 'Notification failed.');
-
-      showToast({ title: 'Notified', message: 'Technician has been notified.', type: 'success' });
+      showToast({ title: 'Notified', message: 'Technician has been sent a reminder.', type: 'success' });
     } catch (err: any) {
       showToast({ title: 'Error', message: err.message || 'Failed to send notification.', type: 'error' });
     }
-  }, []);
-
-  const handlePressJob = useCallback((jobId: string) => {
-    if (role === 'technician') {
-      navigation.navigate('UpdateWork', { jobId });
-    } else {
-      navigation.navigate('JobDetail', { jobId });
-    }
-  }, [role, navigation]);
+  }, [showToast]);
 
   const filteredAllotments = useMemo(() => {
     if (!searchQuery.trim()) return allotments;
-    const term = searchQuery.toLowerCase().trim();
-    return allotments.filter(
-      (m) =>
-        m.material_name.toLowerCase().includes(term) ||
-        (m.technician_name && m.technician_name.toLowerCase().includes(term)) ||
-        (m.job_code && m.job_code.toLowerCase().includes(term)) ||
-        (m.customer_name && m.customer_name.toLowerCase().includes(term))
+    const q = searchQuery.toLowerCase().trim();
+    return allotments.filter((item) =>
+      item.material_name.toLowerCase().includes(q) ||
+      (item.technician_name && item.technician_name.toLowerCase().includes(q)) ||
+      (item.job_code && item.job_code.toLowerCase().includes(q)) ||
+      (item.customer_name && item.customer_name.toLowerCase().includes(q))
     );
   }, [allotments, searchQuery]);
 
-  const renderAllotmentItem = useCallback(({ item }: { item: any }) => (
-    <AllottedMaterialsCard
-      item={item}
-      onPressJob={handlePressJob}
-      showTechnician={!isScoped}
-      showActions={canManage}
-      onMarkReturned={canManage ? handleMarkReturned : undefined}
-      onNotify={canManage ? handleNotify : undefined}
-      returning={returningId === item.id}
-    />
-  ), [handlePressJob, isScoped, canManage, handleMarkReturned, handleNotify, returningId]);
+  const totalHeldUnits = useMemo(() => {
+    return allotments.reduce((sum, item) => sum + item.quantity, 0);
+  }, [allotments]);
 
   return (
     <View style={styles.container}>
       <AppHeader
-        title={isScoped ? 'My Allotted Materials' : 'Allotted Materials'}
+        title={isScoped ? 'My Allocated Items' : 'Allocated Materials'}
         showBack={true}
       />
 
       <View style={styles.content}>
-        {/* Info Banner for managers */}
-        {canManage && (
-          <View style={styles.infoBanner}>
-            <Text style={styles.infoText}>
-              These are materials checked out by technicians that have leftover from completed jobs.
-              Use "Remind" to notify the technician or "Mark Returned" to restore stock.
-            </Text>
-          </View>
-        )}
-
         {/* Search Bar */}
-        <View style={styles.searchBar}>
+        <View style={styles.searchContainer}>
           <Search size={16} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder={isScoped ? 'Search material or job...' : 'Search material, technician, or job...'}
+            placeholder={isScoped ? 'Search your held materials...' : 'Search by material, technician, or job...'}
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
           />
         </View>
 
-        {/* Count badge */}
-        {!loading && !error && (
-          <View style={styles.countRow}>
-            <Text style={styles.countText}>
-              {filteredAllotments.length} active allotment{filteredAllotments.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        )}
-
-        {/* Main List */}
-        {loading && !refreshing ? (
+        {/* List Content */}
+        {loading ? (
           <SkeletonList count={4} />
         ) : error ? (
           <ErrorState message={error} onRetry={() => fetchAllotments()} />
-        ) : filteredAllotments.length === 0 ? (
-          <EmptyState
-            heading={searchQuery ? 'No matches found' : 'No active allotments'}
-            message={
-              searchQuery
-                ? 'Try a different search term.'
-                : isScoped
-                ? 'You have no leftover materials currently.'
-                : 'All materials have been used or returned.'
-            }
-            icon={Package}
-          />
         ) : (
           <FlatList
             data={filteredAllotments}
             keyExtractor={(item) => item.id}
-            renderItem={renderAllotmentItem}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+            }
+            renderItem={({ item }) => (
+              <AllottedMaterialsCard
+                item={item}
+                showTechnician={!isScoped}
+                showActions={canManage}
+                onMarkReturned={handleMarkReturned}
+                onNotify={handleNotify}
+                returning={returningId === item.id}
+                onPressJob={(jobId) => {
+                  if (role === 'admin') {
+                    navigation.navigate('AdminJobDetail', { jobId });
+                  } else if (role === 'receptionist') {
+                    navigation.navigate('JobDetail', { jobId });
+                  } else {
+                    navigation.navigate('UpdateWork', { jobId });
+                  }
+                }}
+              />
+            )}
+            ListEmptyComponent={
+              <EmptyState
+                icon={Package}
+                message={
+                  searchQuery.trim()
+                    ? 'No matching materials found'
+                    : isScoped
+                    ? 'No leftover items held'
+                    : 'No allocated materials in field'
+                }
+                subMessage={
+                  isScoped
+                    ? 'Any unused materials from completed jobs will appear here until returned.'
+                    : 'All technician allocations are reconciled and returned to stock.'
+                }
+              />
             }
           />
         )}
@@ -273,49 +269,29 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
   },
-  infoBanner: {
-    backgroundColor: colors.primary + '12',
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary + '25',
-  },
-  infoText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  searchBar: {
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.sm,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    height: 44,
   },
   searchIcon: {
-    marginRight: spacing.xs,
+    marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    ...typography.body,
+    height: '100%',
     color: colors.textPrimary,
-    paddingVertical: spacing.xs,
+    ...typography.body,
   },
-  countRow: {
-    marginBottom: spacing.sm,
-  },
-  countText: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  listContainer: {
+  listContent: {
     paddingBottom: spacing.xxl,
   },
 });

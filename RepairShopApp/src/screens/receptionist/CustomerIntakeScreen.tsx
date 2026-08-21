@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { User, Phone, Mail, Laptop, Tag, FileText } from 'lucide-react-native';
+import { User, Phone, Mail, Laptop, Tag, FileText, MapPin } from 'lucide-react-native';
 
 import { NewJobFormValues } from '../../types/job';
 import { supabase } from '../../lib/supabase';
@@ -19,6 +19,7 @@ import SegmentedControl from '../../components/shared/SegmentedControl';
 import Dropdown from '../../components/shared/Dropdown';
 import CreatableDropdown from '../../components/shared/CreatableDropdown';
 import ScreenScrollView from '../../components/common/ScreenScrollView';
+import { CustomerTypeaheadMobile } from '../../components/customers/CustomerTypeaheadMobile';
 import { useAppConfig } from '../../context/AppConfigContext';
 import { colors, radius, spacing, typography } from '../../tokens';
 
@@ -38,11 +39,13 @@ export default function CustomerIntakeScreen() {
   const [deviceTypes, setDeviceTypes] = useState<{label: string, value: string}[]>([]);
 
   const [form, setForm] = useState<NewJobFormValues>({
+    customer_id: null,
     customer_name: '',
     customer_contact: '',
     customer_email: '',
     customer_gstin: '',
-    device_type: 'Laptop',
+    customer_address: '',
+    device_type_id: 'laptop',  // default to the standard 'laptop' ui_device_types.id
     reported_issue: '',
     remarks: '',
     job_type: 'Inhouse',
@@ -57,37 +60,40 @@ export default function CustomerIntakeScreen() {
   const [focusField, setFocusField] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof NewJobFormValues, string>>>({});
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchCatalog = async () => {
-      setCatalogLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('job_types')
-          .select('id, title, customer_charge_amount, technician_incentive')
-          .eq('is_active', true)
-          .order('title', { ascending: true });
+  const fetchCatalog = React.useCallback(async () => {
+    setCatalogLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('job_types')
+        .select('id, title, customer_charge_amount, technician_incentive')
+        .eq('is_active', true)
+        .order('title', { ascending: true });
 
-        if (error) {
-          console.error('Error fetching job types catalog:', error.message);
-        } else if (isMounted && data) {
-          setCatalogItems(data as JobTypeCatalogItem[]);
-        }
-
-        const { data: dtData, error: dtError } = await supabase.rpc('get_unique_device_types');
-        if (dtError) {
-          console.error('Error fetching device types:', dtError.message);
-        } else if (isMounted && dtData) {
-          setDeviceTypes(dtData.map((d: any) => ({ label: d.device_type, value: d.device_type })));
-        }
-      } finally {
-        if (isMounted) setCatalogLoading(false);
+      if (error) {
+        console.error('Error fetching job types catalog:', error.message);
+      } else if (data) {
+        setCatalogItems(data as JobTypeCatalogItem[]);
       }
-    };
 
-    fetchCatalog();
-    return () => { isMounted = false; };
+      // Load device types from lookup table; store id as value (FK reference)
+      const { data: dtData, error: dtError } = await supabase
+        .from('ui_device_types')
+        .select('id, label')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (dtError) {
+        console.error('Error fetching device types:', dtError.message);
+      } else if (dtData) {
+        setDeviceTypes(dtData.map((d: any) => ({ label: d.label || d.id, value: d.id })));
+      }
+    } finally {
+      setCatalogLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchCatalog();
+  }, [fetchCatalog]);
 
   const updateForm = (key: keyof NewJobFormValues, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -192,10 +198,35 @@ export default function CustomerIntakeScreen() {
             <SectionLabel title="CUSTOMER DETAILS" />
           </View>
           <View style={styles.card}>
-            {renderField('customer_name',    'Customer Name *',    <User     size={18} color={colors.textMuted} style={styles.inputIcon} />)}
+            <Text style={styles.fieldLabel}>Customer Name *</Text>
+            <CustomerTypeaheadMobile
+              name={form.customer_name}
+              selectedCustomerId={form.customer_id}
+              onChangeName={(val) => {
+                updateForm('customer_name', val);
+                if (form.customer_id) updateForm('customer_id', null);
+              }}
+              onSelectCustomer={(cust) => {
+                setForm((prev) => ({
+                  ...prev,
+                  customer_id: cust.id,
+                  customer_name: cust.name,
+                  customer_contact: cust.phone || prev.customer_contact,
+                  customer_email: cust.email || prev.customer_email,
+                  customer_gstin: cust.gstin || prev.customer_gstin,
+                  customer_address: cust.address || prev.customer_address,
+                }));
+                if (fieldErrors.customer_name) setFieldErrors((prev) => ({ ...prev, customer_name: undefined }));
+                if (fieldErrors.customer_contact) setFieldErrors((prev) => ({ ...prev, customer_contact: undefined }));
+              }}
+              onClearCustomer={() => updateForm('customer_id', null)}
+              error={fieldErrors.customer_name}
+            />
+
             {renderField('customer_contact', 'Contact Number *',   <Phone    size={18} color={colors.textMuted} style={styles.inputIcon} />, { keyboardType: 'phone-pad' })}
             {renderField('customer_email',   'Email (optional)',   <Mail     size={18} color={colors.textMuted} style={styles.inputIcon} />, { keyboardType: 'email-address', autoCapitalize: 'none' })}
             {renderField('customer_gstin',   'GSTIN (optional)',   <FileText size={18} color={colors.textMuted} style={styles.inputIcon} />, { autoCapitalize: 'characters', maxLength: 15, placeholder: 'e.g. 22AAAAA0000A1Z5' })}
+            {renderField('customer_address', 'Billing & Delivery Address (optional)', <MapPin size={18} color={colors.textMuted} style={styles.inputIcon} />, { multiline: true, placeholder: 'Enter physical address...' })}
           </View>
 
           <View style={styles.sectionHeaderBg}>
@@ -226,14 +257,14 @@ export default function CustomerIntakeScreen() {
             <Text style={styles.fieldLabel}>Device Type</Text>
             <CreatableDropdown
               options={deviceTypes.length > 0 ? deviceTypes : [
-                { label: 'PC', value: 'PC' },
-                { label: 'Laptop', value: 'Laptop' },
-                { label: 'Printer', value: 'Printer' },
-                { label: 'Camera', value: 'Camera' },
-                { label: 'Mobile', value: 'Mobile' }
+                { label: 'PC', value: 'pc' },
+                { label: 'Laptop', value: 'laptop' },
+                { label: 'Printer', value: 'printer' },
+                { label: 'Camera', value: 'camera' },
+                { label: 'Mobile', value: 'mobile' }
               ]}
-              selectedValue={form.device_type}
-              onSelect={(val) => updateForm('device_type', val)}
+              selectedValue={form.device_type_id}
+              onSelect={(val) => updateForm('device_type_id', val)}
               placeholder="Search or add a device type..."
               icon={<Laptop size={18} color={colors.textMuted} />}
             />

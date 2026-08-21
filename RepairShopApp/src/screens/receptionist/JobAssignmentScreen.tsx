@@ -51,13 +51,48 @@ export default function JobAssignmentScreen() {
       const { data: jobCode, error: rpcError } = await supabase.rpc('generate_job_code');
       if (rpcError || !jobCode) throw new Error(rpcError?.message || 'Failed to generate job code.');
 
+      // Central Customer Directory: Upsert or link customer
+      let customerId = formState.customer_id || null;
+      try {
+        const { data: custData, error: custErr } = await supabase.rpc('find_or_create_customer', {
+          p_customer_id: customerId,
+          p_name: formState.customer_name.trim(),
+          p_phone: cleanPhoneNumber(formState.customer_contact) || null,
+          p_email: formState.customer_email.trim() || null,
+          p_gstin: formState.customer_gstin?.trim() || null,
+          p_address: formState.customer_address?.trim() || null,
+          p_created_via: 'job',
+          p_user_id: user?.id,
+        });
+        if (!custErr && custData) {
+          customerId = custData.id;
+        }
+      } catch (e) {
+        console.warn('Customer upsert warning:', e);
+      }
+
+      // Central Device Types: Resolve or create device type via RPC
+      let resolvedDeviceTypeId = formState.device_type_id?.trim() || 'Other';
+      try {
+        const { data: dtId, error: dtErr } = await supabase.rpc('find_or_create_device_type', {
+          p_name: resolvedDeviceTypeId,
+        });
+        if (!dtErr && dtId) {
+          resolvedDeviceTypeId = dtId;
+        }
+      } catch (e) {
+        console.warn('Device type resolution warning:', e);
+      }
+
       const { data: newJob, error: insertError } = await supabase.from('jobs').insert({
         job_code: jobCode,
+        customer_id:      customerId,
         customer_name:    formState.customer_name.trim(),
         customer_contact: cleanPhoneNumber(formState.customer_contact),
         customer_email:   formState.customer_email.trim() || null,
         customer_gstin:   formState.customer_gstin?.trim() || null,
-        device_type:      formState.device_type,
+        customer_address: formState.customer_address?.trim() || null,
+        device_type_id:   resolvedDeviceTypeId,
         reported_issue:   formState.reported_issue.trim(),
         remarks:          formState.remarks.trim() || null,
         job_type:         formState.job_type,
@@ -72,11 +107,11 @@ export default function JobAssignmentScreen() {
       if (insertError) throw insertError;
 
       if (technicianIds.length > 1) {
-        const additionalTechs = technicianIds.slice(1).map(id => ({
+        const techs = technicianIds.slice(1).map((id: string) => ({
           job_id: newJob.id,
           technician_id: id
         }));
-        const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+        const { error: additionalError } = await supabase.from('job_technicians').insert(techs);
         if (additionalError) throw additionalError;
       }
 
@@ -91,18 +126,7 @@ export default function JobAssignmentScreen() {
   const printReceipt = async () => {
     if (!createdJob) return;
     try {
-      await printInvoice({
-        docType: 'receipt',
-        jobId: createdJob.job_code,
-        date: createdJob.created_at || new Date().toISOString(),
-        customer: {
-          name: createdJob.customer_name,
-          gst: (createdJob as any).customer_gstin || undefined,
-          phone: createdJob.customer_contact,
-          address: createdJob.device_type + ' — ' + createdJob.reported_issue,
-        },
-        items: [{ description: createdJob.reported_issue || 'Device Repair', hsn: '', price: 0, unit: 1 }],
-      });
+      await printInvoice({ docType: 'receipt', jobId: createdJob.id });
     } catch (error: any) {
       showToast({ title: 'Print Failed', message: error.message, type: 'error' });
     }
@@ -124,7 +148,7 @@ export default function JobAssignmentScreen() {
 
   const handleWhatsAppInvoice = async () => {
     if (!createdJob) return;
-    const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing Digital Solution.`;
+    const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing RepairShop.`;
     const url = createWhatsAppUrl(createdJob.customer_contact, msg);
     if (!url) {
       showToast({ title: 'Invalid number', message: 'Could not format the contact number for WhatsApp.', type: 'error' });
@@ -189,7 +213,7 @@ export default function JobAssignmentScreen() {
           <DetailRow label="Priority" value={formState.priority} valueColor={priorityColor} showDivider />
           <DetailRow label="Job Type" value={formState.job_type} showDivider />
           <DetailRow label="Customer" value={formState.customer_name} showDivider />
-          <DetailRow label="Device"   value={formState.device_type} showDivider />
+          <DetailRow label="Device"   value={formState.device_type_id} showDivider />
           <View style={styles.issueBlock}>
             <Text style={styles.issueLabel}>Issue</Text>
             <Text style={styles.issueValue}>{formState.reported_issue}</Text>

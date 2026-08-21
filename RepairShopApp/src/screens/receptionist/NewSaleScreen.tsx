@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useAppConfig } from '../../context/AppConfigContext';
-import { createWhatsAppUrl } from '@repairshop/shared';
+import { createWhatsAppUrl, calculateGrandTotal } from '@repairshop/shared';
 import { printInvoice } from '../../lib/invoiceService';
 
 import { SaleCustomerForm } from '../../components/sales/SaleCustomerForm';
@@ -27,6 +27,7 @@ type SaleItem = {
   quantity: number;
   unit_price: number;
   product_id: string | null;
+  serial_number?: string;
 };
 
 type InventorySuggestion = {
@@ -34,7 +35,7 @@ type InventorySuggestion = {
   product_id: string;
   item_name: string;
   quantity: number;
-  cost_price: number;
+  selling_rate: number;
   unit?: string | null;
 };
 
@@ -53,7 +54,7 @@ type CreatedSale = {
 
 const emptyItem = (): SaleItem => ({
   clientId: Math.random().toString(36).substr(2, 9),
-  product_id: null, item_name: '', quantity: 1, unit_price: 0,
+  product_id: null, item_name: '', quantity: 1, unit_price: 0, serial_number: '',
 });
 
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
@@ -71,10 +72,12 @@ export default function NewSaleScreen() {
       loading: false,
       createdSale: null as CreatedSale | null,
       form: {
+        customer_id: null as string | null,
         customer_name: '',
         customer_contact: '',
         customer_email: '',
         customer_gstin: '',
+        customer_address: '',
         status: 'Paid' as SaleStatus,
         payment_method: 'Cash' as SalePaymentMethod,
         discount: '0',
@@ -86,18 +89,60 @@ export default function NewSaleScreen() {
       activeItemIndex: null as number | null,
       inventorySuggestions: [] as InventorySuggestion[],
       inventoryLoading: false,
+      previewTotals: { subtotal: 0, totalTax: 0, grandTotal: 0 },
     }
   );
 
-  const { loading, createdSale, form, items, errors, activeItemIndex, inventorySuggestions, inventoryLoading } = state;
+  const { loading, createdSale, form, items, errors, activeItemIndex, inventorySuggestions, inventoryLoading, previewTotals } = state;
 
-  const subtotal = useMemo(
-    () => items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0), 0),
-    [items],
-  );
   const discountValue = Number(form.discount || 0);
-  const taxPercent    = Number(form.tax_percent || 0);
-  const totalAmount   = Math.max(subtotal - discountValue, 0) * (1 + taxPercent / 100);
+  const taxPercent = Number(form.tax_percent || 0);
+
+  // Live total preview via RPC (matches website exactly)
+  useEffect(() => {
+    let isCurrent = true;
+    const runPreview = async () => {
+      const payloadItems = items
+        .filter((i: any) => i.item_name.trim() && i.quantity && i.unit_price)
+        .map((i: any) => ({
+          product_id: i.product_id || null,
+          item_name: i.item_name.trim(),
+          quantity: Number(i.quantity) || 1,
+          selling_rate: Number(i.unit_price) || 0,
+          cgst_rate: i.product_id ? null : taxPercent / 2,
+          sgst_rate: i.product_id ? null : taxPercent / 2,
+          igst_rate: i.product_id ? null : 0,
+          tax_mode: i.product_id ? null : 'exclusive',
+        }));
+
+      if (payloadItems.length === 0) {
+        if (isCurrent) setState({ previewTotals: { subtotal: 0, totalTax: 0, grandTotal: 0 } });
+        return;
+      }
+
+      const { data, error } = await supabase.rpc('preview_invoice', {
+        p_items: payloadItems,
+        p_tax_regime: 'intra_state',
+        p_discount: discountValue
+      });
+
+      if (!error && data && isCurrent) {
+        setState({ previewTotals: { 
+          subtotal: data.subtotal || 0, 
+          totalTax: data.total_tax || 0, 
+          grandTotal: data.grand_total || 0 
+        }});
+      } else if (error) {
+        // Fallback if RPC fails or offline
+        const sub = payloadItems.reduce((sum: number, i: any) => sum + (i.quantity * i.selling_rate), 0);
+        if (isCurrent) setState({ previewTotals: { subtotal: sub, totalTax: 0, grandTotal: Math.max(0, sub - discountValue) } });
+      }
+    };
+    
+    // Slight debounce for performance
+    const timeout = setTimeout(runPreview, 300);
+    return () => { isCurrent = false; clearTimeout(timeout); };
+  }, [items, discountValue, taxPercent]);
 
   // Inventory autocomplete
   useEffect(() => {
@@ -112,7 +157,7 @@ export default function NewSaleScreen() {
         try {
           const { data, error } = await supabase
             .from('inventory')
-            .select('id, product_id, quantity_cached, purchase_rate, products!inner(name, unit)')
+            .select('id, product_id, quantity_cached, selling_rate, products!inner(name, unit)')
             .ilike('products.name', `%${searchTerm}%`)
             .limit(8);
           if (!isCurrent) return;
@@ -120,7 +165,7 @@ export default function NewSaleScreen() {
           const mapped = (data || []).map((row: any) => ({
             id: row.id, product_id: row.product_id,
             item_name: row.products?.name || 'Unknown',
-            quantity: row.quantity_cached, cost_price: row.purchase_rate,
+            quantity: row.quantity_cached, selling_rate: row.selling_rate,
             unit: row.products?.unit,
           })).sort((a, b) => a.item_name.localeCompare(b.item_name));
           setState({ inventorySuggestions: mapped as InventorySuggestion[] });
@@ -137,7 +182,7 @@ export default function NewSaleScreen() {
     setState({ items: items.map((item: any, i: number) => (i === index ? { ...item, ...updates } : item)) });
 
   const selectInventoryItem = (index: number, suggestion: InventorySuggestion) => {
-    updateItem(index, { product_id: suggestion.product_id, item_name: suggestion.item_name, unit_price: Number(suggestion.cost_price || 0) });
+    updateItem(index, { product_id: suggestion.product_id, item_name: suggestion.item_name, unit_price: Number(suggestion.selling_rate || 0) });
     setState({ inventorySuggestions: [], activeItemIndex: null });
   };
 
@@ -168,12 +213,12 @@ export default function NewSaleScreen() {
     setState({
       createdSale: null,
       form: { customer_name: '', customer_contact: '', customer_email: '', customer_gstin: '', status: 'Paid', payment_method: 'Cash', discount: '0', tax_percent: '0', notes: '' },
-      items: [emptyItem()], errors: {}, activeItemIndex: null, inventorySuggestions: []
+      items: [emptyItem()], errors: {}, activeItemIndex: null, inventorySuggestions: [], previewTotals: { subtotal: 0, totalTax: 0, grandTotal: 0 }
     });
   };
 
   const handleWhatsAppInvoice = async () => {
-    const msg = `Hello ${form.customer_name.trim()}, your RepairShop invoice for Sale ${createdSale?.sale_code || ''} is ready.\n\nSub Total: ${currency.format(subtotal)}\nDiscount: ${currency.format(discountValue)}\nTax: ${taxPercent}%\n*Grand Total: ${currency.format(createdSale?.total_amount ?? totalAmount)}*\n\nThank you for choosing RepairShop.`;
+    const msg = `Hello ${form.customer_name.trim()}, your RepairShop invoice for Sale ${createdSale?.sale_code || ''} is ready.\n\nSub Total: ${currency.format(previewTotals.subtotal)}\nDiscount: ${currency.format(discountValue)}\nTax: ${currency.format(previewTotals.totalTax)}\n*Grand Total: ${currency.format(createdSale?.total_amount ?? previewTotals.grandTotal)}*\n\nThank you for choosing RepairShop.`;
     const url = createWhatsAppUrl(form.customer_contact.trim(), msg);
     if (!url) { showToast({ title: 'Invalid number', message: 'Could not format number for WhatsApp.', type: 'error' }); return; }
     try {
@@ -188,17 +233,8 @@ export default function NewSaleScreen() {
   const handlePrintInvoice = async () => {
     if (!createdSale) return;
     try {
-      const saleItems = (createdSale.sale_items || items)
-        .filter((i: any) => String(i.item_name || '').trim())
-        .map((i: any) => ({ description: String(i.item_name), hsn: '', price: Number(i.unit_price), unit: Number(i.quantity) }));
-      await printInvoice({
-        docType: 'sale', invoiceNo: createdSale.sale_code,
-        date: createdSale.created_at || new Date().toISOString(),
-        customer: { name: createdSale.customer_name, gst: createdSale.customer_gstin || undefined, phone: createdSale.customer_contact, address: 'Silchar, Assam' },
-        items: saleItems.length > 0 ? saleItems : [{ description: 'Sale Items', hsn: '', price: Number(createdSale.total_amount || 0), unit: 1 }],
-        taxRatePct: Number(createdSale.tax_percent || 18),
-        discount: Number(createdSale.discount || 0),
-      });
+      // docType:'final' reads from invoices table — mirrors website openInvoicePrint({ docType:'final', invoiceId })
+      await printInvoice({ docType: 'final', invoiceId: createdSale.id });
     } catch (e: any) { showToast({ title: 'Print Failed', message: e.message, type: 'error' }); }
   };
 
@@ -208,55 +244,87 @@ export default function NewSaleScreen() {
 
     setState({ loading: true });
     try {
-      let saleCode = '';
+      // Central Customer Directory: Upsert or link customer
+      let customerId = form.customer_id || null;
       try {
-        const { data, error: rpcError } = await supabase.rpc('generate_sale_code');
-        if (!rpcError && data) saleCode = data;
-      } catch { /* fallback below */ }
-      if (!saleCode) saleCode = `SALE-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      const salePayload: any = {
-        sale_code: saleCode, invoice_number: saleCode,
-        customer_name: form.customer_name.trim(), customer_contact: form.customer_contact.trim(),
-        customer_email: form.customer_email.trim() || null, customer_gstin: form.customer_gstin.trim() || null,
-        status: form.status, payment_method: form.payment_method, payment_mode: form.payment_method?.toLowerCase() || 'cash',
-        discount: discountValue, tax_percent: taxPercent, total_amount: totalAmount, grand_total: totalAmount,
-        notes: form.notes.trim() || null, created_by: user.id,
-        paid_at: form.status === 'Paid' ? new Date().toISOString() : null,
-      };
-
-      let sale: any = null, saleError: any = null;
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const res = await supabase.from('sales').insert(salePayload).select('*').single();
-        if (!res.error) { sale = res.data; saleError = null; break; }
-        saleError = res.error;
-        const missingColMatch = res.error.message?.match(/Could not find the '([^']+)' column/i);
-        if (missingColMatch?.[1]) { delete salePayload[missingColMatch[1]]; } else { break; }
+        const { data: custData, error: custErr } = await supabase.rpc('find_or_create_customer', {
+          p_customer_id: customerId,
+          p_name: form.customer_name.trim(),
+          p_phone: form.customer_contact.trim() || null,
+          p_email: form.customer_email.trim() || null,
+          p_gstin: form.customer_gstin.trim() || null,
+          p_address: form.customer_address.trim() || null,
+          p_created_via: 'sale',
+          p_user_id: user.id,
+        });
+        if (!custErr && custData) {
+          customerId = custData.id;
+        }
+      } catch (e) {
+        console.warn('Customer upsert warning:', e);
       }
-      if (saleError) throw saleError;
 
-      const saleItems = items.map((item: any) => {
-        if (!item.product_id) throw new Error(`Product must be selected from dropdown for ${item.item_name || 'an item'}`);
-        return { sale_id: sale.id, product_id: item.product_id, item_name: item.item_name.trim(), quantity: Number(item.quantity), unit_price: Number(item.unit_price) };
+      // Build item payload matching create_invoice p_items JSONB shape (same as website)
+      const payloadItems = items
+        .filter((item: any) => item.item_name.trim())
+        .map((item: any) => ({
+          product_id:   item.product_id || null,
+          item_name:    item.item_name.trim(),
+          quantity:     Number(item.quantity) || 1,
+          selling_rate: Number(item.unit_price) || 0,  // RPC reads 'selling_rate', not 'unit_price'
+          serial_number: item.serial_number || null,
+          // For inventory-linked items, RPC reads tax rates from products table automatically.
+          // For custom service items (no product_id), apply half the user-entered taxPercent to CGST and SGST
+          cgst_rate:    item.product_id ? null : taxPercent / 2,
+          sgst_rate:    item.product_id ? null : taxPercent / 2,
+          igst_rate:    item.product_id ? null : 0,
+          tax_mode:     item.product_id ? null : 'exclusive',
+        }));
+
+      const { data, error } = await supabase.rpc('create_invoice', {
+        p_customer_name:    form.customer_name.trim(),
+        p_customer_contact: form.customer_contact.trim() || null,
+        p_customer_email:   form.customer_email.trim() || null,
+        p_customer_gstin:   form.customer_gstin.trim() || null,
+        p_tax_regime:       'intra_state',
+        p_items:            payloadItems,
+        p_discount:         discountValue,
+        p_payment_method:   form.payment_method,
+        p_status:           form.status.toLowerCase(),  // 'paid' | 'draft'
+        p_notes:            form.notes.trim() || null,
+        p_job_id:           null,  // counter sale — no linked job
       });
-      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-      if (itemsError) throw itemsError;
+      if (error) throw error;
+
+      if (data?.invoice_id && customerId) {
+        await supabase
+          .from('invoices')
+          .update({
+            customer_id: customerId,
+            customer_address: form.customer_address.trim() || null,
+          })
+          .eq('id', data.invoice_id);
+      }
 
       setState({
         createdSale: {
-          id: sale.id, sale_code: sale.sale_code || sale.invoice_number || saleCode,
-          created_at: sale.created_at || new Date().toISOString(),
-          total_amount: Number(sale.total_amount || sale.grand_total || totalAmount),
-          customer_name: form.customer_name.trim(), customer_contact: form.customer_contact.trim(),
-          customer_gstin: form.customer_gstin.trim() || null,
-          tax_percent: taxPercent, discount: discountValue, sale_items: saleItems,
+          id:               data.invoice_id,
+          sale_code:        data.invoice_code,   // invoice_code e.g. INV-2026-0001
+          created_at:       new Date().toISOString(),
+          total_amount:     previewTotals.grandTotal,          // locally computed; RPC doesn't return grand_total
+          customer_name:    form.customer_name.trim(),
+          customer_contact: form.customer_contact.trim(),
+          customer_gstin:   form.customer_gstin.trim() || null,
+          tax_percent:      taxPercent,
+          discount:         discountValue,
+          sale_items:       null,
         }
       });
-      showToast({ title: 'Sale created', message: sale.sale_code || saleCode, type: 'success' });
+      showToast({ title: 'Invoice created', message: data.invoice_code, type: 'success' });
     } catch (err: any) {
       let msg = err instanceof Error ? err.message : err?.message || err?.details;
-      if (!msg) { try { msg = JSON.stringify(err); } catch { msg = 'Failed to create sale'; } }
-      showToast({ title: 'Sale failed', message: msg, type: 'error' });
+      if (!msg) { try { msg = JSON.stringify(err); } catch { msg = 'Failed to create invoice'; } }
+      showToast({ title: 'Invoice failed', message: msg, type: 'error' });
     } finally {
       setState({ loading: false });
     }
@@ -268,7 +336,7 @@ export default function NewSaleScreen() {
         <AppHeader title="Sale Created" />
         <SaleSuccessCard
           saleCode={createdSale.sale_code}
-          totalAmount={Number(createdSale.total_amount || totalAmount)}
+          totalAmount={Number(createdSale.total_amount || previewTotals.grandTotal)}
           onPrint={handlePrintInvoice}
           onWhatsApp={handleWhatsAppInvoice}
           onCreateAnother={resetForm}
@@ -311,10 +379,11 @@ export default function NewSaleScreen() {
           errors={errors}
           saleStatuses={config.saleStatuses}
           paymentMethods={config.paymentMethods}
-          subtotal={subtotal}
+          subtotal={previewTotals.subtotal}
           discountValue={discountValue}
           taxPercent={taxPercent}
-          totalAmount={totalAmount}
+          totalTax={previewTotals.totalTax}
+          totalAmount={previewTotals.grandTotal}
           onChange={updates => setState({ form: { ...form, ...updates } })}
         />
 

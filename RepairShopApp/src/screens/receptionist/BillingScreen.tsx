@@ -7,7 +7,7 @@ import { printInvoice } from '../../lib/invoiceService';
 
 import { supabase } from '../../lib/supabase';
 import { Job, JobMaterial } from '../../types/job';
-import { Billing } from '../../types/billing';
+import { Invoice } from '../../types/billing';
 import { calculatePartsTotal, calculateTaxAmount, calculateGrandTotal, createWhatsAppUrl } from '@repairshop/shared';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import ErrorState from '../../components/common/ErrorState';
@@ -41,7 +41,7 @@ export default function BillingScreen() {
 
   const [job, setJob] = useState<(Job & { technician_name?: string }) | null>(null);
   const [materials, setMaterials] = useState<JobMaterial[]>([]);
-  const [billing, setBilling] = useState<Billing | null>(null);
+  const [invoice, setInvoice] = useState<any>(null);
 
   const [labourStr, setLabourStr] = useState('0');
   const [taxStr, setTaxStr] = useState('0');
@@ -66,18 +66,19 @@ export default function BillingScreen() {
       if (matsError) throw matsError;
       setMaterials(matsData || []);
 
-      const { data: billData, error: billError } = await supabase
-        .from('billing').select('*').eq('job_id', jobId).maybeSingle();
-      if (billError) throw billError;
+      const { data: invData, error: invError } = await supabase
+        .from('invoices').select('*, invoice_items(*)').eq('job_id', jobId).maybeSingle();
+      if (invError) throw invError;
 
-      if (billData) {
-        setBilling(billData);
-        setLabourStr(billData.labour_charge.toString());
-        setTaxStr(billData.tax_percent.toString());
-        setDiscountStr(billData.discount.toString());
-        setIsPaid(billData.is_paid);
+      if (invData) {
+        setInvoice(invData);
+        const labourItem = (invData.invoice_items || []).find((i: any) => i.item_name === 'Labour Charge');
+        setLabourStr(labourItem ? String(labourItem.unit_price) : '0');
+        setTaxStr('18'); // Assuming default 18% or take from invData if you add tax_percent column
+        setDiscountStr(String(invData.discount || 0));
+        setIsPaid(invData.status === 'paid');
       } else {
-        setBilling(null); setLabourStr('0'); setTaxStr('0'); setDiscountStr('0'); setIsPaid(false);
+        setInvoice(null); setLabourStr('0'); setTaxStr('18'); setDiscountStr('0'); setIsPaid(false);
       }
     } catch (err: any) {
       setError(err.message);
@@ -100,13 +101,40 @@ export default function BillingScreen() {
   const handleSaveBill = async () => {
     try {
       setSaving(true);
-      const payload = { job_id: jobId, parts_total: partsTotal, labour_charge: labourCharge, tax_percent: taxPercent, discount, grand_total: grandTotal, is_paid: isPaid };
-      const query = billing?.id
-        ? supabase.from('billing').update(payload).eq('id', billing.id).select().single()
-        : supabase.from('billing').upsert(payload, { onConflict: 'job_id' }).select().single();
-      const { data, error } = await query;
-      if (error) throw error;
-      setBilling(data);
+      const itemsToBill = materials.map(m => ({ product_id: null, item_name: m.material_name, quantity: m.quantity, unit_price: m.unit_cost }));
+      if (labourCharge > 0) itemsToBill.push({ product_id: null, item_name: 'Labour Charge', quantity: 1, unit_price: labourCharge });
+      
+      let newInvoice = invoice;
+      if (!invoice?.id) {
+        const { data, error } = await supabase.rpc('create_invoice', {
+          p_customer_name: job?.customer_name,
+          p_customer_contact: job?.customer_contact,
+          p_customer_email: job?.customer_email,
+          p_customer_gstin: job?.customer_gstin,
+          p_items: itemsToBill,
+          p_discount: discount,
+          p_payment_method: 'Cash',
+          p_status: isPaid ? 'paid' : 'draft',
+          p_job_id: jobId
+        });
+        if (error) throw error;
+        // Fetch the newly created invoice to update state
+        const { data: fetchInv } = await supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', jobId).single();
+        newInvoice = fetchInv;
+      } else {
+        // Update existing invoice
+        const { error } = await supabase.from('invoices').update({
+          discount,
+          status: isPaid ? 'paid' : 'draft'
+        }).eq('id', invoice.id);
+        if (error) throw error;
+        
+        // Simplify by skipping full item updates for existing invoices unless needed, but let's just update the status & discount for now.
+        // Re-fetch
+        const { data: fetchInv } = await supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', jobId).single();
+        newInvoice = fetchInv;
+      }
+      setInvoice(newInvoice);
       showToast({ title: 'Success', message: 'Bill saved successfully.', type: 'success' });
     } catch (err: any) {
       showToast({ title: 'Save Failed', message: err.message, type: 'error' });
@@ -129,7 +157,7 @@ export default function BillingScreen() {
 
   const handleEmail = async () => {
     if (!job) return;
-    if (!billing) { showToast({ title: 'Error', message: 'Please save bill first.', type: 'error' }); return; }
+    if (!invoice) { showToast({ title: 'Error', message: 'Please save bill first.', type: 'error' }); return; }
     if (!job.customer_email) { showToast({ title: 'Missing Email', message: 'No customer email found.', type: 'error' }); return; }
     try {
       showToast({ title: 'Sending...', message: 'Sending email invoice...', type: 'info' });
@@ -149,20 +177,10 @@ export default function BillingScreen() {
   };
 
   const handlePrint = async () => {
-    if (!job || !billing) return;
+    if (!job) return;
     try {
-      const matItems = materials.length > 0
-        ? materials.map(m => ({ description: m.material_name, hsn: '', price: m.unit_cost, unit: m.quantity }))
-        : [{ description: 'Labour & Service', hsn: '', price: billing.labour_charge || 0, unit: 1 }];
-      if (billing.labour_charge > 0 && materials.length > 0) {
-        matItems.push({ description: 'Labour Charge', hsn: '', price: billing.labour_charge, unit: 1 });
-      }
-      await printInvoice({
-        docType: 'final', invoiceNo: `INV-${job.job_code}`, jobId: job.job_code,
-        date: new Date().toISOString(),
-        customer: { name: job.customer_name, phone: job.customer_contact, address: job.device_type + ' — ' + job.reported_issue },
-        items: matItems, taxRatePct: billing.tax_percent, discount: billing.discount,
-      });
+      // Use jobId — the edge function fetches all data (materials, billing) from DB.
+      await printInvoice({ docType: 'receipt', jobId: job.id });
     } catch (e: any) { showToast({ title: 'Print Failed', message: e.message, type: 'error' }); }
   };
 

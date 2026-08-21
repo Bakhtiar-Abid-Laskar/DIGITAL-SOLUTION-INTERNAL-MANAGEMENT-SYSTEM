@@ -10,9 +10,10 @@ interface MaterialListProps {
   materials: JobMaterial[];
   onDelete: (id: string) => void;
   canEdit: boolean;
+  hidePricing?: boolean;
 }
 
-export default function MaterialList({ materials, onDelete, canEdit }: MaterialListProps) {
+export default function MaterialList({ materials, onDelete, canEdit, hidePricing = false }: MaterialListProps) {
   const total = materials.reduce((sum, m) => sum + m.total_cost, 0);
 
   return (
@@ -25,9 +26,11 @@ export default function MaterialList({ materials, onDelete, canEdit }: MaterialL
           <View key={mat.id} style={styles.row}>
             <View style={styles.info}>
               <Text style={styles.name}>{mat.material_name} (x{mat.quantity})</Text>
-              <Text style={styles.cost}>@ {formatCurrency(mat.unit_cost)} = {formatCurrency(mat.total_cost)}</Text>
-              {mat.photo_url && (
-                <View style={styles.photoAttached}>
+              {!hidePricing && (
+                <Text style={styles.cost}>@ {formatCurrency(mat.unit_cost)} = {formatCurrency(mat.total_cost)}</Text>
+              )}
+              {mat.photo_drive_file_id && (
+                <View style={styles.photoIndicator}>
                   <Camera size={14} color={colors.textSecondary} style={{ marginRight: spacing.xs }} />
                   <Text style={styles.photoText}>Photo attached</Text>
                 </View>
@@ -41,10 +44,12 @@ export default function MaterialList({ materials, onDelete, canEdit }: MaterialL
           </View>
         ))
       )}
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Parts Total:</Text>
-        <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
-      </View>
+      {!hidePricing && (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Parts Total:</Text>
+          <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -79,12 +84,16 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { color: colors.textPrimary, ...typography.bodyBold },
   cost: { color: colors.textSecondary, ...typography.caption, marginTop: 2 },
-  photoAttached: {
+  photoIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
-  photoText: { color: colors.textSecondary, ...typography.caption },
+  photoText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontFamily: 'Inter-Medium',
+  },
   deleteBtn: { padding: spacing.sm },
   totalRow: { 
     flexDirection: 'row', 

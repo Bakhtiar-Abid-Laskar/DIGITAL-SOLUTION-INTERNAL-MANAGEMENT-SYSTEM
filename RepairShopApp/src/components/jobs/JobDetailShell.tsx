@@ -86,7 +86,7 @@ export default function JobDetailShell({
         {/* Device & Issue */}
         <SectionLabel title="DEVICE & ISSUE" />
         <View style={[styles.card, styles.cardSpaced]}>
-          <DetailRow label="Device"   value={job.device_type} showDivider />
+          <DetailRow label="Device"   value={job.device_type_id} showDivider />
           <DetailRow label="Job Type" value={job.job_type} />
           <Text style={styles.subLabel}>Reported Issue</Text>
           <View style={styles.box}>

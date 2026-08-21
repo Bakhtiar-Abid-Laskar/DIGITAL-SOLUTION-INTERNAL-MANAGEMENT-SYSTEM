@@ -47,26 +47,18 @@ export default function ProfileScreen() {
 
   const { logoutVisible, photoModalVisible, phone, email, avatarSignedUrl, avatarLoading, editingPhone, phoneInput, savingPhone, editingEmail, emailInput, savingEmail, oldPassword, newPassword, confirmPassword, showOldPass, showNewPass, showConfirmPass, changingPassword } = state;
 
-  const fetchSignedAvatarUrl = useCallback(async (path: string, cancelled = false) => {
-    try {
-      const { data, error } = await supabase.storage.from('profile-pictures').createSignedUrl(path, 3600);
-      if (cancelled) return;
-      if (!error && data?.signedUrl) setState({ avatarSignedUrl: data.signedUrl });
-    } catch (err) { console.error('Signed URL fetch failed:', err); }
-  }, []);
-
   const fetchUserProfile = useCallback(async (cancelled = false) => {
     if (!user) return;
     try {
-      const { data, error } = await supabase.from('users').select('phone, email, avatar_url').eq('id', user.id).single();
+      const { data, error } = await supabase.from('users').select('phone, email, avatar_drive_file_id').eq('id', user.id).single();
       if (cancelled) return;
       if (!error && data) {
         setState({ phone: data.phone || '' });
         if (data.email) setState({ email: data.email });
-        if (data.avatar_url) fetchSignedAvatarUrl(data.avatar_url, cancelled);
+        if (data.avatar_drive_file_id) setState({ avatarSignedUrl: `https://drive.google.com/uc?id=${data.avatar_drive_file_id}` });
       }
     } catch (err) { console.error('Error fetching user profile:', err); }
-  }, [user, fetchSignedAvatarUrl]);
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,18 +132,35 @@ export default function ProfileScreen() {
       if (result.canceled || !result.assets[0]?.uri) return;
       setState({ avatarLoading: true });
       const compressedUri = await compressImage(result.assets[0].uri);
-      const storagePath = `${user.id}/avatar.jpg`;
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
       const formData = new FormData();
-      formData.append('file', { uri: compressedUri, name: 'avatar.jpg', type: 'image/jpeg' } as any);
-      const { error: uploadErr } = await supabase.storage.from('profile-pictures').upload(storagePath, formData, { upsert: true });
-      if (uploadErr) throw uploadErr;
-      const { error: dbErr } = await supabase.from('users').update({ avatar_url: storagePath }).eq('id', user.id);
+      formData.append('staffName', displayName || 'Unknown');
+      formData.append('image', { uri: compressedUri, name: 'avatar.webp', type: 'image/webp' } as any);
+      
+      const supabaseUrl = (supabase as any).supabaseUrl as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/upload-avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error('Drive upload failed');
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Drive upload failed');
+
+      const { error: dbErr } = await supabase.from('users').update({ avatar_drive_file_id: data.fileId }).eq('id', user.id);
       if (dbErr) throw dbErr;
-      await fetchSignedAvatarUrl(storagePath);
-      showToast({ title: 'Avatar Updated', message: 'Profile picture updated successfully.', type: 'success' });
+      
+      setState({ avatarSignedUrl: `https://drive.google.com/uc?id=${data.fileId}` });
+      showToast({ title: 'Success', message: 'Profile picture updated.', type: 'success' });
     } catch (err: any) {
-      showToast({ title: 'Upload Failed', message: err.message || 'Could not upload profile picture.', type: 'error' });
-    } finally { setState({ avatarLoading: false }); }
+      showToast({ title: 'Upload Failed', message: err.message || 'Could not update profile picture.', type: 'error' });
+    } finally {
+      setState({ avatarLoading: false });
+    };
   };
 
   const confirmLogout = async () => {

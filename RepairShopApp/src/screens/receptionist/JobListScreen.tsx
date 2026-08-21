@@ -75,7 +75,7 @@ export default function JobListScreen() {
       const trimmedQuery = searchQuery.trim();
       if (trimmedQuery) {
         query = query.or(
-          `job_code.ilike.%${trimmedQuery}%,customer_name.ilike.%${trimmedQuery}%,customer_contact.ilike.%${trimmedQuery}%`
+          `job_code.ilike.%${trimmedQuery}%,customer_name.ilike.%${trimmedQuery}%,customer_contact.ilike.%${trimmedQuery}%,reported_issue.ilike.%${trimmedQuery}%,remarks.ilike.%${trimmedQuery}%,work_notes.ilike.%${trimmedQuery}%`
         );
       }
 

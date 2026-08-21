@@ -87,25 +87,16 @@ export default function AdminJobDetailScreen() {
 
   const handleReassign = async (technicianIds: string[]) => {
     try {
-      const primaryId = technicianIds.length > 0 ? technicianIds[0] : null;
-      
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ technician_id: primaryId })
-        .eq('id', jobId);
-
-      if (updateError) throw updateError;
-      
-      // Clear old secondary techs
+      // Clear old techs
       await supabase.from('job_technicians').delete().eq('job_id', jobId);
       
-      // Insert new secondary techs
-      if (technicianIds.length > 1) {
-        const additionalTechs = technicianIds.slice(1).map(id => ({
+      // Insert new techs
+      if (technicianIds.length > 0) {
+        const techs = technicianIds.map(id => ({
           job_id: jobId,
           technician_id: id
         }));
-        const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+        const { error: additionalError } = await supabase.from('job_technicians').insert(techs);
         if (additionalError) throw additionalError;
       }
 
@@ -117,6 +108,13 @@ export default function AdminJobDetailScreen() {
       showToast({ title: 'Reassign Failed', message: mapErrorToUserMessage(err), type: 'error' });
     }
   };
+
+  const lineItems = React.useMemo(() => materials.map(m => ({
+    id: m.id,
+    name: m.material_name,
+    qty: m.quantity,
+    cost: m.total_cost / (m.quantity || 1),
+  })), [materials]);
 
   if (loading) return (
     <View style={styles.container}>
@@ -131,12 +129,7 @@ export default function AdminJobDetailScreen() {
     </View>
   );
 
-  const lineItems = React.useMemo(() => materials.map(m => ({
-    id: m.id,
-    name: m.material_name,
-    qty: m.quantity,
-    cost: m.total_cost / (m.quantity || 1),
-  })), [materials]);
+
 
   return (
     <View style={styles.container}>

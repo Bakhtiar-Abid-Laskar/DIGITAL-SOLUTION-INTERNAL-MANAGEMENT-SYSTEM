@@ -51,6 +51,21 @@ export const colors = {
   accentRed: '#E5484D',
   accentOrange: '#F5A524',
 
+  // Digital Solution Brand Tokens
+  brand: {
+    navyDark: '#0A1A3A',             // header gradient start (top-left)
+    blueBright: '#1E56CC',           // header gradient end (bottom-right), primary accent
+    blueDeep: '#16233F',             // "DIGITAL" wordmark, "Welcome Back!" text
+    blueAccent: '#1E56CC',           // "SOLUTION" wordmark, links, checkbox, icon glyphs
+    buttonGradientStart: '#14337A',  // login button gradient start
+    buttonGradientEnd: '#1E70E0',    // login button gradient end
+  },
+  surfaceCard: '#FFFFFF',
+  surfaceInputBg: '#F3F5F9',         // pill-shaped input backgrounds
+  surfaceIconChip: '#EAF1FF',        // light blue chip behind each service icon
+  borderSubtle: '#E7EAF0',           // subtle borders
+  brandTextSecondary: '#8A94A6',     // subtitle, placeholder, service labels
+
   // Nav
   navBackground: '#1C1C1E',
   navActive: '#3B5BFF',

@@ -100,10 +100,10 @@ export default function AllottedMaterialsCard({
       {/* Admin/Receptionist Action Buttons */}
       {showActions && (
         <View style={styles.actions}>
-          {onNotify && item.technician_id ? (
+          {onNotify ? (
             <AppPressable
               style={styles.notifyBtn}
-              onPress={() => onNotify(item.technician_id!)}
+              onPress={() => onNotify(item.id)}
             >
               <Bell size={14} color={colors.primary} style={{ marginRight: 4 }} />
               <Text style={styles.notifyBtnText}>Remind</Text>

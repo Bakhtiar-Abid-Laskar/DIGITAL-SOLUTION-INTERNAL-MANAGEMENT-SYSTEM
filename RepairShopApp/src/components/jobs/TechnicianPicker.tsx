@@ -16,7 +16,8 @@ interface TechnicianPickerProps {
 
 const TechRow = React.memo(function TechRow({ 
   item, 
-  onSelect 
+  isSelected,
+  onToggle 
 }: { 
   item: TechnicianSummary, 
   isSelected: boolean,
@@ -62,11 +63,16 @@ export default function TechnicianPicker({ visible, onClose, onSelect, initialSe
   useEffect(() => {
     let cancelled = false;
     if (visible) {
+      // Only sync selection + fetch when the sheet opens.
+      // initialSelectedIds is intentionally omitted from deps: its default `= []`
+      // creates a new array reference on every parent render, which would cause
+      // an infinite loop (effect fires → setState → parent re-renders → new [] → repeat).
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       setSelectedIds(initialSelectedIds);
       fetchTechnicians(cancelled);
     }
     return () => { cancelled = true; };
-  }, [visible, fetchTechnicians, initialSelectedIds]);
+  }, [visible, fetchTechnicians]); // intentionally excludes initialSelectedIds
 
   // Sync names on load
   useEffect(() => {

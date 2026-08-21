@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { getTodayDateString } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
-import { Plus, ClipboardList, Users, Bell, LogOut, User, CheckCircle, AlertTriangle, Activity, Menu, DollarSign, BarChart3, Package, MessageCircle, Mail, FileText } from 'lucide-react-native';
+import { Plus, ClipboardList, Users, Bell, LogOut, User, CheckCircle, AlertTriangle, Activity, Menu, DollarSign, BarChart3, Package, MessageCircle, Mail, FileText, CreditCard } from 'lucide-react-native';
 import { useToast } from '../../context/ToastContext';
 import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
@@ -114,6 +114,7 @@ export default function DashboardScreen() {
     { id: 'new_job', label: 'New Job', icon: Plus, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
     { id: 'new_sale', label: 'New Sale', icon: DollarSign, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
     { id: 'sales', label: 'Sales', icon: FileText, bgColor: QUICK_ACTION_COLORS.greenTile?.bg || '#E6F4EA', iconColor: QUICK_ACTION_COLORS.greenTile?.fg || '#137333', onPress: () => navigation.navigate('SalesList') },
+    { id: 'pending_payments', label: 'Pending Payments', icon: CreditCard, bgColor: '#FFF4E5', iconColor: '#E65100', onPress: () => navigation.navigate('PendingPayments') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
     { id: 'customers', label: 'Customers', icon: Users, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('Customers') },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, bgColor: QUICK_ACTION_COLORS.redTile.bg, iconColor: QUICK_ACTION_COLORS.redTile.fg, onPress: () => navigation.navigate('AnalyticsScreen') },

@@ -10,6 +10,7 @@ type SaleItem = {
   quantity: number;
   unit_price: number;
   product_id: string | null;
+  serial_number?: string;
 };
 
 type InventorySuggestion = {
@@ -17,7 +18,7 @@ type InventorySuggestion = {
   product_id: string;
   item_name: string;
   quantity: number;
-  cost_price: number;
+  selling_rate: number;
   unit?: string | null;
 };
 
@@ -87,13 +88,24 @@ export function SaleItemsList({
                     >
                       <Text style={styles.suggestionTitle} numberOfLines={2}>{suggestion.item_name}</Text>
                       <Text style={styles.suggestionMeta}>
-                        Stock: {suggestion.quantity} {suggestion.unit || ''} | Price: {currency.format(Number(suggestion.cost_price || 0))}
+                        Stock: {suggestion.quantity} {suggestion.unit || ''} | Price: {currency.format(Number(suggestion.selling_rate || 0))}
                       </Text>
                     </AppPressable>
                   ))
                 )}
               </View>
             )}
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Serial Number (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter serial number"
+              placeholderTextColor={colors.textMuted}
+              value={item.serial_number || ''}
+              onChangeText={(value) => onUpdateItem(index, { serial_number: value })}
+            />
           </View>
 
           <View style={styles.row}>
@@ -161,8 +173,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary, ...typography.body, borderWidth: 1, borderColor: colors.border,
   },
   searchWrap: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
-  searchInput: { flex: 1, paddingLeft: spacing.xl + spacing.xs },
-  inputIcon: { position: 'absolute', left: spacing.md, zIndex: 1 },
+  searchInput: { flex: 1, paddingLeft: 42, paddingTop: spacing.md, paddingRight: spacing.md, paddingBottom: spacing.md },
+  inputIcon: { position: 'absolute', left: spacing.md, zIndex: 2 },
   suggestionBox: {
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
     backgroundColor: colors.surface, marginTop: spacing.xs, overflow: 'hidden',

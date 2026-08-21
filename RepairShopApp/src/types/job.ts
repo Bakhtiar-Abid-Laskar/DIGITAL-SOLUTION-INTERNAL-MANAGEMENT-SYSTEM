@@ -6,11 +6,13 @@ export type DeviceType = string;
 export interface Job {
   id: string;
   job_code: string;
+  customer_id?: string | null;
   customer_name: string;
   customer_contact: string;
   customer_email: string | null;
   customer_gstin?: string | null;
-  device_type: DeviceType;
+  customer_address?: string | null;
+  device_type_id: DeviceType; // references ui_device_types.id (text)
   reported_issue: string;
   remarks: string | null;
   work_notes: string | null;
@@ -33,17 +35,19 @@ export interface JobMaterial {
   qty_taken?: number | null;
   unit_cost: number;
   total_cost: number;
-  photo_url?: string | null;
+  photo_drive_file_id?: string | null;
   checkout_status?: 'checked_out' | 'confirmed';
   usage_confirmed_at?: string | null;
 }
 
 export interface NewJobFormValues {
+  customer_id?: string | null;
   customer_name: string;
   customer_contact: string;
   customer_email: string;
   customer_gstin?: string;
-  device_type: DeviceType;
+  customer_address?: string;
+  device_type_id: DeviceType; // references ui_device_types.id (text)
   reported_issue: string;
   remarks: string;
   job_type: JobType; // Inhouse | Onsite

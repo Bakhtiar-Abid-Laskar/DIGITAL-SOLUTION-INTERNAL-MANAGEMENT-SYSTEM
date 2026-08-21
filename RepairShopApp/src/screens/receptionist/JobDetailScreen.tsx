@@ -203,13 +203,7 @@ export default function JobDetailScreen() {
               onPress={async () => {
                 if (!job) return;
                 try {
-                  await printInvoice({
-                    docType: 'receipt',
-                    jobId: job.job_code,
-                    date: job.created_at || new Date().toISOString(),
-                    customer: { name: job.customer_name, phone: job.customer_contact, address: job.device_type + ' — ' + job.reported_issue },
-                    items: [{ description: job.reported_issue || 'Device Repair', hsn: '', price: 0, unit: 1 }],
-                  });
+                  await printInvoice({ docType: 'receipt', jobId: job.id });
                 } catch (e: any) { showToast({ title: 'Print Failed', message: e.message, type: 'error' }); }
               }}
             >

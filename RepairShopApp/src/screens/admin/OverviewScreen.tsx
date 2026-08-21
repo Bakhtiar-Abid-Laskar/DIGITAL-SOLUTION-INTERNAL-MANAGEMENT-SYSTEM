@@ -20,6 +20,7 @@ import {
   TrendingDown,
   MessageCircle,
   Mail,
+  CreditCard,
 } from 'lucide-react-native';
 
 import { useAuth } from '../../context/AuthContext';
@@ -137,6 +138,7 @@ export default function OverviewScreen() {
   const quickActions: QuickAction[] = [
     { id: 'new_job', label: 'New Job', icon: ClipboardList, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
     { id: 'sales', label: 'Sales', icon: Banknote, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('SalesList') },
+    { id: 'pending_payments', label: 'Pending Payments', icon: CreditCard, bgColor: '#FFF4E5', iconColor: '#E65100', onPress: () => navigation.navigate('PendingPayments') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
     { id: 'users', label: 'Staff', icon: Users, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('Users') },
     { id: 'inventory', label: 'Inventory', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('Inventory') },
