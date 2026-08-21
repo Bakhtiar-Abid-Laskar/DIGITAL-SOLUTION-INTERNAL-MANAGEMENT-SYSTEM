@@ -453,11 +453,11 @@ const styles = StyleSheet.create({
 
   // ─── Header Styles ───
   headerWrapper: {
-    minHeight: 230,
+    minHeight: 250,
     backgroundColor: colors.brand.navyDark,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 40,
+    paddingBottom: 42,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -470,18 +470,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    width: 86,
+    height: 86,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-    ...shadow.card,
+    marginBottom: 12,
+    ...shadow.medium,
   },
   logoImage: {
-    width: 50,
-    height: 50,
+    width: 70,
+    height: 70,
   },
   wordmarkRow: {
     flexDirection: 'row',

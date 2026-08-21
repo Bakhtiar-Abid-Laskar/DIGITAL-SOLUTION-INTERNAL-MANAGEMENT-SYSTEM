@@ -193,85 +193,98 @@ export default function LoginPage() {
   const greetingHeadline = firstName ? `Welcome, ${firstName}!` : "Welcome Back!";
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#0A1A3A] via-[#0D224D] to-[#1E56CC] p-4 sm:p-6 relative overflow-hidden font-sans">
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#07132B] via-[#0A1A3A] to-[#164194] p-4 sm:p-8 relative overflow-hidden font-sans">
       {/* Decorative ambient background glows */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#1E56CC]/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#14337A]/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-32 -left-32 w-[500px] h-[500px] bg-[#1E56CC]/25 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-[550px] h-[550px] bg-[#14337A]/35 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#1E56CC]/10 rounded-full blur-[180px] pointer-events-none" />
 
       {/* Main Login Card Container */}
       <div
-        className={`w-full max-w-[420px] bg-white rounded-[28px] shadow-[0_20px_50px_rgba(10,26,58,0.35)] overflow-hidden relative z-10 transition-transform duration-150 ${
+        className={`w-full max-w-[460px] bg-white rounded-[32px] shadow-[0_25px_70px_rgba(7,19,43,0.45),0_10px_30px_rgba(0,0,0,0.12)] overflow-hidden relative z-10 transition-transform duration-150 border border-white/20 ${
           isShaking ? "animate-[shake_0.4s_ease-in-out]" : ""
         }`}
       >
-        {/* ─── HEADER PANEL (Gradient + Circuit SVG + Logo Lockup) ─── */}
-        <div className="relative bg-gradient-to-br from-[#0A1A3A] to-[#1E56CC] pt-8 pb-10 px-6 text-center overflow-hidden">
+        {/* ─── HEADER PANEL (Gradient + High-Res Enlarged Logo + Circuit SVG) ─── */}
+        <div className="relative bg-gradient-to-br from-[#0A1A3A] via-[#0E265C] to-[#1E56CC] pt-10 pb-12 px-6 sm:px-8 text-center overflow-hidden">
           {/* Circuit Board SVG Vector Overlay */}
-          <div className="absolute inset-0 opacity-15 pointer-events-none">
-            <svg width="100%" height="100%" viewBox="0 0 400 240" fill="none">
+          <div className="absolute inset-0 opacity-20 pointer-events-none">
+            <svg width="100%" height="100%" viewBox="0 0 460 260" fill="none">
               <path
-                d="M 10 30 L 70 30 L 110 70 L 170 70 M 240 40 L 290 40 L 330 80 L 390 80 M 30 160 L 80 160 L 120 120 L 190 120 M 260 170 L 310 170 L 350 130 L 390 130"
+                d="M 20 40 L 90 40 L 140 90 L 210 90 M 270 50 L 330 50 L 380 100 L 440 100 M 40 180 L 100 180 L 150 130 L 230 130 M 290 190 L 350 190 L 400 140 L 440 140"
                 stroke="#FFFFFF"
-                strokeWidth="1.5"
+                strokeWidth="1.75"
               />
-              <circle cx="170" cy="70" r="3.5" fill="#FFFFFF" />
-              <circle cx="390" cy="80" r="3.5" fill="#FFFFFF" />
-              <circle cx="30" cy="160" r="3.5" fill="#FFFFFF" />
-              <circle cx="190" cy="120" r="3.5" fill="#FFFFFF" />
-              <circle cx="260" cy="170" r="3.5" fill="#FFFFFF" />
-              <line x1="110" y1="70" x2="110" y2="100" stroke="#FFFFFF" strokeWidth="1" />
-              <line x1="330" y1="80" x2="330" y2="110" stroke="#FFFFFF" strokeWidth="1" />
+              <circle cx="210" cy="90" r="4" fill="#FFFFFF" />
+              <circle cx="440" cy="100" r="4" fill="#FFFFFF" />
+              <circle cx="40" cy="180" r="4" fill="#FFFFFF" />
+              <circle cx="230" cy="130" r="4" fill="#FFFFFF" />
+              <circle cx="290" cy="190" r="4" fill="#FFFFFF" />
+              <line x1="140" y1="90" x2="140" y2="125" stroke="#FFFFFF" strokeWidth="1.25" />
+              <line x1="380" y1="100" x2="380" y2="135" stroke="#FFFFFF" strokeWidth="1.25" />
             </svg>
           </div>
 
-          {/* Logo Lockup */}
+          {/* Logo Lockup with ENLARGED Prominent Logo */}
           <div className="relative z-10 flex flex-col items-center">
-            <div className="w-16 h-16 rounded-2xl bg-white/95 shadow-md flex items-center justify-center p-2.5 mb-3">
+            {/* Enlarged Logo Badge (2.5x larger, clear focal point) */}
+            <div className="w-24 h-24 sm:w-26 sm:h-26 rounded-[24px] bg-white/95 shadow-[0_12px_28px_rgba(0,0,0,0.25),0_2px_8px_rgba(255,255,255,0.4)_inset] flex items-center justify-center p-3 mb-4 transition-transform hover:scale-105 duration-200">
               <Image
                 src="/logo.png"
                 alt="Digital Solution Logo"
-                width={52}
-                height={52}
+                width={80}
+                height={80}
                 className="w-full h-full object-contain"
                 priority
               />
             </div>
 
             {/* Wordmark: DIGITAL SOLUTION */}
-            <div className="flex items-center justify-center gap-1.5">
-              <span className="text-xl font-extrabold text-white tracking-[0.08em]">DIGITAL</span>
-              <span className="text-xl font-extrabold text-[#60A5FA] tracking-[0.08em]">SOLUTION</span>
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-2xl sm:text-[26px] font-black text-white tracking-[0.09em] drop-shadow-sm">
+                DIGITAL
+              </span>
+              <span className="text-2xl sm:text-[26px] font-black text-[#60A5FA] tracking-[0.09em] drop-shadow-sm">
+                SOLUTION
+              </span>
             </div>
 
             {/* Tagline */}
-            <div className="flex items-center justify-center gap-2 mt-1.5 px-4">
-              <div className="w-4 h-[1px] bg-white/30" />
-              <span className="text-[9px] font-semibold tracking-wider text-white/80 uppercase">
+            <div className="flex items-center justify-center gap-2.5 mt-2 px-4 max-w-sm">
+              <div className="w-6 h-[1.5px] bg-white/30 rounded-full" />
+              <span className="text-[10px] sm:text-[10.5px] font-semibold tracking-[0.15em] text-white/85 uppercase">
                 Smart Solution for a Digital Future
               </span>
-              <div className="w-4 h-[1px] bg-white/30" />
+              <div className="w-6 h-[1.5px] bg-white/30 rounded-full" />
             </div>
           </div>
         </div>
 
-        {/* ─── CARD PANEL (White Body) ─── */}
-        <div className="bg-white px-6 sm:px-8 pt-6 pb-7 -mt-6 rounded-t-[28px] relative z-20 shadow-[0_-8px_20px_rgba(0,0,0,0.04)]">
+        {/* ─── CARD PANEL (White Body with Soft Seam & Depth) ─── */}
+        <div className="bg-white px-7 sm:px-9 pt-7 pb-8 -mt-7 rounded-t-[32px] relative z-20 shadow-[0_-10px_25px_rgba(10,26,58,0.06)]">
           {/* Greeting Block */}
-          <div className="text-center mb-5">
-            <h1 className="text-2xl font-bold text-[#16233F] tracking-tight">{greetingHeadline}</h1>
-            <p className="text-xs text-[#8A94A6] mt-0.5">Login to continue to your account</p>
+          <div className="text-center mb-6">
+            <h1 className="text-2xl sm:text-[26px] font-bold text-[#16233F] tracking-tight">
+              {greetingHeadline}
+            </h1>
+            <p className="text-[13px] text-[#8A94A6] mt-1 font-normal">
+              Login to continue to your account
+            </p>
           </div>
 
-          {/* 5 Service Category Chips */}
-          <div className="grid grid-cols-5 gap-1.5 mb-6">
+          {/* 5 Service Category Chips Row */}
+          <div className="grid grid-cols-5 gap-2 mb-7">
             {SERVICES.map((item) => {
               const ServiceIcon = item.Icon;
               return (
-                <div key={item.id} className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-[#EAF1FF] flex items-center justify-center mb-1 text-[#1E56CC] shadow-xs">
-                    <ServiceIcon size={18} strokeWidth={2} />
+                <div
+                  key={item.id}
+                  className="group flex flex-col items-center text-center cursor-default transition-transform hover:-translate-y-0.5 duration-150"
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-[#EAF1FF] flex items-center justify-center mb-1.5 text-[#1E56CC] group-hover:bg-[#dbe7ff] transition-colors shadow-xs">
+                    <ServiceIcon size={20} strokeWidth={2} />
                   </div>
-                  <span className="text-[8px] font-medium text-[#8A94A6] leading-tight whitespace-pre-line">
+                  <span className="text-[9px] font-semibold text-[#8A94A6] group-hover:text-[#16233F] transition-colors leading-[12px] whitespace-pre-line">
                     {item.label}
                   </span>
                 </div>
@@ -281,62 +294,66 @@ export default function LoginPage() {
 
           {/* Error Message Box */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 mb-4 animate-fade-in font-medium">
-              <AlertCircle size={15} className="shrink-0 text-red-500" />
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-2xl text-xs flex items-center gap-2.5 mb-5 animate-fade-in font-medium shadow-xs">
+              <AlertCircle size={16} className="shrink-0 text-red-500" />
               <span>{error}</span>
             </div>
           )}
 
           {/* ─── FORM INPUTS ─── */}
-          <form onSubmit={handleLogin} className="space-y-3.5">
+          <form onSubmit={handleLogin} className="space-y-4">
             {/* Username / Email Input */}
-            <div className="relative flex items-center">
-              <div className="absolute left-4 text-[#8A94A6] pointer-events-none">
-                <User size={18} />
+            <div>
+              <div className="relative flex items-center">
+                <div className="absolute left-4 text-[#8A94A6] pointer-events-none">
+                  <User size={19} />
+                </div>
+                <input
+                  type="email"
+                  placeholder="Username / Email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  required
+                  autoFocus
+                  className="w-full bg-[#F3F5F9] border border-[#E7EAF0] focus:border-[#1E56CC] focus:bg-white text-[#16233F] placeholder-[#8A94A6] text-sm rounded-full pl-12 pr-4 py-3.5 outline-none transition-all shadow-2xs focus:shadow-sm"
+                />
               </div>
-              <input
-                type="email"
-                placeholder="Username / Email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (error) setError(null);
-                }}
-                required
-                autoFocus
-                className="w-full bg-[#F3F5F9] border border-[#E7EAF0] focus:border-[#1E56CC] focus:bg-white text-[#16233F] placeholder-[#8A94A6] text-sm rounded-full pl-11 pr-4 py-3 outline-none transition-all"
-              />
             </div>
 
             {/* Password Input */}
-            <div className="relative flex items-center">
-              <div className="absolute left-4 text-[#8A94A6] pointer-events-none">
-                <Lock size={18} />
+            <div>
+              <div className="relative flex items-center">
+                <div className="absolute left-4 text-[#8A94A6] pointer-events-none">
+                  <Lock size={19} />
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  required
+                  className="w-full bg-[#F3F5F9] border border-[#E7EAF0] focus:border-[#1E56CC] focus:bg-white text-[#16233F] placeholder-[#8A94A6] text-sm rounded-full pl-12 pr-12 py-3.5 outline-none transition-all shadow-2xs focus:shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 text-[#8A94A6] hover:text-[#16233F] transition-colors p-1"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
               </div>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError(null);
-                }}
-                required
-                className="w-full bg-[#F3F5F9] border border-[#E7EAF0] focus:border-[#1E56CC] focus:bg-white text-[#16233F] placeholder-[#8A94A6] text-sm rounded-full pl-11 pr-11 py-3 outline-none transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 text-[#8A94A6] hover:text-[#16233F] transition-colors p-1"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
             </div>
 
             {/* Options: Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between text-xs pt-0.5 px-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none text-[#8A94A6]">
+            <div className="flex items-center justify-between text-xs pt-1 px-1">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none text-[#8A94A6] hover:text-[#16233F] transition-colors">
                 <input
                   type="checkbox"
                   checked={rememberMe}
@@ -344,34 +361,34 @@ export default function LoginPage() {
                   className="sr-only"
                 />
                 <div
-                  className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                  className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all ${
                     rememberMe
-                      ? "bg-[#1E56CC] border-[#1E56CC] text-white"
+                      ? "bg-[#1E56CC] border-[#1E56CC] text-white shadow-xs"
                       : "bg-white border-[#8A94A6]/50"
                   }`}
                 >
-                  {rememberMe && <Check size={11} strokeWidth={3} />}
+                  {rememberMe && <Check size={12} strokeWidth={3} />}
                 </div>
-                <span>Remember me</span>
+                <span className="font-medium text-[13px]">Remember me</span>
               </label>
 
               <a
                 href="mailto:support@digitalsolution.com?subject=Password%20Reset%20Request"
-                className="font-semibold text-[#1E56CC] hover:text-[#14337A] transition-colors"
+                className="font-semibold text-[13px] text-[#1E56CC] hover:text-[#14337A] transition-colors"
               >
                 Forgot Password?
               </a>
             </div>
 
-            {/* ─── LOGIN BUTTON (Gradient Fill) ─── */}
+            {/* ─── LOGIN BUTTON (Gradient Fill + Elevation) ─── */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 bg-gradient-to-r from-[#14337A] to-[#1E70E0] hover:from-[#102963] hover:to-[#195ec2] active:scale-[0.99] text-white font-bold py-3.5 rounded-xl tracking-wider text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full mt-2 bg-gradient-to-r from-[#14337A] via-[#1A4BB5] to-[#1E70E0] hover:from-[#102963] hover:via-[#16419E] hover:to-[#195ec2] active:scale-[0.99] text-white font-bold py-4 rounded-2xl tracking-[0.1em] text-sm shadow-[0_6px_20px_rgba(30,112,224,0.35)] transition-all flex items-center justify-center gap-2.5 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" />
+                  <Loader2 size={19} className="animate-spin" />
                   <span>LOGGING IN...</span>
                 </>
               ) : (
@@ -381,11 +398,11 @@ export default function LoginPage() {
           </form>
 
           {/* ─── FOOTER ─── */}
-          <div className="mt-5 text-center text-xs text-[#8A94A6]">
+          <div className="mt-6 text-center text-xs text-[#8A94A6]">
             <span>Don't have an account? </span>
             <a
               href="mailto:admin@digitalsolution.com?subject=Account%20Inquiry"
-              className="font-semibold text-[#1E56CC] hover:underline"
+              className="font-semibold text-[#1E56CC] hover:text-[#14337A] hover:underline transition-colors"
             >
               Contact Admin
             </a>
