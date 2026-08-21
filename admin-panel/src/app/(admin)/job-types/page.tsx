@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { JobTypeItem } from "@/types/salary";
-import { Plus, Edit2, Trash2, Tag, Search, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Edit2, Trash2, Tag, CheckCircle2, XCircle } from "lucide-react";
 import JobTypeFormModal from "@/components/catalog/JobTypeFormModal";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Card } from "@/components/common/Card";
+import { SearchFilterBar } from "@/components/common/SearchFilterBar";
+import { DataTable, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/common/DataTable";
 import { Button } from "@/components/common/Button";
-import { Input } from "@/components/common/Input";
-import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useToast } from "@/components/common/ToastProvider";
@@ -106,99 +105,85 @@ export default function JobTypesPage() {
         }
       />
 
-      <Card noAccentLine className="p-4 flex flex-wrap gap-4 items-center justify-between bg-admin-bg-surface">
-        <div className="relative flex-1 min-w-[250px] max-w-sm">
-          <Search className="absolute left-3 top-2.5 text-admin-text-muted" size={16} />
-          <Input
-            type="text"
-            placeholder="Search job types..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </Card>
+      <SearchFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search job types..."
+        showClearButton={Boolean(searchQuery)}
+        onClearFilters={() => setSearchQuery("")}
+      />
 
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <div className="overflow-x-auto flex-1 table-scroll-shadow">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border">
-              <tr>
-                <th scope="col" className="px-6 py-4 font-medium">Job Type Title</th>
-                <th scope="col" className="px-6 py-4 font-medium">Base Customer Charge</th>
-                <th scope="col" className="px-6 py-4 font-medium">Technician Incentive</th>
-                <th scope="col" className="px-6 py-4 font-medium">Status</th>
-                <th scope="col" className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-admin-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={5}>
-                    <LoadingState message="Loading job types catalog..." />
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <EmptyState
-                      icon={<Tag size={40} className="text-admin-text-muted" />}
-                      heading="No job types found"
-                      subtext="Create a new job type to enable automatic customer charge and incentive accrual."
-                      asCard={false}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(item => (
-                  <tr key={item.id} className="transition-colors hover:bg-admin-bg-hover">
-                    <td className="px-6 py-4 font-bold text-admin-text-primary">
-                      {item.title}
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-admin-accent">
-                      {currency.format(item.customer_charge_amount || 0)}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-admin-success">
-                      +{currency.format(item.technician_incentive || 0)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleToggleActive(item)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                          item.is_active
-                            ? 'bg-admin-success-dim text-admin-success border-admin-success/30'
-                            : 'bg-admin-danger-dim text-admin-danger border-admin-danger/30'
-                        }`}
-                      >
-                        {item.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                        {item.is_active ? 'Active' : 'Inactive'}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => { setEditingItem(item); setShowModal(true); }}
-                        className="p-2 text-admin-accent bg-admin-accent-dim hover:bg-admin-accent hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                        title="Edit Job Type"
-                        aria-label="Edit Job Type"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.title)}
-                        className="p-2 text-admin-danger bg-admin-danger-dim hover:bg-admin-danger hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                        title="Delete Job Type"
-                        aria-label="Delete Job Type"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DataTable
+        isLoading={loading}
+        skeletonRows={5}
+        skeletonCols={5}
+        isEmpty={filtered.length === 0}
+        emptyState={
+          <EmptyState
+            icon={<Tag size={40} className="text-admin-text-muted" />}
+            heading="No job types found"
+            subtext="Create a new job type to enable automatic customer charge and incentive accrual."
+          />
+        }
+      >
+        <TableHead>
+          <tr>
+            <TableHeaderCell>Job Type Title</TableHeaderCell>
+            <TableHeaderCell>Base Customer Charge</TableHeaderCell>
+            <TableHeaderCell>Technician Incentive</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell align="right">Actions</TableHeaderCell>
+          </tr>
+        </TableHead>
+        <TableBody>
+          {filtered.map(item => (
+            <TableRow key={item.id}>
+              <TableCell className="font-bold text-admin-text-primary">
+                {item.title}
+              </TableCell>
+              <TableCell className="font-semibold text-admin-accent">
+                {currency.format(item.customer_charge_amount || 0)}
+              </TableCell>
+              <TableCell className="font-medium text-admin-success">
+                +{currency.format(item.technician_incentive || 0)}
+              </TableCell>
+              <TableCell>
+                <button
+                  onClick={() => handleToggleActive(item)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                    item.is_active
+                      ? 'bg-admin-completed-bg text-admin-completed-fg border-admin-completed-fg/30'
+                      : 'bg-admin-urgent-bg text-admin-urgent-fg border-admin-urgent-fg/30'
+                  }`}
+                >
+                  {item.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                  {item.is_active ? 'Active' : 'Inactive'}
+                </button>
+              </TableCell>
+              <TableCell align="right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => { setEditingItem(item); setShowModal(true); }}
+                    className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                    title="Edit Job Type"
+                    aria-label="Edit Job Type"
+                  >
+                    <Edit2 size={15} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id, item.title)}
+                    className="p-1.5 text-admin-text-secondary hover:text-admin-danger hover:bg-admin-urgent-bg/20 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                    title="Delete Job Type"
+                    aria-label="Delete Job Type"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </DataTable>
 
       {showModal && (
         <JobTypeFormModal

@@ -2,27 +2,41 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Attendance, User, getSignedUrlCached, useDebounceValue } from '@repairshop/shared';
-import { CalendarDays, Search, CheckCircle, XCircle, MapPin, Clock, Image as ImageIcon, MapPinOff, Download } from "lucide-react";
+import { Attendance, getSignedUrlCached, useDebounceValue } from '@repairshop/shared';
+import { CalendarDays, MapPin, Clock, Image as ImageIcon, Download, X } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchFilterBar } from "@/components/common/SearchFilterBar";
 import { Card } from "@/components/common/Card";
-import { Input } from "@/components/common/Input";
 import { Select } from "@/components/common/Select";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { useToast } from "@/components/common/ToastProvider";
-import { TableSkeleton } from "@/components/common/LoadingState";
+import { DataTableSkeleton } from "@/components/common/Skeleton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { StaffAttendanceDrawer } from "@/components/attendance/StaffAttendanceDrawer";
 import { exportAttendanceToCSV } from "@/utils/csv";
+import { formatDate } from "@/utils/formatDate";
+
+/** Extract Google Drive file ID from any Drive URL or bare ID */
+function extractDriveFileId(urlOrId: string | null | undefined): string | null {
+  if (!urlOrId) return null;
+  const byPath = urlOrId.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  if (byPath) return byPath[1];
+  const byParam = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+  if (byParam) return byParam[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(urlOrId)) return urlOrId;
+  return null;
+}
 
 type AttendanceRecord = Attendance & {
   users: { name: string; role: string; id: string };
   checkInSelfieSignedUrl?: string | null;
   checkOutSelfieSignedUrl?: string | null;
-  check_in_selfie_url?: string | null;
-  check_out_selfie_url?: string | null;
+  check_in_drive_file_id?: string | null;
+  check_out_drive_file_id?: string | null;
+  checkin_photo_drive_link?: string | null;
+  checkout_photo_drive_link?: string | null;
   at_location?: boolean;
   review_status?: string;
 };
@@ -42,7 +56,7 @@ export default function AttendancePage() {
 
   const { showToast } = useToast();
 
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<{ id: string; name: string; role: string } | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -88,16 +102,14 @@ export default function AttendancePage() {
       if (cancelled) return;
       if (error) throw error;
       
-      const recordsWithUrls = await Promise.all((data || []).map(async (record) => {
+      const recordsWithUrls = (data || []).map((record) => {
         const item = record as unknown as AttendanceRecord;
-        if (item.check_in_selfie_url) {
-          item.checkInSelfieSignedUrl = await getSignedUrlCached(supabase, 'attendance-selfies', item.check_in_selfie_url);
-        }
-        if (item.check_out_selfie_url) {
-          item.checkOutSelfieSignedUrl = await getSignedUrlCached(supabase, 'attendance-selfies', item.check_out_selfie_url);
-        }
+        const inId = extractDriveFileId(item.checkin_photo_drive_link) || extractDriveFileId(item.check_in_drive_file_id);
+        const outId = extractDriveFileId(item.checkout_photo_drive_link) || extractDriveFileId(item.check_out_drive_file_id);
+        if (inId) item.checkInSelfieSignedUrl = `https://drive.google.com/thumbnail?id=${inId}&sz=w400`;
+        if (outId) item.checkOutSelfieSignedUrl = `https://drive.google.com/thumbnail?id=${outId}&sz=w400`;
         return item;
-      }));
+      });
 
       setRecords(recordsWithUrls);
       if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE) || 1);
@@ -159,55 +171,78 @@ export default function AttendancePage() {
         const ids = matchedUsers?.map(u => u.id) || [];
         if (ids.length > 0) {
           query = query.in('user_id', ids);
-        } else {
-           showToast('No records to export', 'error');
-           setExporting(false);
-           return;
         }
       }
 
-      const { data, error } = await query.limit(1000);
+      const { data, error } = await query;
       if (error) throw error;
-      
-      exportAttendanceToCSV(data || [], 'repairshop_attendance_filtered.csv');
+      if (data) {
+        exportAttendanceToCSV(data as any, `repairshop_attendance_all_${new Date().toISOString().split('T')[0]}.csv`);
+      }
     } catch (err: any) {
-      showToast('Export failed', 'error');
+      showToast(`Failed to export data: ${err.message}`, 'error');
     } finally {
       setExporting(false);
     }
   };
 
   const SelfieThumbnail = ({ url, alt }: { url?: string | null, alt: string }) => {
-    if (!url) return <div className="w-10 h-10 rounded-md bg-[var(--surface-sunken)] flex items-center justify-center border border-[var(--border-subtle)]"><ImageIcon size={16} className="text-[var(--text-tertiary)]" /></div>;
+    if (!url) {
+      return (
+        <div className="w-10 h-10 rounded-md bg-admin-bg-subtle flex items-center justify-center border border-admin-border text-admin-text-muted" title={`No ${alt} selfie`}>
+          <ImageIcon size={16} />
+        </div>
+      );
+    }
     return (
-      <button 
-        onClick={() => setPreviewImage(url)} 
-        className="relative w-10 h-10 rounded-md overflow-hidden border border-[var(--border-subtle)] hover:opacity-80 transition-opacity"
+      <button
+        onClick={() => setPreviewImage({ url, label: alt })}
+        className="relative w-10 h-10 rounded-md overflow-hidden border border-admin-border hover:opacity-80 transition-opacity cursor-pointer shadow-xs group"
+        title={`View ${alt} selfie`}
       >
-        <img src={url} alt={alt} className="w-full h-full object-cover" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={alt} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <ImageIcon size={12} className="text-white" />
+        </div>
       </button>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full flex flex-col">
       <PageHeader 
         title="Attendance Monitoring" 
+        description="Verify staff daily attendance, selfie check-ins, and GPS location status."
+        actions={
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => exportAttendanceToCSV(records, 'repairshop_attendance_page.csv')} disabled={records.length === 0}>
+              Export Page
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportAll} isLoading={exporting} leftIcon={<Download size={14} />}>
+              Export All
+            </Button>
+          </div>
+        }
       />
 
-      <Card className="p-4 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 min-w-[200px]">
-          <Input
-            placeholder="Search by staff name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-4">
+      <SearchFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by staff name..."
+        showClearButton={Boolean(searchQuery || statusFilter !== "All" || reviewFilter !== "All")}
+        onClearFilters={() => {
+          setSearchQuery("");
+          setStatusFilter("All");
+          setReviewFilter("All");
+        }}
+      >
+        <div className="w-36">
           <Select 
             value={statusFilter} 
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-40"
+            className="h-10 text-sm"
+            aria-label="Filter by Status"
           >
             <option value="All">All Statuses</option>
             <option value="Present">Present</option>
@@ -215,49 +250,46 @@ export default function AttendancePage() {
             <option value="Leave">Leave</option>
             <option value="Absent">Absent</option>
           </Select>
+        </div>
+        <div className="w-44">
           <Select 
             value={reviewFilter} 
             onChange={(e) => setReviewFilter(e.target.value)}
-            className="w-44"
+            className="h-10 text-sm"
+            aria-label="Filter by Review Status"
           >
             <option value="All">All Review States</option>
             <option value="Pending">Pending Review</option>
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
           </Select>
-          <Button variant="outline" onClick={() => exportAttendanceToCSV(records, 'repairshop_attendance_page.csv')} disabled={records.length === 0}>
-            Export Page
-          </Button>
-          <Button variant="outline" onClick={handleExportAll} disabled={exporting}>
-             <Download size={16} className="mr-2" />
-             {exporting ? 'Exporting...' : 'Export All'}
-          </Button>
         </div>
-      </Card>
+      </SearchFilterBar>
 
       {loading ? (
-        <TableSkeleton cols={6} rows={5} />
+        <DataTableSkeleton cols={6} rows={6} hasFilterBar={false} />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto table-scroll-shadow">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs uppercase bg-[var(--surface-sunken)] text-[var(--text-secondary)] border-b border-[var(--border-subtle)]">
+        <Card noAccentLine className="flex-1 flex flex-col overflow-hidden border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
+          <div className="overflow-x-auto flex-1 table-scroll-shadow">
+            <table className="w-full text-sm text-left whitespace-nowrap">
+              <thead className="text-xs uppercase bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border sticky top-0 z-10 font-semibold">
                 <tr>
-                  <th className="px-4 py-3">Staff</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">In / Out</th>
-                  <th className="px-4 py-3 text-center">Selfies</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-6 py-3.5">Staff</th>
+                  <th className="px-6 py-3.5">Date</th>
+                  <th className="px-6 py-3.5">In / Out</th>
+                  <th className="px-6 py-3.5 text-center">Selfies</th>
+                  <th className="px-6 py-3.5">Location</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-admin-border bg-admin-bg-surface">
                 {records.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-0">
+                    <td colSpan={6} className="p-8">
                       <EmptyState 
                         heading="No attendance records found" 
                         subtext="Try adjusting your filters or search query." 
+                        asCard={false}
                       />
                     </td>
                   </tr>
@@ -265,54 +297,50 @@ export default function AttendancePage() {
                   records.map((record) => (
                     <tr 
                       key={record.id} 
-                      className={`border-b hover:bg-[var(--surface-hover)] ${
-                        !record.at_location && record.review_status === 'pending'
-                          ? 'bg-amber-500/5 border-l-2 border-l-amber-400 border-b-[var(--border-subtle)]'
-                          : 'border-[var(--border-subtle)]'
-                      }`}
+                      className="hover:bg-admin-bg-hover transition-colors"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         <button 
                           onClick={() => setSelectedStaff({ id: record.users.id, name: record.users.name, role: record.users.role })}
-                          className="font-medium text-admin-accent hover:underline text-left"
+                          className="font-semibold text-admin-accent hover:underline text-left cursor-pointer"
                         >
                           {record.users.name}
                         </button>
-                        <div className="text-xs text-[var(--text-secondary)]">{record.users.role}</div>
+                        <div className="text-xs text-admin-text-muted capitalize">{record.users.role}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5">
-                          <CalendarDays size={14} className="text-[var(--text-tertiary)]" />
-                          <span className="text-[var(--text-primary)] font-medium">
-                            {new Date(record.date).toLocaleDateString()}
+                          <CalendarDays size={14} className="text-admin-text-muted" />
+                          <span className="text-admin-text-primary font-medium text-xs">
+                            {formatDate(record.date)}
                           </span>
                         </div>
                         <Badge 
                           variant={record.status === 'Present' ? 'success' : record.status === 'Halfday' ? 'warning' : 'danger'} 
-                          className="mt-1 inline-block"
+                          className="mt-1"
                         >
                           {record.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                            <span className="w-8 text-xs font-semibold">IN</span>
-                            {record.check_in_time ? new Date(record.check_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                      <td className="px-6 py-4">
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center gap-2 text-admin-text-secondary">
+                            <span className="w-8 font-semibold text-admin-text-muted">IN</span>
+                            <span className="font-mono">{record.check_in_time ? new Date(record.check_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                            <span className="w-8 text-xs font-semibold">OUT</span>
-                            {record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                          <div className="flex items-center gap-2 text-admin-text-secondary">
+                            <span className="w-8 font-semibold text-admin-text-muted">OUT</span>
+                            <span className="font-mono">{record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         <div className="flex gap-2 justify-center">
                           <SelfieThumbnail url={record.checkInSelfieSignedUrl} alt="Check In" />
                           <SelfieThumbnail url={record.checkOutSelfieSignedUrl} alt="Check Out" />
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
                           <Badge variant={record.at_location ? 'success' : 'danger'}>
                             {record.at_location ? 'At Location' : 'Out of Bounds'}
@@ -322,21 +350,21 @@ export default function AttendancePage() {
                               href={`https://www.google.com/maps?q=${record.gps_lat},${record.gps_lng}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-admin-accent underline flex items-center gap-1 mt-1 hover:opacity-80"
+                              className="text-xs text-admin-accent hover:underline flex items-center gap-1 mt-0.5"
                             >
-                              <MapPin size={10} /> View Map
+                              <MapPin size={11} /> View Map
                             </a>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4 text-right">
                         {record.review_status === 'pending' ? (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="primary" onClick={() => handleReviewAction(record.id, 'approved')}>Allow</Button>
-                            <Button size="sm" variant="danger" onClick={() => handleReviewAction(record.id, 'rejected')}>Deny</Button>
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="primary" className="h-7 text-xs px-2.5" onClick={() => handleReviewAction(record.id, 'approved')}>Allow</Button>
+                            <Button size="sm" variant="danger" className="h-7 text-xs px-2.5" onClick={() => handleReviewAction(record.id, 'rejected')}>Deny</Button>
                           </div>
                         ) : (
-                          <div className="flex flex-col items-start gap-1">
+                          <div className="flex flex-col items-end gap-1">
                             <Badge 
                               variant={record.review_status === 'approved' ? 'success' : 'danger'} 
                               className="capitalize"
@@ -345,7 +373,7 @@ export default function AttendancePage() {
                             </Badge>
                             <button 
                               onClick={() => handleReviewAction(record.id, 'pending')}
-                              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline underline-offset-2 flex items-center gap-1"
+                              className="text-xs text-admin-text-muted hover:text-admin-text-primary underline flex items-center gap-1 cursor-pointer"
                             >
                               <Clock size={10} /> Re-review
                             </button>
@@ -359,7 +387,7 @@ export default function AttendancePage() {
             </table>
           </div>
           {records.length > 0 && (
-            <div className="p-4 border-t border-[var(--border-subtle)]">
+            <div className="p-4 border-t border-admin-border bg-admin-bg-surface">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -372,18 +400,32 @@ export default function AttendancePage() {
 
       {/* Image Preview Modal */}
       {previewImage && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-3xl w-full aspect-[3/4] bg-[var(--surface-base)] rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <img src={previewImage} alt="Preview" className="w-full h-full object-contain" />
-            <button 
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full hover:bg-black/80"
-            >
-              <XCircle size={24} />
-            </button>
+          <div
+            className="relative max-w-2xl w-full bg-admin-surface rounded-xl overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-admin-border">
+              <p className="font-semibold text-admin-text-primary">{previewImage.label} Selfie</p>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="p-1 rounded-md hover:bg-admin-bg-subtle transition-colors text-admin-text-muted hover:text-admin-text-primary cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="bg-black flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImage.url.replace('sz=w400', 'sz=w1200')}
+                alt={previewImage.label}
+                className="max-w-full max-h-[75vh] object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           </div>
         </div>
       )}

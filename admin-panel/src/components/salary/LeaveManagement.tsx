@@ -74,11 +74,6 @@ export default function LeaveManagement({ staff, currentAdminId }: Props) {
       .update({ status: 'approved', approved_by: currentAdminId, approved_at: new Date().toISOString() })
       .eq('id', leave.id);
     if (!err) {
-      await supabase.from('payroll_audit_log').insert({
-        action: 'leave_approved', user_id: leave.user_id,
-        details: { leave_date: leave.leave_date, leave_id: leave.id },
-        performed_by: currentAdminId,
-      });
       setLeaves(prev => prev.filter(l => l.id !== leave.id));
       setTotal(t => Math.max(0, t - 1));
     }
@@ -89,11 +84,6 @@ export default function LeaveManagement({ staff, currentAdminId }: Props) {
       .update({ status: 'rejected', approved_by: currentAdminId, approved_at: new Date().toISOString() })
       .eq('id', leave.id);
     if (!err) {
-      await supabase.from('payroll_audit_log').insert({
-        action: 'leave_rejected', user_id: leave.user_id,
-        details: { leave_date: leave.leave_date, leave_id: leave.id },
-        performed_by: currentAdminId,
-      });
       setLeaves(prev => prev.filter(l => l.id !== leave.id));
       setTotal(t => Math.max(0, t - 1));
     }
@@ -114,11 +104,6 @@ export default function LeaveManagement({ staff, currentAdminId }: Props) {
         approved_at: new Date().toISOString(),
       });
       if (!err) {
-        await supabase.from('payroll_audit_log').insert({
-          action: 'leave_approved', user_id: addUserId,
-          details: { leave_date: addDate, source: 'admin_direct' },
-          performed_by: currentAdminId,
-        });
         setAddUserId(''); setAddDate(''); setAddReason(''); setShowAddForm(false);
         if (activeTab === 'approved') fetchLeaves();
       } else {

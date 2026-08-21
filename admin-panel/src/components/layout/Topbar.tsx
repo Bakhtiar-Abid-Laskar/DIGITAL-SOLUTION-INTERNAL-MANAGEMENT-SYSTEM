@@ -5,6 +5,8 @@ import { LogOut, Bell, Menu, ChevronRight } from 'lucide-react';
 import { Button } from '../common/Button';
 import { usePathname, useRouter } from 'next/navigation';
 import { NotificationsDropdown, NotificationType } from './NotificationsDropdown';
+import { useToast } from '../common/ToastProvider';
+import { playNotificationChime, requestWebNotificationPermission, showWebNotification } from '@/lib/webNotifications';
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -14,6 +16,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const { profile, signOut } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const { showToast } = useToast();
   
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -21,6 +24,13 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   
   const notifRef = useRef<HTMLDivElement>(null);
   const logoutRef = useRef<HTMLDivElement>(null);
+
+  // Request browser notification permission once on mount
+  useEffect(() => {
+    if (profile?.id) {
+      requestWebNotificationPermission().catch(() => {});
+    }
+  }, [profile?.id]);
 
   const fetchNotifications = useCallback(async (cancelled = false) => {
     if (!profile?.id) return;
@@ -86,7 +96,35 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       .channel('admin-topbar-notifications')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${profile.id}` },
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${profile.id}` },
+        (payload) => {
+          const newNotif = payload.new as any;
+          if (newNotif) {
+            // 1. Play Web Audio Chime
+            playNotificationChime();
+
+            // 2. Trigger native desktop browser notification
+            showWebNotification({
+              title: newNotif.title || 'Digital Solution',
+              body: newNotif.message || '',
+              icon: '/logo.webp',
+              tag: `notif-${newNotif.id}`,
+              onClick: () => {
+                if (newNotif.job_id) {
+                  router.push(`/jobs/${newNotif.job_id}`);
+                }
+              }
+            });
+
+            // 3. Trigger In-App Toast
+            showToast(newNotif.message || newNotif.title || 'New notification', 'info');
+          }
+          fetchNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${profile.id}` },
         () => {
           fetchNotifications();
         }
@@ -97,7 +135,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, fetchNotifications]);
+  }, [profile?.id, fetchNotifications, router, showToast]);
 
   // Close popovers on outside click
   useEffect(() => {

@@ -17,6 +17,7 @@ export default function AddStockModal({
   const [quantity, setQuantity] = useState('');
   const [rate, setRate] = useState(() => item.purchase_rate.toString());
   const [notes, setNotes] = useState('');
+  const [serialNumbers, setSerialNumbers] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,10 +42,11 @@ export default function AddStockModal({
         p_product_id: item.product_id,
         p_quantity: qty,
         p_rate: rt,
-        p_notes: notes || 'Manual stock entry'
+        p_notes: notes || 'Manual stock entry',
+        p_serial_numbers: serialNumbers || null
       });
 
-      if (rpcErr) throw rpcErr;
+      if (rpcErr) throw new Error(rpcErr.message);
 
       onSuccess();
     } catch (err: any) {
@@ -73,8 +75,8 @@ export default function AddStockModal({
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="field-6bkrdw" className="block text-sm font-medium text-admin-text-secondary mb-1">Quantity to Add *</label>
-              <Input id="field-6bkrdw" 
+              <label htmlFor="field-qty" className="block text-sm font-medium text-admin-text-secondary mb-1">Quantity to Add *</label>
+              <Input id="field-qty" 
                 type="number" 
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
@@ -82,8 +84,8 @@ export default function AddStockModal({
               />
             </div>
             <div>
-              <label htmlFor="field-mu38cy" className="block text-sm font-medium text-admin-text-secondary mb-1">Purchase Rate (₹) *</label>
-              <Input id="field-mu38cy" 
+              <label htmlFor="field-rate" className="block text-sm font-medium text-admin-text-secondary mb-1">Purchase Rate (₹) *</label>
+              <Input id="field-rate" 
                 type="number" 
                 value={rate}
                 onChange={e => setRate(e.target.value)}
@@ -91,12 +93,23 @@ export default function AddStockModal({
               />
             </div>
             <div>
-              <label htmlFor="field-hscv0n" className="block text-sm font-medium text-admin-text-secondary mb-1">Notes (Optional)</label>
-              <Input id="field-hscv0n" 
+              <label htmlFor="field-notes" className="block text-sm font-medium text-admin-text-secondary mb-1">Notes (Optional)</label>
+              <Input id="field-notes" 
                 type="text" 
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 placeholder="Reason for stock entry"
+              />
+            </div>
+            <div>
+              <label htmlFor="field-serial" className="block text-sm font-medium text-admin-text-secondary mb-1">Serial Number(s) (Optional)</label>
+              <textarea 
+                id="field-serial" 
+                value={serialNumbers}
+                onChange={e => setSerialNumbers(e.target.value)}
+                placeholder="Comma or newline separated"
+                className="w-full rounded-md border border-admin-border bg-admin-bg-base px-3 py-2 text-sm text-admin-text-primary focus:outline-none focus:ring-2 focus:ring-admin-primary/50"
+                rows={3}
               />
             </div>
           </div>

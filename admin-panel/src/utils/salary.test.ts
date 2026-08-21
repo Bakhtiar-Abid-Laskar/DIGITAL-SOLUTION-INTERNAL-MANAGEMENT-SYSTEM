@@ -1,6 +1,6 @@
 import { calculateNetSalary } from './salary';
 
-describe('Fixed Monthly Salary Engine', () => {
+describe('Fixed Monthly Salary Engine (admin-panel/src/utils/salary.ts)', () => {
   it('calculates net salary correctly with fixed monthly salary, additions, and deductions', () => {
     const inputs = {
       monthly_salary: 25000,
@@ -32,11 +32,6 @@ describe('Fixed Monthly Salary Engine', () => {
       early_deduction_rate: 150, // -300
       advance_deducted: 5000, // -5000
     };
-
-    // Total Additions = 100 + 300 + 1500 + 1000 + 2000 + 1500 = 6400
-    // Total Deductions = 400 + 1600 + 200 + 300 + 0 = 2500
-    // Gross Salary = 25000 + 6400 - 2500 = 28900
-    // Net Salary = 28900 - 5000 = 23900
 
     const result = calculateNetSalary(inputs);
 
@@ -71,5 +66,76 @@ describe('Fixed Monthly Salary Engine', () => {
     const result = calculateNetSalary(inputs);
     expect(result.customer_review_deduction).toBe(1500);
     expect(result.gross_salary).toBe(18500);
+  });
+
+  it('handles legacy base_pay fallback when monthly_salary is omitted', () => {
+    const inputs = {
+      monthly_salary: undefined as any,
+      base_pay: 18000,
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.monthly_salary).toBe(18000);
+    expect(result.base_pay).toBe(18000);
+  });
+
+  it('handles default job completion threshold and no bonus when under threshold', () => {
+    const inputs = {
+      monthly_salary: 20000,
+      completed_jobs_count: 25, // default threshold is 30, so 25 <= 30
+      job_completion_bonus_amount: 1000,
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.job_completion_bonus).toBe(0);
+  });
+
+  it('handles neutral review scores (3.0 to 4.4) with zero bonus and zero penalty', () => {
+    const inputs = {
+      monthly_salary: 20000,
+      avg_review_score: 3.8,
+      customer_review_bonus_rate: 1000,
+      customer_review_penalty_rate: 1000,
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.customer_review_bonus_total).toBe(0);
+    expect(result.customer_review_deduction).toBe(0);
+  });
+
+  it('handles zero review score (no reviews) with zero penalty', () => {
+    const inputs = {
+      monthly_salary: 20000,
+      avg_review_score: 0,
+      customer_review_penalty_rate: 1000,
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.customer_review_deduction).toBe(0);
+  });
+
+  it('handles full absent days when allowed leave days are already exhausted', () => {
+    const inputs = {
+      monthly_salary: 20000,
+      full_absent_days: 3,
+      leave_count: 5, // already used 5 leaves
+      allowed_leave_days: 2, // only 2 were allowed -> 0 remaining allowed
+      absent_day_deduction: 700, // 3 * 700 = 2100
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.chargeable_days).toBe(3);
+    expect(result.absence_deduction).toBe(2100);
+  });
+
+  it('floors net salary to zero when advance salary exceeds gross pay', () => {
+    const inputs = {
+      monthly_salary: 5000,
+      advance_deducted: 8000,
+    };
+
+    const result = calculateNetSalary(inputs);
+    expect(result.gross_salary).toBe(5000);
+    expect(result.net_salary).toBe(0);
   });
 });

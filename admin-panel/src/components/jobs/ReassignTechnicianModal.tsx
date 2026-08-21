@@ -49,7 +49,7 @@ export default function ReassignTechnicianModal({
         const { error: addErr } = await supabase
           .from('job_technicians')
           .insert(toAdd.map(id => ({ job_id: job.id, technician_id: id })));
-        if (addErr) throw addErr;
+        if (addErr) throw new Error(addErr.message);
       }
 
       if (toRemove.length > 0) {
@@ -59,7 +59,7 @@ export default function ReassignTechnicianModal({
           .in('technician_id', toRemove)
           .eq('job_id', job.id)
           .is('removed_at', null);
-        if (removeErr) throw removeErr;
+        if (removeErr) throw new Error(removeErr.message);
       }
 
       // Also update the legacy technician_id for backward compatibility

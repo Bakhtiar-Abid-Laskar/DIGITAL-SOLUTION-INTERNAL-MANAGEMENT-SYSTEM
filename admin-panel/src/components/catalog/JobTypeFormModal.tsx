@@ -60,12 +60,12 @@ export default function JobTypeFormModal({ item, onClose, onSuccess }: Props) {
           .from('job_types')
           .update(payload)
           .eq('id', item.id);
-        if (err) throw err;
+        if (err) throw new Error(err.message);
       } else {
         const { error: err } = await supabase
           .from('job_types')
           .insert(payload);
-        if (err) throw err;
+        if (err) throw new Error(err.message);
       }
 
       onSuccess();

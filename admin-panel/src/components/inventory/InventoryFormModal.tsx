@@ -116,7 +116,7 @@ export default function InventoryFormModal({
           p_location: stockData.location || null
         });
 
-        if (rpcErr) throw rpcErr;
+        if (rpcErr) throw new Error(rpcErr.message);
       }
 
       onSuccess();

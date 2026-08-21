@@ -17,7 +17,10 @@ export function calculatePartsTotal(materials: { total_cost: number }[]): number
  * @returns The calculated tax amount.
  */
 export function calculateTaxAmount(partsTotal: number, labourCharge: number, taxPercent: number): number {
-  return (partsTotal + labourCharge) * (taxPercent / 100);
+  const p = Number(partsTotal) || 0;
+  const l = Number(labourCharge) || 0;
+  const t = Number(taxPercent) || 0;
+  return (p + l) * (t / 100);
 }
 
 /**
@@ -35,9 +38,13 @@ export function calculateGrandTotal(
   taxPercent: number,
   discount: number
 ): number {
-  const base = partsTotal + labourCharge;
-  const withTax = base * (1 + taxPercent / 100);
-  const final = withTax - discount;
+  const p = Number(partsTotal) || 0;
+  const l = Number(labourCharge) || 0;
+  const t = Number(taxPercent) || 0;
+  const d = Number(discount) || 0;
+  const base = p + l;
+  const withTax = base * (1 + t / 100);
+  const final = withTax - d;
   return roundMoney(Math.max(0, final)); // Prevent negative totals
 }
 

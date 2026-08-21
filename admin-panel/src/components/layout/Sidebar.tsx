@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, Users, Package, Boxes, BarChart3, Wallet, FileText, Settings, Tag, Tags, Wrench, X, Receipt, Truck, ShoppingCart, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Users, Package, Boxes, BarChart3, Wallet, FileText, Settings, Tag, X, Receipt, CreditCard, CalendarDays, UserCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect } from 'react';
@@ -9,8 +9,10 @@ import { useEffect } from 'react';
 const NAV_ITEMS = [
   { label: 'Overview', href: '/', icon: LayoutDashboard },
   { label: 'Jobs', href: '/jobs', icon: Briefcase },
+  { label: 'Customers', href: '/customers', icon: UserCheck },
   { label: 'Job Types', href: '/job-types', icon: Tag },
   { label: 'Sales', href: '/sales', icon: Receipt },
+  { label: 'Pending Payments', href: '/pending-payments', icon: CreditCard },
   { label: 'Allotted Materials', href: '/materials', icon: Boxes },
   { label: 'Staff', href: '/staff', icon: Users },
   { label: 'Attendance', href: '/attendance', icon: CalendarDays },

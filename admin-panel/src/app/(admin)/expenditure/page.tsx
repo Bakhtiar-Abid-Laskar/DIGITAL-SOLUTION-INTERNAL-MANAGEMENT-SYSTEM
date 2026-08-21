@@ -9,14 +9,15 @@ import ExpenditureTable from '@/components/expenditure/ExpenditureTable';
 import ExpenditureSummaryCards from '@/components/expenditure/ExpenditureSummaryCards';
 import { getCurrentMonth } from '@/utils/formatDate';
 import { PageHeader } from '@/components/common/PageHeader';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/common/Card';
+import { SearchFilterBar } from '@/components/common/SearchFilterBar';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
-import { LoadingState } from '@/components/common/LoadingState';
+import { DataTableSkeleton } from '@/components/common/Skeleton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/common/Button';
 import { useToast } from '@/components/common/ToastProvider';
-import { Lock, ClipboardList, Download } from 'lucide-react';
+import { Lock, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const EXPENDITURE_TYPES: Array<{ value: PaymentType | 'all'; label: string }> = [
   { value: 'all', label: 'All Types' },
@@ -39,7 +40,6 @@ export default function ExpenditurePage() {
   const fetchPayments = useCallback(async () => {
     setLoading(true);
     const start = `${month}-01`;
-    // Next month
     const [y, m] = month.split('-').map(Number);
     const nextMonth = m === 12
       ? `${y + 1}-01-01`
@@ -73,13 +73,13 @@ export default function ExpenditurePage() {
     if (role === 'admin') fetchPayments();
   }, [role, fetchPayments]);
 
-  if (isLoading) return <LoadingState message="Loading expenditure records..." className="h-full" />;
+  if (isLoading) return <DataTableSkeleton rows={6} cols={4} />;
 
   if (role !== 'admin') {
     return (
       <div className="h-full flex items-center justify-center">
         <EmptyState 
-          icon={<Lock className="w-12 h-12 text-admin-danger" />}
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
           heading="Access Denied"
           subtext="Expenditure management is restricted to administrators only."
         />
@@ -91,7 +91,7 @@ export default function ExpenditurePage() {
     ? payments.filter(p => p.description?.toLowerCase().includes(search.toLowerCase()))
     : payments;
 
-  const handleExportCSV = () => {
+  const handleExportXLSX = () => {
     setExporting(true);
     if (filtered.length === 0) {
       showToast('No records to export', 'info');
@@ -99,21 +99,18 @@ export default function ExpenditurePage() {
       return;
     }
 
-    let csvData = 'Date,Type,Description,Amount\n';
-    filtered.forEach(p => {
-      csvData += `"${new Date(p.created_at).toLocaleDateString()}","${p.type}","${p.description || ''}",${p.amount}\n`;
-    });
+    const data = filtered.map(p => ({
+      Date: new Date(p.created_at).toLocaleDateString(),
+      Type: p.type,
+      Description: p.description || '',
+      Amount: p.amount
+    }));
 
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `expenditure-${month}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Expenditures");
+    XLSX.writeFile(wb, `expenditure-${month}.xlsx`);
+    
     setExporting(false);
   };
 
@@ -122,12 +119,12 @@ export default function ExpenditurePage() {
       <PageHeader 
         title="Expenditure Tracking" 
         description="Record and monitor all business expenses for the selected month."
-      >
-        <Button onClick={handleExportCSV} isLoading={exporting} variant="outline" size="sm" className="flex items-center gap-2">
-          <Download size={16} />
-          Export CSV
-        </Button>
-      </PageHeader>
+        actions={
+          <Button onClick={handleExportXLSX} isLoading={exporting} variant="outline" size="sm" leftIcon={<Download size={14} />}>
+            Export XLSX
+          </Button>
+        }
+      />
 
       <ExpenditureSummaryCards payments={payments} />
 
@@ -138,40 +135,40 @@ export default function ExpenditurePage() {
         />
       )}
 
-      {/* Filters */}
-      <Card noAccentLine>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ClipboardList size={20} className="text-admin-text-secondary" />
-            Expenditure History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px] max-w-xs">
-              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Month</label>
-              <Input type="month" value={month} onChange={e => setMonth(e.target.value)} />
-            </div>
-            <div className="flex-1 min-w-[200px] max-w-xs">
-              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Type</label>
-              <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value as PaymentType | 'all')}>
-                {EXPENDITURE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </Select>
-            </div>
-            <div className="flex-1 min-w-[250px]">
-              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Search Description</label>
-              <Input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Search & Filters */}
+      <SearchFilterBar
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search expense description..."
+        showClearButton={Boolean(search || typeFilter !== 'all')}
+        onClearFilters={() => {
+          setSearch('');
+          setTypeFilter('all');
+        }}
+      >
+        <div className="w-40">
+          <Input 
+            type="month" 
+            value={month} 
+            onChange={e => setMonth(e.target.value)} 
+            className="h-10 text-sm"
+            aria-label="Filter Month"
+          />
+        </div>
+        <div className="w-48">
+          <Select 
+            value={typeFilter} 
+            onChange={e => setTypeFilter(e.target.value as PaymentType | 'all')}
+            className="h-10 text-sm"
+            aria-label="Filter by Type"
+          >
+            {EXPENDITURE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+        </div>
+      </SearchFilterBar>
 
       <div className="flex-1 overflow-hidden">
-        {loading ? (
-          <LoadingState message="Loading expenditure records..." />
-        ) : (
-          <ExpenditureTable payments={filtered} />
-        )}
+        <ExpenditureTable payments={filtered} isLoading={loading} />
       </div>
     </div>
   );

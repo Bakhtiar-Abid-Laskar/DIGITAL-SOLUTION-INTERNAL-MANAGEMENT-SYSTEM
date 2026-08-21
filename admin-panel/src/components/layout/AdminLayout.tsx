@@ -14,9 +14,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-admin-bg-base">
-        <Loader2 className="animate-spin text-admin-accent mb-4" size={32} />
-        <p className="text-admin-text-secondary">Loading Digital Solution Admin...</p>
+      <div className="flex h-screen bg-admin-bg-base overflow-hidden">
+        {/* Sidebar skeleton */}
+        <div className="hidden md:flex flex-col w-64 border-r border-admin-border bg-admin-bg-surface p-4 space-y-4">
+          <div className="h-8 w-36 bg-admin-bg-subtle rounded skeleton-pulse" />
+          <div className="space-y-2 pt-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-9 w-full bg-admin-bg-subtle rounded-lg skeleton-pulse" />
+            ))}
+          </div>
+        </div>
+        {/* Main area skeleton */}
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="h-16 border-b border-admin-border bg-admin-bg-surface px-6 flex items-center justify-between">
+            <div className="h-6 w-32 bg-admin-bg-subtle rounded skeleton-pulse" />
+            <div className="h-8 w-8 rounded-full bg-admin-bg-subtle skeleton-pulse" />
+          </div>
+          <div className="p-6 sm:p-8 space-y-6">
+            <div className="h-8 w-48 bg-admin-bg-subtle rounded skeleton-pulse" />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-24 bg-admin-bg-surface border border-admin-border rounded-xl skeleton-pulse" />
+              ))}
+            </div>
+            <div className="h-64 bg-admin-bg-surface border border-admin-border rounded-xl skeleton-pulse" />
+          </div>
+        </div>
       </div>
     );
   }

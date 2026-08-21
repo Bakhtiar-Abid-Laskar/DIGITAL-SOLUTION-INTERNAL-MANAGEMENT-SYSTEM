@@ -48,20 +48,24 @@ export default function HolidayCalendarForm() {
     try {
       const { error } = await supabase
         .from('holidays')
-        .insert({
+        .upsert({
           date,
           name: name.trim(),
           is_recurring: isRecurring,
-        });
+        }, { onConflict: 'date' });
       err = error;
     } finally {
       setSaving(false);
     }
     
     if (err) {
-      setError(err.message || 'Failed to add holiday');
+      if (err.message?.includes('holidays_date_key') || (err as any).code === '23505') {
+        setError('A holiday for this date is already configured. You can delete the existing one or pick another date.');
+      } else {
+        setError(err.message || 'Failed to save holiday');
+      }
     } else {
-      setSuccess('Holiday added successfully!');
+      setSuccess('Holiday saved successfully!');
       setDate('');
       setName('');
       setIsRecurring(false);

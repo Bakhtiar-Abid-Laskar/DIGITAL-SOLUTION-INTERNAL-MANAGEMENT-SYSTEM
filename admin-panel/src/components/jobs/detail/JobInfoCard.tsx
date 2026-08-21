@@ -11,6 +11,9 @@ import { Save, X, Edit, MessageCircle, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
 
+import { MaterialReconciliationModal } from './MaterialReconciliationModal';
+import { JobMaterial } from '@repairshop/shared';
+
 interface JobInfoCardProps {
   job: Job;
   technicians: User[];
@@ -19,11 +22,17 @@ interface JobInfoCardProps {
   onJobUpdated: (job: Job) => void;
   billing: any;
   deviceTypes: string[];
+  materials?: JobMaterial[];
+  onUpdateMaterials?: (materials: JobMaterial[]) => void;
 }
 
-export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUpdated, billing, deviceTypes }: JobInfoCardProps) {
+export function JobInfoCard({
+  job, technicians, isEditing, setIsEditing, onJobUpdated, billing, deviceTypes,
+  materials = [], onUpdateMaterials
+}: JobInfoCardProps) {
   const { showToast } = useToast();
   const [editForm, setEditForm] = useState<Partial<Job>>(job);
+  const [showReconcileModal, setShowReconcileModal] = useState(false);
 
   const handleSaveJob = async () => {
     try {
@@ -32,6 +41,13 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
         return;
       }
       
+      // If marking as Completed and there are materials, prompt reconciliation
+      if (editForm.status === 'Completed' && job?.status !== 'Completed' && materials.length > 0) {
+        setIsEditing(false);
+        setShowReconcileModal(true);
+        return;
+      }
+
       const updateData: any = {
         customer_name: editForm.customer_name,
         customer_contact: editForm.customer_contact,
@@ -41,8 +57,7 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
         remarks: editForm.remarks || null,
         job_type: editForm.job_type,
         priority: editForm.priority,
-        status: editForm.status,
-        technician_id: editForm.technician_id
+        status: editForm.status
       };
 
       if (editForm.status === 'Completed' && job?.status !== 'Completed') {
@@ -50,7 +65,7 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
       }
 
       const { error } = await supabase.from('jobs').update(updateData).eq('id', job.id);
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       
       setIsEditing(false);
       showToast("Job updated successfully", "success");
@@ -105,11 +120,7 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
           </div>
           <div className="space-y-4">
             <h4 className="font-medium text-admin-text-primary border-b border-admin-border pb-2">Job Assignment & Status</h4>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-admin-text-secondary">Technician</label><Select  value={editForm.technician_id || ''} onChange={(e) => setEditForm({ ...editForm, technician_id: e.target.value })}>
-                <option value="">Unassigned</option>
-                {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-admin-text-secondary">Status</label><Select  value={editForm.status || 'Received'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}>
                 <option value="Received">Received</option>
                 <option value="Assigned">Assigned</option>
@@ -136,47 +147,60 @@ export function JobInfoCard({ job, technicians, isEditing, setIsEditing, onJobUp
   }
 
   return (
-    <Card>
-      <div className="p-6 border-b border-admin-border">
-        <h3 className="text-lg font-semibold leading-none tracking-tight">Customer & Device Info</h3>
-      </div>
-      <div className="p-6 pt-0 space-y-4 text-sm mt-4">
-        <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
-          <div>
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Customer Name</div>
-            <div className="font-medium text-admin-text-primary">{job.customer_name}</div>
-          </div>
-          <div>
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Contact</div>
-            <div className="font-medium">
-              <a href={`tel:${job.customer_contact}`} className="text-admin-accent hover:underline">
-                {job.customer_contact}
-              </a>
+    <>
+      <Card>
+        <div className="p-6 border-b border-admin-border">
+          <h3 className="text-lg font-semibold leading-none tracking-tight">Customer & Device Info</h3>
+        </div>
+        <div className="p-6 pt-0 space-y-4 text-sm mt-4">
+          <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
+            <div>
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Customer Name</div>
+              <div className="font-medium text-admin-text-primary">{job.customer_name}</div>
+            </div>
+            <div>
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Contact</div>
+              <div className="font-medium">
+                <a href={`tel:${job.customer_contact}`} className="text-admin-accent hover:underline">
+                  {job.customer_contact}
+                </a>
+              </div>
+            </div>
+            <div className="col-span-2">
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Email</div>
+              <div className="font-medium text-admin-text-primary">
+                {job.customer_email || '-'}
+              </div>
             </div>
           </div>
-          <div className="col-span-2">
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Email</div>
-            <div className="font-medium text-admin-text-primary">
-              {job.customer_email || '-'}
+          
+          <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
+            <div>
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Device Type</div>
+              <div className="font-medium text-admin-text-primary">{job.device_type}</div>
+            </div>
+            <div>
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Reported Issue</div>
+              <div className="font-medium text-admin-text-primary">{job.reported_issue}</div>
+            </div>
+            <div className="col-span-2">
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Remarks</div>
+              <div className="font-medium text-admin-text-primary">{job.remarks || '-'}</div>
             </div>
           </div>
         </div>
-        
-        <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
-          <div>
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Device Type</div>
-            <div className="font-medium text-admin-text-primary">{job.device_type}</div>
-          </div>
-          <div>
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Reported Issue</div>
-            <div className="font-medium text-admin-text-primary">{job.reported_issue}</div>
-          </div>
-          <div className="col-span-2">
-            <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Remarks</div>
-            <div className="font-medium text-admin-text-primary">{job.remarks || '-'}</div>
-          </div>
-        </div>
-      </div>
-    </Card>
+      </Card>
+
+      <MaterialReconciliationModal
+        isOpen={showReconcileModal}
+        onClose={() => setShowReconcileModal(false)}
+        job={job}
+        materials={materials}
+        onReconciled={(updatedJob, updatedMaterials) => {
+          onJobUpdated(updatedJob);
+          if (onUpdateMaterials) onUpdateMaterials(updatedMaterials);
+        }}
+      />
+    </>
   );
 }

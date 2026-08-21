@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Card } from "@/components/common/Card";
+import { DataTable, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/common/DataTable";
 import { useToast } from "@/components/common/ToastProvider";
 import { Badge } from "@/components/common/Badge";
-import { LoadingState } from "@/components/common/LoadingState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { CalendarX, Check, X } from "lucide-react";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
+import { formatDate } from "@/utils/formatDate";
 
 export default function LeavesPage() {
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -78,79 +78,74 @@ export default function LeavesPage() {
     <div className="space-y-6 h-full flex flex-col">
       <PageHeader 
         title="Leave Requests" 
-        description="Manage employee leave requests."
+        description="Manage and approve employee leave applications."
       />
 
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <div className="overflow-x-auto flex-1 table-scroll-shadow">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border">
-              <tr>
-                <th scope="col" className="px-6 py-4 font-medium">Employee</th>
-                <th scope="col" className="px-6 py-4 font-medium">Leave Date</th>
-                <th scope="col" className="px-6 py-4 font-medium">Reason</th>
-                <th scope="col" className="px-6 py-4 font-medium">Status</th>
-                <th scope="col" className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-admin-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={5}>
-                    <LoadingState message="Loading leaves..." />
-                  </td>
-                </tr>
-              ) : leaves.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <EmptyState 
-                      icon={<CalendarX size={40} className="text-admin-text-muted" />}
-                      heading="No leave requests"
-                      subtext="There are currently no leave requests to manage."
-                      asCard={false}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                leaves.map(leave => (
-                  <tr key={leave.id} className="hover:bg-admin-bg-hover transition-colors">
-                    <td className="px-6 py-4 font-medium text-admin-text-primary">{leave.user?.name || 'Unknown'}</td>
-                    <td className="px-6 py-4 text-admin-text-secondary">{new Date(leave.leave_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-admin-text-secondary max-w-[200px] truncate" title={leave.reason}>{leave.reason || '-'}</td>
-                    <td className="px-6 py-4">
-                      {leave.status === 'pending' && <Badge variant="warning">Pending</Badge>}
-                      {leave.status === 'approved' && <Badge variant="success">Approved</Badge>}
-                      {leave.status === 'rejected' && <Badge variant="danger">Rejected</Badge>}
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      {leave.status === 'pending' && (
-                        <>
-                          <button 
-                            onClick={() => handleUpdateStatus(leave.id, 'approved')}
-                            className="p-2 text-admin-completed-fg bg-admin-completed-bg hover:opacity-80 rounded-md transition-colors inline-flex items-center justify-center"
-                            title="Approve Leave"
-                            aria-label="Approve Leave"
-                          >
-                            <Check size={16} />
-                          </button>
-                          <button 
-                            onClick={() => handleUpdateStatus(leave.id, 'rejected')}
-                            className="p-2 text-admin-danger bg-admin-danger-dim hover:bg-admin-danger hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                            title="Reject Leave"
-                            aria-label="Reject Leave"
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DataTable
+        isLoading={loading}
+        skeletonRows={5}
+        skeletonCols={5}
+        isEmpty={leaves.length === 0}
+        emptyState={
+          <EmptyState 
+            icon={<CalendarX size={40} className="text-admin-text-muted" />}
+            heading="No leave requests"
+            subtext="There are currently no leave requests to manage."
+          />
+        }
+      >
+        <TableHead>
+          <tr>
+            <TableHeaderCell>Employee</TableHeaderCell>
+            <TableHeaderCell>Leave Date</TableHeaderCell>
+            <TableHeaderCell>Reason</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell align="right">Actions</TableHeaderCell>
+          </tr>
+        </TableHead>
+        <TableBody>
+          {leaves.map(leave => (
+            <TableRow key={leave.id}>
+              <TableCell className="font-semibold text-admin-text-primary">
+                {leave.user?.name || 'Unknown'}
+              </TableCell>
+              <TableCell className="text-admin-text-secondary text-xs">
+                {formatDate(leave.leave_date)}
+              </TableCell>
+              <TableCell className="text-admin-text-secondary max-w-[240px] truncate" title={leave.reason}>
+                {leave.reason || '-'}
+              </TableCell>
+              <TableCell>
+                {leave.status === 'pending' && <Badge variant="warning">Pending</Badge>}
+                {leave.status === 'approved' && <Badge variant="success">Approved</Badge>}
+                {leave.status === 'rejected' && <Badge variant="danger">Rejected</Badge>}
+              </TableCell>
+              <TableCell align="right">
+                {leave.status === 'pending' && (
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button 
+                      onClick={() => handleUpdateStatus(leave.id, 'approved')}
+                      className="p-1.5 text-admin-completed-fg bg-admin-completed-bg hover:opacity-80 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer border border-admin-completed-fg/20"
+                      title="Approve Leave"
+                      aria-label="Approve Leave"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleUpdateStatus(leave.id, 'rejected')}
+                      className="p-1.5 text-admin-urgent-fg bg-admin-urgent-bg hover:opacity-80 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer border border-admin-urgent-fg/20"
+                      title="Reject Leave"
+                      aria-label="Reject Leave"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </DataTable>
 
       {confirmModal?.isOpen && (
         <ConfirmationModal

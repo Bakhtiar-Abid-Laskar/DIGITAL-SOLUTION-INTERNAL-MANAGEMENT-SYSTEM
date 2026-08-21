@@ -10,6 +10,7 @@ import { useToast } from "@/components/common/ToastProvider";
 
 interface JobMaterialsCardProps {
   jobId: string;
+  job?: any;
   materials: JobMaterial[];
   newMaterial: { name: string; qty: number; unitCost: number };
   addingMaterial: boolean;
@@ -21,7 +22,7 @@ interface JobMaterialsCardProps {
 }
 
 export function JobMaterialsCard({
-  jobId, materials, newMaterial, addingMaterial,
+  jobId, job, materials, newMaterial, addingMaterial,
   onUpdateMaterials, onUpdateNewMaterial, onResetNewMaterial, onSetAddingMaterial, setConfirmModal
 }: JobMaterialsCardProps) {
   const { showToast } = useToast();
@@ -33,11 +34,17 @@ export function JobMaterialsCard({
     }
     onSetAddingMaterial(true);
     try {
+      const techId = job?.technician_id || null;
       const { error } = await supabase.from('job_materials').insert({
         job_id: jobId,
         material_name: newMaterial.name.trim(),
         quantity: newMaterial.qty,
-        unit_cost: newMaterial.unitCost
+        added_qty: newMaterial.qty,
+        used_qty: newMaterial.qty,
+        remaining_qty: 0,
+        unit_cost: newMaterial.unitCost,
+        technician_id: techId,
+        checkout_status: 'checked_out',
       });
       if (error) throw error;
       
@@ -82,8 +89,8 @@ export function JobMaterialsCard({
             <tr>
               <th scope="col" className="px-6 py-4 font-medium">Material Name</th>
               <th scope="col" className="px-6 py-4 font-medium text-center">Qty</th>
-              <th scope="col" className="px-6 py-4 font-medium text-right">Unit Cost</th>
-              <th scope="col" className="px-6 py-4 font-medium text-right">Total Cost</th>
+              <th scope="col" className="px-6 py-4 font-medium text-right">Unit Price</th>
+              <th scope="col" className="px-6 py-4 font-medium text-right">Total</th>
               <th scope="col" className="px-6 py-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
@@ -128,6 +135,7 @@ export function JobMaterialsCard({
               <td className="px-2 py-3 w-32">
                 <Input 
                   type="number" min="0" 
+                  placeholder="Price (₹)"
                   value={newMaterial.unitCost.toString()} 
                   onChange={e => onUpdateNewMaterial({ unitCost: parseFloat(e.target.value) || 0 })} 
                   className="h-9 text-sm text-right"

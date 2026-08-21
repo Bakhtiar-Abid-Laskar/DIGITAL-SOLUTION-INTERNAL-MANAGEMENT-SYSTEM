@@ -7,3 +7,4 @@ export * from './src/hooks/useDebounceValue';
 export * from './src/storageUrlCache';
 
 export * from './src/badgeConfig';
+export * from './src/imageUtils';

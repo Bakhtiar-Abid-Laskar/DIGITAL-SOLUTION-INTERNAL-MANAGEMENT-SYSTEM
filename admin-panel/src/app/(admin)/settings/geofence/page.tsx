@@ -33,12 +33,28 @@ export default function GeofenceSettingsPage() {
       
       if (error) throw error;
       if (data) {
-        setSetting(data as GeofenceSettings);
-        setRadius((data as GeofenceSettings).radius ?? 100);
+        const centerLat = Number(data.center_lat ?? (data as any).lat ?? 0);
+        const centerLng = Number(data.center_lng ?? (data as any).lng ?? 0);
+        const radiusMeters = Number(data.radius_meters ?? (data as any).radius ?? 100);
+
+        const mappedSetting: GeofenceSettings = {
+          id: data.id,
+          center_lat: centerLat,
+          center_lng: centerLng,
+          radius_meters: radiusMeters,
+          lat: centerLat,
+          lng: centerLng,
+          radius: radiusMeters,
+          is_active: data.is_active ?? true,
+          updated_at: data.updated_at || new Date().toISOString(),
+          created_at: (data as any).created_at || new Date().toISOString()
+        };
+        setSetting(mappedSetting);
+        setRadius(radiusMeters);
       }
     } catch (e: any) {
-      console.error(e);
-      showToast(e.message, 'error');
+      console.error('Error fetching geofence setting:', e);
+      showToast(e?.message || 'Failed to load geofence settings', 'error');
     } finally {
       setLoading(false);
     }
@@ -46,7 +62,13 @@ export default function GeofenceSettingsPage() {
 
   const handleSave = async (lat: number, lng: number) => {
     try {
-      const payload = { lat, lng, radius };
+      const payload = { 
+        center_lat: lat, 
+        center_lng: lng, 
+        radius_meters: radius,
+        is_active: true,
+        updated_at: new Date().toISOString()
+      };
       
       if (setting?.id) {
         const { error } = await supabase
@@ -61,10 +83,10 @@ export default function GeofenceSettingsPage() {
         if (error) throw error;
       }
       showToast('Geofence updated successfully!', 'success');
-      fetchSetting();
+      await fetchSetting();
     } catch (e: any) {
-      console.error(e);
-      showToast(e.message, 'error');
+      console.error('Error saving geofence:', e);
+      showToast(e?.message || 'Failed to save geofence location', 'error');
     }
   };
 
@@ -75,17 +97,25 @@ export default function GeofenceSettingsPage() {
     try {
       const { error } = await supabase
         .from('geofence_settings')
-        .update({ radius })
+        .update({ 
+          radius_meters: radius,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', setting.id);
       if (error) throw error;
       showToast(`Radius updated to ${radius}m successfully!`, 'success');
-      fetchSetting();
+      await fetchSetting();
     } catch (e: any) {
-      showToast(e.message, 'error');
+      console.error('Error saving geofence radius:', e);
+      showToast(e?.message || 'Failed to update radius', 'error');
     } finally {
       setSavingRadius(false);
     }
   };
+
+  const savedLat = setting ? (setting.center_lat ?? setting.lat ?? 0) : 0;
+  const savedLng = setting ? (setting.center_lng ?? setting.lng ?? 0) : 0;
+  const savedRadius = setting ? (setting.radius_meters ?? setting.radius ?? 100) : 100;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -100,16 +130,16 @@ export default function GeofenceSettingsPage() {
           <div>
             <p className="text-xs text-admin-text-secondary uppercase tracking-wide font-medium mb-1">Saved Location</p>
             <p className="text-admin-text-primary font-mono font-semibold">
-              {setting.lat.toFixed(6)}, {setting.lng.toFixed(6)}
+              {savedLat.toFixed(6)}, {savedLng.toFixed(6)}
             </p>
           </div>
           <div>
             <p className="text-xs text-admin-text-secondary uppercase tracking-wide font-medium mb-1">Saved Radius</p>
-            <p className="text-admin-text-primary font-semibold">{setting.radius} m</p>
+            <p className="text-admin-text-primary font-semibold">{savedRadius} m</p>
           </div>
           <div className="flex items-center">
             <a
-              href={`https://www.google.com/maps?q=${setting.lat},${setting.lng}`}
+              href={`https://www.google.com/maps?q=${savedLat},${savedLng}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-admin-accent text-xs underline underline-offset-2 hover:opacity-80 transition-opacity"

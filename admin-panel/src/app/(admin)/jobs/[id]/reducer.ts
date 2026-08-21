@@ -8,6 +8,7 @@ export interface JobDetailState {
   loading: boolean;
   error: string | null;
   deviceTypes: string[];
+  onsiteVisits: any[];
   
   // Edit State
   isEditing: boolean;
@@ -37,7 +38,7 @@ export interface JobDetailState {
 
 export type JobDetailAction =
   | { type: 'FETCH_START' }
-  | { type: 'FETCH_SUCCESS'; payload: { job: Job; materials: JobMaterial[]; technicians: User[]; billing: any; deviceTypes: string[] } }
+  | { type: 'FETCH_SUCCESS'; payload: { job: Job; materials: JobMaterial[]; technicians: User[]; billing: any; deviceTypes: string[]; onsiteVisits: any[] } }
   | { type: 'FETCH_ERROR'; error: string }
   | { type: 'SET_EDITING'; isEditing: boolean }
   | { type: 'UPDATE_EDIT_FORM'; payload: Partial<Job> }
@@ -62,6 +63,7 @@ export const initialState: JobDetailState = {
   loading: true,
   error: null,
   deviceTypes: [],
+  onsiteVisits: [],
   
   isEditing: false,
   editForm: {},
@@ -92,12 +94,17 @@ export function jobDetailReducer(state: JobDetailState, action: JobDetailAction)
         technicians: action.payload.technicians,
         billing: action.payload.billing,
         deviceTypes: action.payload.deviceTypes,
+        onsiteVisits: action.payload.onsiteVisits,
         notes: action.payload.job.work_notes || '',
         billingForm: {
-          labour_charge: action.payload.billing?.labour_charge || 0,
-          tax_percent: action.payload.billing?.tax_percent || 0,
+          labour_charge: (() => {
+            const items = action.payload.billing?.invoice_items || [];
+            const labourItem = items.find((i: any) => i.item_name === 'Labour Charge');
+            return labourItem ? Number(labourItem.selling_rate) : 0;
+          })(),
+          tax_percent: 18, // Default or computed from invoice
           discount: action.payload.billing?.discount || 0,
-          is_paid: action.payload.billing?.is_paid || false,
+          is_paid: action.payload.billing?.status === 'paid',
         }
       };
     case 'FETCH_ERROR':

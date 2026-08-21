@@ -7,13 +7,12 @@ import { Job } from '@repairshop/shared';
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
-import { LoadingState } from "@/components/common/LoadingState";
+import { JobDetailSkeleton } from "@/components/common/Skeleton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useToast } from "@/components/common/ToastProvider";
-import { openInvoicePrint } from '@/lib/invoiceClient';
-import { ArrowLeft, Printer, MapPin } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { jobDetailReducer, initialState } from './reducer';
 import { JobInfoCard } from '@/components/jobs/detail/JobInfoCard';
@@ -21,6 +20,7 @@ import { JobConfigCard } from '@/components/jobs/detail/JobConfigCard';
 import { JobMaterialsCard } from '@/components/jobs/detail/JobMaterialsCard';
 import { JobBillingCard } from '@/components/jobs/detail/JobBillingCard';
 import { JobNotesCard } from '@/components/jobs/detail/JobNotesCard';
+import { OnsiteDetailsCard } from '@/components/jobs/detail/OnsiteDetailsCard';
 import ReassignTechnicianModal from '@/components/jobs/ReassignTechnicianModal';
 
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,12 +33,13 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const fetchData = useCallback(async (cancelled = false) => {
     if (!cancelled) dispatch({ type: 'FETCH_START' });
     try {
-      const [jobRes, matRes, billRes, techRes, deviceTypesRes] = await Promise.all([
-        supabase.from('jobs').select('*, technician:users!jobs_technician_id_fkey(name, phone), job_technicians(*, technician:users!job_technicians_technician_id_fkey(name, phone))').eq('id', id).single(),
+      const [jobRes, matRes, billRes, techRes, deviceTypesRes, onsiteVisitsRes] = await Promise.all([
+        supabase.from('jobs').select('*, technician:users!jobs_technician_id_fkey(name, phone), job_technicians(*, technician:users!job_technicians_technician_id_fkey(name, phone)), job_type_ref:job_types!jobs_job_type_ref_id_fkey(id, title, customer_charge_amount)').eq('id', id).single(),
         supabase.from('job_materials').select('*').eq('job_id', id),
-        supabase.from('billing').select('*').eq('job_id', id).single(),
+        supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', id).maybeSingle(),
         supabase.from('users').select('*').eq('role', 'technician').eq('is_active', true),
-        supabase.rpc('get_unique_device_types')
+        supabase.rpc('get_unique_device_types'),
+        supabase.from('onsite_visits').select('id, arrival_time, arrival_gps_lat, arrival_gps_lng, arrival_selfie_drive_file_id, arrival_photo_drive_link, departure_time, departure_gps_lat, departure_gps_lng, departure_selfie_drive_file_id, departure_photo_drive_link, device_photo_drive_file_id, device_photo_drive_link').eq('job_id', id)
       ]);
 
       if (cancelled) return;
@@ -51,7 +52,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           materials: matRes.data || [], 
           technicians: techRes.data || [], 
           billing: billRes.data,
-          deviceTypes: (deviceTypesRes.data || []).map((d: any) => d.device_type)
+          deviceTypes: (deviceTypesRes.data || []).map((d: any) => d.device_type),
+          onsiteVisits: onsiteVisitsRes.data || []
         } 
       });
     } catch (err: any) {
@@ -81,7 +83,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     };
   }, [id, fetchData]);
 
-  if (state.loading) return <div className="p-10"><LoadingState message="Loading job details..." /></div>;
+  if (state.loading) return <JobDetailSkeleton />;
   if (state.error || !state.job) return <div className="p-10"><ErrorState message={state.error || 'Job not found'} /></div>;
 
   const handleSaveJob = async () => {
@@ -125,35 +127,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         title={`Job ${state.job.job_code}`} 
         description="Manage customer job details, assignment, and billing."
         actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={async () => {
-                if (!state.job) return;
-                try {
-                  await openInvoicePrint({
-                    docType: 'receipt',
-                    jobId: state.job.id,           
-                    invoiceNo: state.job.job_code, 
-                    date: state.job.created_at || new Date().toISOString(),
-                    customer: {
-                      name: state.job.customer_name,
-                      gst: (state.job as any).customer_gstin || undefined,
-                      phone: state.job.customer_contact,
-                      address: state.job.device_type + ' — ' + state.job.reported_issue,
-                    },
-                    items: [{ description: state.job.reported_issue || 'Device Repair', hsn: '', price: 0, unit: 1 }],
-                  });
-                } catch (e: any) { showToast(e.message, 'error'); }
-              }}
-              leftIcon={<Printer size={16} />}
-            >
-              Print Receipt
-            </Button>
-            <Button variant="ghost" onClick={() => router.push('/jobs')} leftIcon={<ArrowLeft size={16} />}>
-              Back to Jobs
-            </Button>
-          </div>
+          <Button variant="ghost" onClick={() => router.push('/jobs')} leftIcon={<ArrowLeft size={16} />}>
+            Back to Jobs
+          </Button>
         }
       />
 
@@ -169,10 +145,13 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             onJobUpdated={(job) => dispatch({ type: 'UPDATE_JOB', job })}
             billing={state.billing}
             deviceTypes={state.deviceTypes}
+            materials={state.materials}
+            onUpdateMaterials={(materials) => dispatch({ type: 'UPDATE_MATERIALS', materials })}
           />
 
           <JobMaterialsCard
             jobId={id}
+            job={state.job}
             materials={state.materials}
             newMaterial={state.newMaterial}
             addingMaterial={state.addingMaterial}
@@ -183,6 +162,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             setConfirmModal={(modal) => dispatch({ type: 'SET_CONFIRM_MODAL', modal })}
           />
 
+          {state.job.job_type === 'Onsite' && (
+            <OnsiteDetailsCard onsiteVisits={state.onsiteVisits} />
+          )}
+
           <JobNotesCard
             jobId={id}
             notes={state.notes}
@@ -191,17 +174,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             onSetNotesSaving={(saving) => dispatch({ type: 'SET_NOTES_SAVING', saving })}
             onJobNotesSaved={(notes) => dispatch({ type: 'UPDATE_NOTES', notes })}
           />
-
-          {state.job.job_type === 'Onsite' && (
-            <Card>
-              <div className="p-6 border-b border-admin-border">
-                <h3 className="text-lg font-semibold leading-none tracking-tight">Onsite Visit Details</h3>
-              </div>
-              <div className="p-6 pt-0 mt-4">
-                <EmptyState icon={<MapPin size={32} />} heading="Onsite Tracking" subtext="Onsite check-ins and selfies will appear here if logged by the technician." asCard={false} />
-              </div>
-            </Card>
-          )}
 
         </div>
 
@@ -222,6 +194,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
             <JobBillingCard
               jobId={id}
+              job={state.job}
               jobCode={state.job.job_code}
               materials={state.materials}
               billing={state.billing}

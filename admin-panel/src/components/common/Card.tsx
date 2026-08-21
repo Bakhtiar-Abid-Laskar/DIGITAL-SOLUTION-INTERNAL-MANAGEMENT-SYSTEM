@@ -7,12 +7,11 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   noAccentLine?: boolean;
 }
 
-export function Card({ children, className, noAccentLine = false, ...props }: CardProps) {
+export function Card({ children, className, noAccentLine = true, ...props }: CardProps) {
   return (
     <div
       className={cn(
         "bg-admin-bg-surface border border-admin-border rounded-lg relative overflow-hidden",
-        !noAccentLine && "border-l-[4px] border-l-admin-accent",
         className
       )}
       {...props}

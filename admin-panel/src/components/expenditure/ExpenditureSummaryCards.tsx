@@ -3,17 +3,10 @@
 import { Payment } from '@/types/salary';
 import { formatCurrency } from '@repairshop/shared';
 import { Package, Wallet, Building2, IndianRupee } from 'lucide-react';
-import styles from '@/styles/expenditure.module.css';
+import { StatCard } from '@/components/common/StatCard';
 
 interface Props {
   payments: Payment[];
-}
-
-interface CardConfig {
-  label: string;
-  value: number;
-  accentColor: string;
-  Icon: React.ElementType;
 }
 
 export default function ExpenditureSummaryCards({ payments }: Props) {
@@ -25,24 +18,36 @@ export default function ExpenditureSummaryCards({ payments }: Props) {
   const office    = sum('office_development');
   const total     = materials + daily + office;
 
-  const cards: CardConfig[] = [
-    { label: 'Materials Purchase', value: materials, accentColor: 'var(--color-admin-progress-fg)',  Icon: Package      },
-    { label: 'Daily Expenditure',  value: daily,     accentColor: 'var(--color-admin-warning)',      Icon: Wallet       },
-    { label: 'Office Development', value: office,    accentColor: 'var(--color-admin-accent)',       Icon: Building2    },
-    { label: 'Total Expenditure',  value: total,     accentColor: 'var(--color-admin-danger)',       Icon: IndianRupee  },
-  ];
-
   return (
-    <div className={styles.summaryGrid}>
-      {cards.map(card => (
-        <div key={card.label} className={styles.summaryCard} style={{ borderTopColor: card.accentColor }}>
-          <div className={styles.summaryIcon}>
-            <card.Icon size={24} style={{ color: card.accentColor }} />
-          </div>
-          <div className={styles.summaryLabel}>{card.label}</div>
-          <div className={styles.summaryValue} style={{ color: card.accentColor }}>{formatCurrency(card.value)}</div>
-        </div>
-      ))}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCard
+        title="Materials Purchase"
+        value={formatCurrency(materials)}
+        detail="Parts and components"
+        icon={<Package size={18} />}
+        tone="info"
+      />
+      <StatCard
+        title="Daily Expenditure"
+        value={formatCurrency(daily)}
+        detail="Routine operational spend"
+        icon={<Wallet size={18} />}
+        tone="warning"
+      />
+      <StatCard
+        title="Office Development"
+        value={formatCurrency(office)}
+        detail="Infrastructure & tools"
+        icon={<Building2 size={18} />}
+        tone="neutral"
+      />
+      <StatCard
+        title="Total Expenditure"
+        value={formatCurrency(total)}
+        detail="Combined expenses this month"
+        icon={<IndianRupee size={18} />}
+        tone="danger"
+      />
     </div>
   );
 }

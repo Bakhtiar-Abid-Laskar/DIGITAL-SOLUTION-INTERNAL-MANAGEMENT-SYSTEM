@@ -1,10 +1,12 @@
 import { User, Job, JobTypeCatalogItem } from '@repairshop/shared';
 
 export interface CreateJobFormState {
+  customer_id?: string | null;
   customer_name: string;
   customer_contact: string;
   customer_email: string;
   customer_gstin: string;
+  customer_address: string;
   device_type: string;
   reported_issue: string;
   remarks: string;
@@ -15,6 +17,7 @@ export interface CreateJobFormState {
   snap_technician_incentive: number;
   priority: 'Normal' | 'High' | 'Urgent';
   technician_ids: string[];
+  advance_amount: string; // New field for partial payment / advance
 }
 
 export interface CreateJobState {
@@ -32,6 +35,7 @@ export type CreateJobAction =
   | { type: 'SET_CATALOG_LOADING'; loading: boolean }
   | { type: 'FETCH_SUCCESS'; technicians: User[]; catalogItems: JobTypeCatalogItem[]; deviceTypes: string[] }
   | { type: 'SET_FORM_FIELD'; field: keyof CreateJobFormState; value: any }
+  | { type: 'SET_CUSTOMER_INFO'; payload: Partial<CreateJobFormState> }
   | { type: 'SET_CATALOG_ITEM'; payload: Partial<CreateJobFormState> }
   | { type: 'SET_ERRORS'; errors: Record<string, string> }
   | { type: 'SET_LOADING'; loading: boolean }
@@ -39,10 +43,12 @@ export type CreateJobAction =
   | { type: 'RESET_FORM' };
 
 export const initialFormState: CreateJobFormState = {
+  customer_id: null,
   customer_name: '',
   customer_contact: '',
   customer_email: '',
   customer_gstin: '',
+  customer_address: '',
   device_type: 'Laptop',
   reported_issue: '',
   remarks: '',
@@ -53,6 +59,7 @@ export const initialFormState: CreateJobFormState = {
   snap_technician_incentive: 0,
   priority: 'Normal',
   technician_ids: [],
+  advance_amount: '',
 };
 
 export const initialState: CreateJobState = {
@@ -74,6 +81,8 @@ export function createJobReducer(state: CreateJobState, action: CreateJobAction)
       return { ...state, technicians: action.technicians, catalogItems: action.catalogItems, deviceTypes: action.deviceTypes, catalogLoading: false };
     case 'SET_FORM_FIELD':
       return { ...state, form: { ...state.form, [action.field]: action.value } };
+    case 'SET_CUSTOMER_INFO':
+      return { ...state, form: { ...state.form, ...action.payload } };
     case 'SET_CATALOG_ITEM':
       return { ...state, form: { ...state.form, ...action.payload } };
     case 'SET_ERRORS':

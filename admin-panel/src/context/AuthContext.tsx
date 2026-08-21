@@ -57,6 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
+      } catch (err) {
+        console.warn('Could not load auth session:', err);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -75,6 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(data);
           }
         }
+      } catch (err) {
+        console.warn('Could not fetch user profile:', err);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -96,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
+      } catch (err) {
+        console.warn('Auth state change handler error:', err);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -107,6 +113,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [router, pathname]);
 
+  // Re-fetch profile when browser tab regains focus (picks up role/is_active changes)
+  useEffect(() => {
+    if (!sessionUser) return;
+
+    const handleFocus = async () => {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', sessionUser.id)
+          .single();
+        if (data) {
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error('Error re-fetching profile on focus:', err);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [sessionUser]);
 
 
   // Idle Timeout Logic

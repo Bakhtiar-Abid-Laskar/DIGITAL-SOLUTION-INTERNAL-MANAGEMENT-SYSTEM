@@ -122,7 +122,18 @@ export default function WhatsAppSettingsPage() {
   };
 
   if (loading) {
-    return <div className="p-8">Loading settings...</div>;
+    return (
+      <div className="space-y-6 h-full flex flex-col">
+        <PageHeader 
+          title="WhatsApp Integration" 
+          description="Manage automated WhatsApp notifications sent to customers."
+        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-96 bg-admin-bg-surface border border-admin-border rounded-xl skeleton-pulse" />
+          <div className="h-96 bg-admin-bg-surface border border-admin-border rounded-xl skeleton-pulse" />
+        </div>
+      </div>
+    );
   }
 
   const renderToggle = (label: string, key: keyof typeof settings) => (

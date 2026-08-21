@@ -1,33 +1,41 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { InventoryWithProduct, useDebounceValue } from '@repairshop/shared';
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, PlusCircle } from "lucide-react";
+import { InventoryWithProduct, useDebounceValue, formatCurrency } from '@repairshop/shared';
+import { Plus, Edit2, Trash2, AlertTriangle, Package, PlusCircle, History, Layers } from "lucide-react";
 import InventoryFormModal from "@/components/inventory/InventoryFormModal";
+import PurchaseIntakeModal from "@/components/inventory/PurchaseIntakeModal";
 import AddStockModal from "@/components/inventory/AddStockModal";
+import { PurchaseHistoryTab } from "@/components/inventory/PurchaseHistoryTab";
 import { PageHeader } from "@/components/common/PageHeader";
+import { Tabs, TabItem } from "@/components/common/Tabs";
+import { SearchFilterBar } from "@/components/common/SearchFilterBar";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
-import { Input } from "@/components/common/Input";
-import { LoadingState, TableSkeleton } from "@/components/common/LoadingState";
+import { DataTableSkeleton } from "@/components/common/Skeleton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useToast } from "@/components/common/ToastProvider";
 import { Pagination } from "@/components/common/Pagination";
+import { formatDate } from "@/utils/formatDate";
 
 export default function InventoryPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'inventory' | 'purchases'>('inventory');
   const [inventory, setInventory] = useState<InventoryWithProduct[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
   const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const PAGE_SIZE = 20;
 
-  const [showModal, setShowModal] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryWithProduct | null>(null);
   
@@ -45,7 +53,7 @@ export default function InventoryPage() {
       let query = supabase
         .from('inventory')
         .select('*, products!inner(*)', { count: 'exact' })
-        // Sort by product name via the joined table
+        .eq('products.is_active', true)
         .order('name', { referencedTable: 'products', ascending: true });
 
       if (debouncedSearchQuery) {
@@ -76,10 +84,13 @@ export default function InventoryPage() {
   }, [debouncedSearchQuery]);
 
   useEffect(() => {
+    setSearchQuery(searchParams.get("search") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
     let cancelled = false;
     fetchInventory(cancelled);
     
-    // Subscribe to both products and inventory changes
     const channel = supabase.channel('admin-inventory-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
         fetchInventory();
@@ -101,8 +112,12 @@ export default function InventoryPage() {
       title: 'Delete Item',
       message: `Are you sure you want to delete "${name}"? This will remove all associated stock data.`,
       onConfirm: async () => {
-        // Deleting from products cascades to inventory
-        const { error } = await supabase.from('products').delete().eq('id', productId);
+        let { error } = await supabase.from('products').delete().eq('id', productId);
+        if (error && error.code === '23503') {
+          const { error: softDeleteError } = await supabase.from('products').update({ is_active: false }).eq('id', productId);
+          error = softDeleteError;
+        }
+
         if (error) {
           showToast('Failed to delete item. It might be used in existing invoices.', 'error');
         } else {
@@ -116,145 +131,203 @@ export default function InventoryPage() {
 
   const lowStockCount = inventory.filter(item => item.quantity_cached <= item.low_stock_threshold).length;
 
+  const tabs: TabItem[] = [
+    {
+      id: 'inventory',
+      label: `Current Stock & Items (${inventory.length})`,
+      icon: <Layers size={16} />,
+    },
+    {
+      id: 'purchases',
+      label: 'Purchase History',
+      icon: <History size={16} />,
+    },
+  ];
+
   return (
     <div className="space-y-6 h-full flex flex-col">
       <PageHeader 
-        title="Inventory" 
-        description="Manage your shop's products, parts, and materials."
+        title="Inventory & Purchases" 
+        description="Manage your shop's stock, log supplier purchase intake, and track purchase history."
         actions={
-          <Button leftIcon={<Plus size={16} />} onClick={() => { setEditingItem(null); setShowModal(true); }}>
-            Add Product
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              variant="primary"
+              leftIcon={<Plus size={15} />} 
+              onClick={() => setShowPurchaseModal(true)}
+            >
+              Log Purchase
+            </Button>
+          </div>
         }
       />
 
-      <Card noAccentLine className="p-4 flex flex-wrap gap-4 items-center justify-between bg-admin-bg-surface">
-        <div className="relative flex-1 min-w-[250px] max-w-sm">
-          <Search className="absolute left-3 top-2.5 text-admin-text-muted" size={16} />
-          <Input aria-label="Search by name or SKU..." 
-            type="text" 
-            placeholder="Search by name or SKU..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        
-        {lowStockCount > 0 && (
-          <div className="flex items-center gap-2 text-admin-danger bg-admin-danger-dim px-4 py-2 rounded-lg font-medium text-sm border border-admin-danger/20">
-            <AlertTriangle size={16} />
-            <span>{lowStockCount} items are running low!</span>
-          </div>
-        )}
-      </Card>
+      {/* Standardized Tabs */}
+      <Tabs
+        items={tabs}
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as 'inventory' | 'purchases')}
+      />
 
-      {loading ? (
-        <TableSkeleton />
+      {activeTab === 'purchases' ? (
+        <PurchaseHistoryTab onOpenIntakeModal={() => setShowPurchaseModal(true)} />
       ) : (
-        <Card className="flex-1 flex flex-col overflow-hidden">
-          <div className="overflow-x-auto flex-1 table-scroll-shadow">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border">
-                <tr>
-                  <th scope="col" className="px-6 py-4 font-medium">Item Name</th>
-                  <th scope="col" className="px-6 py-4 font-medium">SKU</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Qty</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Purchase Rate</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Selling Rate</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Unit</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Threshold</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Last Updated</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-admin-border">
-                {inventory.length === 0 ? (
-                <tr>
-                  <td colSpan={9}>
-                    <EmptyState 
-                      icon={<Package size={40} className="text-admin-text-muted" />}
-                      heading="No inventory items found"
-                      subtext="Try adjusting your search query or add a new product."
-                      asCard={false}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                inventory.map(item => {
-                  const isLowStock = item.quantity_cached <= item.low_stock_threshold;
-                  return (
-                    <tr key={item.id} className={`transition-colors hover:bg-admin-bg-hover ${isLowStock ? 'bg-admin-pending-bg/50' : ''}`}>
-                      <td className="px-6 py-4 font-medium text-admin-text-primary flex items-center gap-2">
-                        {isLowStock && <AlertTriangle size={14} className="text-admin-danger" />}
-                        {item.products?.name || 'Unknown Product'}
-                      </td>
-                      <td className="px-6 py-4 text-admin-text-secondary">{item.products?.sku || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className={`font-bold ${isLowStock ? 'text-admin-danger' : 'text-admin-text-primary'}`}>
-                          {item.quantity_cached}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-admin-text-primary">
-                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(item.purchase_rate || 0)}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-admin-text-primary">
-                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(item.selling_rate || 0)}
-                      </td>
-                      <td className="px-6 py-4 text-admin-text-secondary">{item.products?.unit || '-'}</td>
-                      <td className="px-6 py-4 text-admin-text-secondary">{item.low_stock_threshold}</td>
-                      <td className="px-6 py-4 text-admin-text-secondary">{new Date(item.last_updated).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button 
-                          onClick={() => { setEditingItem(item); setShowAddStockModal(true); }}
-                          className="p-2 text-admin-primary bg-admin-primary/10 hover:bg-admin-primary hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                          title="Quick Add Stock"
-                          aria-label="Quick Add Stock"
-                        >
-                          <PlusCircle size={16} />
-                        </button>
-                        <button 
-                          onClick={() => { setEditingItem(item); setShowModal(true); }}
-                          className="p-2 text-admin-accent bg-admin-accent-dim hover:bg-admin-accent hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                          title="Edit Item"
-                          aria-label="Edit Item"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(item.product_id, item.products?.name)}
-                          className="p-2 text-admin-danger bg-admin-danger-dim hover:bg-admin-danger hover:text-white rounded-md transition-colors inline-flex items-center justify-center"
-                          title="Delete Item"
-                          aria-label="Delete Item"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+        <>
+          <SearchFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search by product name or SKU..."
+            showClearButton={Boolean(searchQuery)}
+            onClearFilters={() => setSearchQuery("")}
+            actions={
+              lowStockCount > 0 ? (
+                <div className="flex items-center gap-2 text-admin-urgent-fg bg-admin-urgent-bg px-3 py-1.5 rounded-lg font-semibold text-xs border border-admin-urgent-fg/20">
+                  <AlertTriangle size={14} />
+                  <span>{lowStockCount} items running low</span>
+                </div>
+              ) : undefined
+            }
+          />
+
+          {loading ? (
+            <DataTableSkeleton rows={6} cols={9} hasFilterBar={false} />
+          ) : (
+            <Card noAccentLine className="flex-1 flex flex-col overflow-hidden border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
+              <div className="overflow-x-auto flex-1 table-scroll-shadow">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-admin-bg-subtle text-admin-text-secondary sticky top-0 z-10 border-b border-admin-border text-xs uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th scope="col" className="px-6 py-3.5">Item Name</th>
+                      <th scope="col" className="px-6 py-3.5">SKU</th>
+                      <th scope="col" className="px-6 py-3.5 text-center">Qty</th>
+                      <th scope="col" className="px-6 py-3.5 text-right">Purchase Rate</th>
+                      <th scope="col" className="px-6 py-3.5 text-right">Selling Rate</th>
+                      <th scope="col" className="px-6 py-3.5">Unit</th>
+                      <th scope="col" className="px-6 py-3.5 text-center">Min Threshold</th>
+                      <th scope="col" className="px-6 py-3.5">Last Updated</th>
+                      <th scope="col" className="px-6 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-admin-border bg-admin-bg-surface">
+                    {inventory.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-8">
+                        <EmptyState 
+                          icon={<Package size={40} className="text-admin-text-muted" />}
+                          heading="No inventory items found"
+                          subtext="Try adjusting your search query or log a new purchase intake."
+                          asCard={false}
+                          action={
+                            <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setShowPurchaseModal(true)}>
+                              Log Purchase Intake
+                            </Button>
+                          }
+                        />
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-          
-          {inventory.length > 0 && (
-            <Pagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
+                  ) : (
+                    inventory.map(item => {
+                      const isLowStock = item.quantity_cached <= item.low_stock_threshold;
+                      return (
+                        <tr key={item.id} className={`transition-colors hover:bg-admin-bg-hover ${isLowStock ? 'bg-admin-urgent-bg/10' : ''}`}>
+                          <td className="px-6 py-4 font-semibold text-admin-text-primary">
+                            <div className="flex items-center gap-2">
+                              {isLowStock && <AlertTriangle size={14} className="text-admin-urgent-fg shrink-0" />}
+                              <span>{item.products?.name || 'Unknown Product'}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-admin-text-muted">{item.products?.sku || '-'}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold font-mono ${
+                              isLowStock 
+                                ? 'bg-admin-urgent-bg text-admin-urgent-fg border border-admin-urgent-fg/20' 
+                                : 'bg-admin-bg-subtle text-admin-text-primary border border-admin-border'
+                            }`}>
+                              {item.quantity_cached}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right font-medium text-admin-text-secondary">
+                            {formatCurrency(item.purchase_rate || 0)}
+                          </td>
+                          <td className="px-6 py-4 text-right font-semibold text-admin-text-primary">
+                            {formatCurrency(item.selling_rate || 0)}
+                          </td>
+                          <td className="px-6 py-4 text-admin-text-secondary text-xs">{item.products?.unit || '-'}</td>
+                          <td className="px-6 py-4 text-center text-admin-text-muted text-xs font-mono">{item.low_stock_threshold}</td>
+                          <td className="px-6 py-4 text-admin-text-muted text-xs">{formatDate(item.last_updated)}</td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button 
+                                onClick={() => { setEditingItem(item); setShowAddStockModal(true); }}
+                                className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Quick Add Stock"
+                                aria-label="Quick Add Stock"
+                              >
+                                <PlusCircle size={15} />
+                              </button>
+                              <button 
+                                onClick={() => { setEditingItem(item); setShowEditModal(true); }}
+                                className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Edit Item Details"
+                                aria-label="Edit Item Details"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(item.product_id, item.products?.name)}
+                                className="p-1.5 text-admin-text-secondary hover:text-admin-danger hover:bg-admin-urgent-bg/20 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Delete Item"
+                                aria-label="Delete Item"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+              
+            {inventory.length > 0 && (
+              <div className="p-4 border-t border-admin-border bg-admin-bg-surface">
+                <Pagination 
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </Card>
           )}
-        </Card>
+        </>
       )}
 
-      {showModal && (
-        <InventoryFormModal 
-          item={editingItem}
-          onClose={() => { setShowModal(false); setEditingItem(null); }}
-          onSuccess={() => { setShowModal(false); setEditingItem(null); fetchInventory(); }}
+      {/* Two-Step Purchase Intake Modal */}
+      {showPurchaseModal && (
+        <PurchaseIntakeModal
+          onClose={() => setShowPurchaseModal(false)}
+          onSuccess={() => {
+            setShowPurchaseModal(false);
+            fetchInventory();
+            showToast('Purchase order logged and stock incremented successfully!', 'success');
+          }}
         />
       )}
 
+      {/* Edit Item Modal */}
+      {showEditModal && editingItem && (
+        <InventoryFormModal 
+          item={editingItem}
+          onClose={() => { setShowEditModal(false); setEditingItem(null); }}
+          onSuccess={() => { setShowEditModal(false); setEditingItem(null); fetchInventory(); showToast('Product details updated', 'success'); }}
+        />
+      )}
+
+      {/* Quick Add Stock Modal */}
       {showAddStockModal && editingItem && (
         <AddStockModal 
           item={editingItem}

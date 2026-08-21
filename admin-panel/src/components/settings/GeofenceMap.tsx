@@ -53,17 +53,33 @@ function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) =
 }
 
 export default function GeofenceMap({ initialSetting, onSave, radius = 100 }: GeofenceMapProps) {
+  const initialLat = initialSetting ? (initialSetting.center_lat ?? initialSetting.lat ?? null) : null;
+  const initialLng = initialSetting ? (initialSetting.center_lng ?? initialSetting.lng ?? null) : null;
+
   const [position, setPosition] = useState<[number, number] | null>(
-    initialSetting ? [initialSetting.lat, initialSetting.lng] : null
+    initialLat !== null && initialLng !== null ? [initialLat, initialLng] : null
   );
   const [saving, setSaving] = useState(false);
   const [geolocating, setGeolocating] = useState(false);
   const [geoError, setGeoError] = useState('');
 
   // Lat/Lng text input state
-  const [latInput, setLatInput] = useState(initialSetting ? String(initialSetting.lat) : '');
-  const [lngInput, setLngInput] = useState(initialSetting ? String(initialSetting.lng) : '');
+  const [latInput, setLatInput] = useState(initialLat !== null ? String(initialLat) : '');
+  const [lngInput, setLngInput] = useState(initialLng !== null ? String(initialLng) : '');
   const [inputError, setInputError] = useState('');
+
+  // Sync state if initialSetting changes
+  useEffect(() => {
+    if (initialSetting) {
+      const lat = initialSetting.center_lat ?? initialSetting.lat ?? null;
+      const lng = initialSetting.center_lng ?? initialSetting.lng ?? null;
+      if (lat !== null && lng !== null) {
+        setPosition([lat, lng]);
+        setLatInput(Number(lat).toFixed(6));
+        setLngInput(Number(lng).toFixed(6));
+      }
+    }
+  }, [initialSetting]);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,8 +88,8 @@ export default function GeofenceMap({ initialSetting, onSave, radius = 100 }: Ge
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const defaultCenter: [number, number] = initialSetting
-    ? [initialSetting.lat, initialSetting.lng]
+  const defaultCenter: [number, number] = (initialLat !== null && initialLng !== null)
+    ? [initialLat, initialLng]
     : [20.5937, 78.9629]; // India center
 
   // ── Sync lat/lng inputs when user clicks map ──────────────────────────────

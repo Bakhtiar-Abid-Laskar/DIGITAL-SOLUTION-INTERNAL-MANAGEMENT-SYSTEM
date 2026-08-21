@@ -1,31 +1,54 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
-import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from './Card';
+import { Skeleton, DataTableSkeleton, TableSkeleton, CardSkeleton, StatCardSkeleton, SectionCardSkeleton, PageHeaderSkeleton, JobDetailSkeleton } from './Skeleton';
+
+export { Skeleton, DataTableSkeleton, TableSkeleton, CardSkeleton, StatCardSkeleton, SectionCardSkeleton, PageHeaderSkeleton, JobDetailSkeleton };
 
 interface LoadingStateProps {
   message?: string;
   className?: string;
   asCard?: boolean;
+  rows?: number;
 }
 
+/**
+ * LoadingState (Skeleton-Powered)
+ * Replaces circular spinners with a clean shimmering skeleton block.
+ */
 export function LoadingState({ 
-  message = "Loading...", 
+  message, 
   className,
-  asCard = false
+  asCard = false,
+  rows = 4
 }: LoadingStateProps) {
   
   const content = (
-    <div className={cn("flex flex-col items-center justify-center py-12 text-center", className)}>
-      <Loader2 className="w-8 h-8 text-admin-accent animate-spin mb-4" />
-      <p className="text-sm font-medium text-admin-text-secondary">{message}</p>
+    <div className={cn("w-full py-6 px-4 space-y-3 animate-fade-in", className)}>
+      {message && (
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-medium text-admin-text-muted uppercase tracking-wider">{message}</p>
+          <div className="h-1.5 w-16 bg-admin-accent/30 rounded-full overflow-hidden">
+            <div className="h-full w-full bg-admin-accent skeleton-pulse" />
+          </div>
+        </div>
+      )}
+      <div className="space-y-2.5">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4">
+            <Skeleton className="h-4 w-28 rounded" />
+            <Skeleton className="h-4 flex-1 rounded" style={{ opacity: Math.max(0.4, 1 - i * 0.15) }} />
+            <Skeleton className="h-4 w-20 rounded" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 
   if (asCard) {
     return (
-      <Card noAccentLine>
-        <CardContent>
+      <Card noAccentLine className="border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
+        <CardContent className="p-0">
           {content}
         </CardContent>
       </Card>
@@ -34,42 +57,3 @@ export function LoadingState({
 
   return content;
 }
-
-export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
-  return (
-    <div className="w-full border border-admin-border rounded-xl overflow-hidden bg-admin-bg-surface shadow-xs">
-      <div className="bg-admin-bg-subtle p-4 border-b border-admin-border flex gap-4">
-        {Array.from({ length: cols }).map((_, i) => (
-          <div key={i} className="h-4 skeleton-pulse flex-1" />
-        ))}
-      </div>
-      <div className="divide-y divide-admin-border">
-        {Array.from({ length: rows }).map((_, r) => (
-          <div key={r} className="p-4 flex gap-4 items-center">
-            {Array.from({ length: cols }).map((_, c) => (
-              <div key={c} className="h-4 skeleton-pulse flex-1" style={{ opacity: 1 - c * 0.15 }} />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function CardSkeleton({ count = 4 }: { count?: number }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-admin-bg-surface border border-admin-border rounded-xl p-5 shadow-xs flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <div className="h-4 w-24 skeleton-pulse" />
-            <div className="h-8 w-8 rounded-lg skeleton-pulse" />
-          </div>
-          <div className="h-8 w-20 skeleton-pulse mt-1" />
-          <div className="h-3 w-32 skeleton-pulse" />
-        </div>
-      ))}
-    </div>
-  );
-}
-

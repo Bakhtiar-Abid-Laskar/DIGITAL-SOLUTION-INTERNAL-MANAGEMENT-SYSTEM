@@ -35,22 +35,20 @@ export function JobNotesCard({
   };
 
   return (
-    <Card className="flex flex-col h-full">
-      <div className="p-6 border-b border-admin-border">
-        <h3 className="text-lg font-semibold leading-none tracking-tight">Technician Work Notes</h3>
+    <Card className="flex flex-col">
+      <div className="p-4 border-b border-admin-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold leading-none tracking-tight text-admin-text-primary">Technician Work Notes</h3>
+        <Button onClick={handleSaveNotes} isLoading={notesSaving} leftIcon={<Save size={14} />} variant="outline">
+          Save
+        </Button>
       </div>
-      <div className="flex-1 flex flex-col p-6 pt-0 mt-4">
-        <Textarea 
+      <div className="p-4">
+        <Textarea
           value={notes}
           onChange={e => onUpdateNotes(e.target.value)}
-          className="flex-1 min-h-[150px]"
+          className="min-h-[64px] text-sm"
           placeholder="Enter diagnosis, repair steps, or internal remarks..."
         />
-      </div>
-      <div className="bg-admin-bg-subtle border-t border-admin-border p-4 flex justify-end rounded-b-xl">
-        <Button onClick={handleSaveNotes} isLoading={notesSaving} leftIcon={<Save size={16} />}>
-          Save Notes
-        </Button>
       </div>
     </Card>
   );

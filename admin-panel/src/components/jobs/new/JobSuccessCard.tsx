@@ -48,22 +48,6 @@ export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccess
                   await openInvoicePrint({
                     docType: 'receipt',
                     jobId: createdJob.id,
-                    invoiceNo: createdJob.job_code,
-                    date: createdJob.created_at || new Date().toISOString(),
-                    customer: {
-                      name: createdJob.customer_name,
-                      gst: (createdJob as any).customer_gstin || undefined,
-                      phone: createdJob.customer_contact,
-                      address: createdJob.device_type + ' — ' + createdJob.reported_issue,
-                    },
-                    items: [{
-                      description: createdJob.reported_issue || 'Device Repair',
-                      hsn: '',
-                      price: 0,
-                      unit: 1,
-                    }],
-                    taxRatePct: 18,
-                    discount: 0,
                   });
                 } catch (e: any) {
                   showToast(e.message || 'Failed to open receipt', 'error');

@@ -12,17 +12,18 @@ import AdvanceSalaryForm from '@/components/salary/AdvanceSalaryForm';
 import HolidayCalendarForm from '@/components/salary/HolidayCalendarForm';
 import BonusForm from '@/components/salary/BonusForm';
 import LeaveManagement from '@/components/salary/LeaveManagement';
+import PayrollRunPanel from '@/components/salary/PayrollRunPanel';
 import { PageHeader } from '@/components/common/PageHeader';
 import { TableSkeleton, CardSkeleton } from '@/components/common/LoadingState';
 import { EmptyState } from '@/components/common/EmptyState';
-import { Lock, Calculator, Settings, Wallet, Calendar, Gift, ClipboardList } from 'lucide-react';
+import { Lock, Calculator, Settings, Wallet, Calendar, Gift, ClipboardList, PlayCircle } from 'lucide-react';
 import { Tabs } from '@/components/common/Tabs';
 
 export default function SalaryPage() {
   const { role, profile, isLoading } = useAuth();
   const [staff, setStaff] = useState<User[]>([]);
   const [breakdown, setBreakdown] = useState<SalaryBreakdown | null>(null);
-  const [activeTab, setActiveTab] = useState<'calculate' | 'rates' | 'advance' | 'holidays' | 'bonus' | 'leaves'>('calculate');
+  const [activeTab, setActiveTab] = useState<'payroll' | 'calculate' | 'rates' | 'advance' | 'holidays' | 'bonus' | 'leaves'>('payroll');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchStaff = useCallback(async () => {
@@ -32,6 +33,24 @@ export default function SalaryPage() {
 
   useEffect(() => {
     if (role === 'admin') fetchStaff();
+  }, [role, fetchStaff]);
+
+  // Realtime: refresh staff list when users are added/updated
+  useEffect(() => {
+    if (role !== 'admin') return;
+
+    const channel = supabase
+      .channel('salary-users-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        () => { fetchStaff(); }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [role, fetchStaff]);
 
   // --- Role Guard ---
@@ -56,6 +75,7 @@ export default function SalaryPage() {
   }
 
   const tabs = [
+    { id: 'payroll',   label: 'Payroll Run',      icon: <PlayCircle size={16} /> },
     { id: 'calculate', label: 'Calculate Salary', icon: <Calculator size={16} /> },
     { id: 'rates',     label: 'Staff Rates',      icon: <Settings size={16} /> },
     { id: 'advance',   label: 'Advance Salary',   icon: <Wallet size={16} /> },
@@ -83,6 +103,10 @@ export default function SalaryPage() {
 
       {/* Tab Panels */}
       <div className="flex-1 overflow-y-auto">
+        {activeTab === 'payroll' && (
+          <PayrollRunPanel staff={staff} />
+        )}
+
         {activeTab === 'calculate' && (
           <div className="space-y-6">
             <SalaryCalculatorForm staff={staff} onResult={setBreakdown} />

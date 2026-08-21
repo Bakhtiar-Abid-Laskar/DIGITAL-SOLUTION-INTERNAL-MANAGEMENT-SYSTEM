@@ -7,20 +7,23 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
+import { Select } from "@/components/common/Select";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { Tabs } from "@/components/common/Tabs";
 import { Pagination } from "@/components/common/Pagination";
-import { LoadingState, TableSkeleton } from "@/components/common/LoadingState";
+import { DataTableSkeleton } from "@/components/common/Skeleton";
 import { ErrorState } from "@/components/common/ErrorState";
 import { EmptyState } from "@/components/common/EmptyState";
 import ReassignTechnicianModal from "@/components/jobs/ReassignTechnicianModal";
 import { PlusCircle, Search, Download, Briefcase, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { exportJobsToCSV } from "@/utils/csv";
+import { formatDate } from "@/utils/formatDate";
 
 export default function JobsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [technicians, setTechnicians] = useState<User[]>([]);
@@ -37,10 +40,10 @@ export default function JobsPage() {
   const PAGE_SIZE = 20;
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [techFilter, setTechFilter] = useState("All");
-  const [priorityFilter, setPriorityFilter] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "All");
+  const [techFilter, setTechFilter] = useState(() => searchParams.get("technician") || "All");
+  const [priorityFilter, setPriorityFilter] = useState(() => searchParams.get("priority") || "All");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
   const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -86,7 +89,8 @@ export default function JobsPage() {
         job_technicians(technician_id, removed_at, technician:users!job_technicians_technician_id_fkey(name))
       `, { count: 'exact' }).order('created_at', { ascending: false });
 
-      if (statusFilter !== "All") query = query.eq('status', statusFilter);
+      if (statusFilter === "active") query = query.in('status', ['Received', 'In Progress', 'Waiting for Materials']);
+      else if (statusFilter !== "All") query = query.eq('status', statusFilter);
       if (techFilter !== "All") query = query.or(`technician_id.eq.${techFilter},job_technicians.technician_id.eq.${techFilter}`);
       if (priorityFilter !== "All") query = query.eq('priority', priorityFilter);
       if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString());
@@ -97,7 +101,7 @@ export default function JobsPage() {
       }
       
       if (debouncedSearchQuery) {
-        query = query.or(`job_code.ilike.%${debouncedSearchQuery}%,customer_name.ilike.%${debouncedSearchQuery}%,customer_contact.ilike.%${debouncedSearchQuery}%`);
+        query = query.or(`job_code.ilike.%${debouncedSearchQuery}%,customer_name.ilike.%${debouncedSearchQuery}%,customer_contact.ilike.%${debouncedSearchQuery}%,reported_issue.ilike.%${debouncedSearchQuery}%,remarks.ilike.%${debouncedSearchQuery}%,work_notes.ilike.%${debouncedSearchQuery}%`);
       }
 
       const from = (currentPage - 1) * PAGE_SIZE;
@@ -132,6 +136,13 @@ export default function JobsPage() {
       console.error('Failed to fetch technicians', err);
     }
   }, []);
+
+  useEffect(() => {
+    setStatusFilter(searchParams.get("status") || "All");
+    setTechFilter(searchParams.get("technician") || "All");
+    setPriorityFilter(searchParams.get("priority") || "All");
+    setSearchQuery(searchParams.get("search") || "");
+  }, [searchParams]);
 
   useEffect(() => {
     fetchTechnicians();
@@ -183,6 +194,7 @@ export default function JobsPage() {
 
   const tabItems = [
     { id: "All", label: `All (${totalCount})` },
+    { id: "active", label: `Open (${(statusCounts['Received'] || 0) + (statusCounts['In Progress'] || 0) + (statusCounts['Waiting for Materials'] || 0)})` },
     { id: "Received", label: `Received (${statusCounts['Received'] || 0})` },
     { id: "In Progress", label: `In Progress (${statusCounts['In Progress'] || 0})` },
     { id: "Waiting for Materials", label: `Waiting (${statusCounts['Waiting for Materials'] || 0})` },
@@ -195,16 +207,16 @@ export default function JobsPage() {
     <div className="space-y-6 h-full flex flex-col">
       <PageHeader 
         title="Jobs Management" 
-        description="View and manage all repair jobs."
+        description="View and manage all customer repair jobs."
         actions={
-          <>
-            <Button leftIcon={<PlusCircle size={16} />} onClick={() => router.push('/jobs/new')}>
+          <div className="flex items-center gap-3">
+            <Button size="sm" leftIcon={<PlusCircle size={15} />} onClick={() => router.push('/jobs/new')}>
               Create Job
             </Button>
-            <Button variant="outline" leftIcon={<Download size={16} />} onClick={handleExportCSV}>
+            <Button size="sm" variant="outline" leftIcon={<Download size={15} />} onClick={handleExportCSV}>
               Export CSV
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -216,74 +228,79 @@ export default function JobsPage() {
       />
 
       {/* Filter Bar */}
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="w-full md:w-80 relative">
+      <Card noAccentLine className="p-4 flex flex-wrap gap-4 items-center justify-between bg-admin-bg-surface border border-admin-border rounded-lg shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted" size={16} />
-            <Input aria-label="Search code, customer, contact..." 
+            <Input 
               placeholder="Search code, customer, contact..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-10 text-sm"
+              aria-label="Search jobs"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <select
+          <div className="w-44">
+            <Select
               aria-label="Filter by Technician"
               value={techFilter}
               onChange={(e) => setTechFilter(e.target.value)}
-              className="bg-admin-bg-subtle border border-admin-border rounded-xl px-3 py-2 text-sm text-admin-text-primary focus:outline-none focus:border-admin-accent"
+              className="h-10 text-sm"
             >
               <option value="All">All Technicians</option>
               {technicians.map(t => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
-            </select>
+            </Select>
+          </div>
 
-            <select
+          <div className="w-36">
+            <Select
               aria-label="Filter by Priority"
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="bg-admin-bg-subtle border border-admin-border rounded-xl px-3 py-2 text-sm text-admin-text-primary focus:outline-none focus:border-admin-accent"
+              className="h-10 text-sm"
             >
               <option value="All">All Priorities</option>
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
               <option value="High">High</option>
               <option value="Urgent">Urgent</option>
-            </select>
+            </Select>
+          </div>
 
-            <input 
+          <div className="flex items-center gap-2">
+            <Input 
               type="date" 
               aria-label="From Date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-admin-bg-subtle border border-admin-border rounded-xl px-3 py-2 text-sm text-admin-text-primary focus:outline-none focus:border-admin-accent"
+              className="h-10 text-sm w-36"
               title="From Date"
             />
-            
-            <input 
+            <span className="text-xs text-admin-text-muted">to</span>
+            <Input 
               type="date" 
               aria-label="To Date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="bg-admin-bg-subtle border border-admin-border rounded-xl px-3 py-2 text-sm text-admin-text-primary focus:outline-none focus:border-admin-accent"
+              className="h-10 text-sm w-36"
               title="To Date"
             />
-
-            {(searchQuery || techFilter !== 'All' || priorityFilter !== 'All' || dateFrom || dateTo || statusFilter !== 'All') && (
-              <Button variant="ghost" size="sm" onClick={handleClearFilters} leftIcon={<X size={14} />}>
-                Clear
-              </Button>
-            )}
           </div>
+
+          {(searchQuery || techFilter !== 'All' || priorityFilter !== 'All' || dateFrom || dateTo || statusFilter !== 'All') && (
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} leftIcon={<X size={14} />} className="h-10">
+              Clear
+            </Button>
+          )}
         </div>
       </Card>
 
       {/* Main Table Content */}
       {loading ? (
-        <TableSkeleton />
+        <DataTableSkeleton rows={6} cols={8} hasFilterBar={false} />
       ) : error ? (
         <ErrorState message={error} onRetry={fetchJobs} />
       ) : jobs.length === 0 ? (
@@ -294,42 +311,49 @@ export default function JobsPage() {
           action={<Button variant="outline" size="sm" onClick={handleClearFilters}>Clear Filters</Button>}
         />
       ) : (
-        <Card className="flex-1 flex flex-col overflow-hidden">
+        <Card noAccentLine className="flex-1 flex flex-col overflow-hidden border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
           <div className="overflow-x-auto flex-1 table-scroll-shadow">
             <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border sticky top-0 z-10">
+              <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border sticky top-0 z-10 text-xs uppercase font-semibold">
                 <tr>
-                  <th scope="col" className="px-6 py-4 font-medium">Job Code</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Customer</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Device</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Technician</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Status</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Priority</th>
-                  <th scope="col" className="px-6 py-4 font-medium">Created</th>
-                  <th scope="col" className="px-6 py-4 font-medium text-right">Actions</th>
+                  <th scope="col" className="px-6 py-3.5">Job Code</th>
+                  <th scope="col" className="px-6 py-3.5">Customer</th>
+                  <th scope="col" className="px-6 py-3.5">Device</th>
+                  <th scope="col" className="px-6 py-3.5">Technician</th>
+                  <th scope="col" className="px-6 py-3.5">Status</th>
+                  <th scope="col" className="px-6 py-3.5">Priority</th>
+                  <th scope="col" className="px-6 py-3.5">Created</th>
+                  <th scope="col" className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-admin-border">
+              <tbody className="divide-y divide-admin-border bg-admin-bg-surface">
                 {jobs.map((job) => (
                   <tr 
                     key={job.id} 
                     onClick={() => openJobDetail(job)}
                     className="hover:bg-admin-bg-hover transition-colors cursor-pointer"
                   >
-                    <td className="px-6 py-4 font-medium text-admin-text-primary">{job.job_code}</td>
+                    <td className="px-6 py-4 font-mono font-bold text-xs text-admin-text-primary">{job.job_code}</td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-admin-text-primary">{job.customer_name}</div>
+                      <div className="font-semibold text-admin-text-primary">{job.customer_name}</div>
                       <div className="text-xs text-admin-text-muted">{job.customer_contact}</div>
                     </td>
                     <td className="px-6 py-4 text-admin-text-secondary">{job.device_type}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-admin-text-secondary">
-                          {job.technician?.name || 'Unassigned'}
+                        <span className="text-admin-text-secondary text-xs">
+                          {(() => {
+                            const techNames = [
+                              job.technician?.name,
+                              ...(job.job_technicians || []).map((jt: any) => jt.technician?.name)
+                            ].filter(Boolean);
+                            const uniqueNames = Array.from(new Set(techNames));
+                            return uniqueNames.length > 0 ? uniqueNames.join(', ') : 'Unassigned';
+                          })()}
                         </span>
                         <button 
                           onClick={(e) => openReassign(e, job)}
-                          className="text-xs text-admin-accent hover:underline font-medium ml-1"
+                          className="text-xs text-admin-accent hover:underline font-semibold ml-1 cursor-pointer"
                         >
                           Reassign
                         </button>
@@ -342,7 +366,7 @@ export default function JobsPage() {
                       <PriorityBadge priority={job.priority} />
                     </td>
                     <td className="px-6 py-4 text-admin-text-muted text-xs">
-                      {new Date(job.created_at).toLocaleDateString()}
+                      {formatDate(job.created_at)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Button variant="ghost" size="sm" onClick={() => openJobDetail(job)}>

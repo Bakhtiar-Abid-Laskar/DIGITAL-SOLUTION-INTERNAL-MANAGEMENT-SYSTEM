@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Shield, User, Globe, Store, Bell, CheckCircle2 } from "lucide-react";
+import { Shield, User, Globe, Store, Bell, CheckCircle2, Cloud } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/common/Card";
 import { Input } from "@/components/common/Input";
@@ -133,6 +133,70 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-admin-text-secondary mb-1">Environment</p>
                 <div className="px-4 py-2 bg-admin-bg-subtle border border-admin-border rounded text-sm text-admin-text-primary">
                   {process.env.NODE_ENV === 'development' ? 'Development' : 'Production'}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="text-admin-accent" size={20} /> Google Drive Integration
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-admin-text-secondary leading-relaxed">
+                Connect your Google Drive to enable automated database exports, attendance selfies, and invoice storage.
+              </p>
+              <div className="flex items-center justify-between py-2 border-b border-admin-border">
+                <div>
+                  <p className="text-sm font-medium text-admin-text-primary">Service Account Credentials</p>
+                  <p className="text-xs text-admin-text-secondary">Set via Supabase CLI Secrets</p>
+                </div>
+                <Badge variant="neutral" className="flex items-center gap-1">
+                  Read-only
+                </Badge>
+              </div>
+              <div className="pt-2 flex justify-end">
+                <a 
+                  href="https://supabase.com/docs/guides/functions/secrets" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-sm text-admin-accent hover:underline"
+                >
+                  View Setup Instructions &rarr;
+                </a>
+                <h3 className="font-semibold text-admin-text-primary text-sm flex items-center gap-2 mt-4">
+                  <Cloud size={16} className="text-admin-accent" />
+                  Google Drive OAuth Credentials
+                </h3>
+                <p className="text-sm text-admin-text-secondary mt-1 max-w-2xl leading-relaxed">
+                  Authentication is managed via secure <strong>OAuth 2.0 Refresh Tokens</strong> stored as encrypted secrets in the Supabase Edge Functions. 
+                  This allows the backend to utilize your personal Google Drive storage.
+                </p>
+                <div className="mt-4 p-4 border border-admin-border bg-admin-bg-subtle/50 rounded-lg">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-admin-text-muted mb-2">Required Secrets</h4>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2 font-mono text-admin-text-primary">
+                      <div className="w-1.5 h-1.5 rounded-full bg-admin-accent" />
+                      GOOGLE_CLIENT_ID
+                    </li>
+                    <li className="flex items-center gap-2 font-mono text-admin-text-primary">
+                      <div className="w-1.5 h-1.5 rounded-full bg-admin-accent" />
+                      GOOGLE_CLIENT_SECRET
+                    </li>
+                    <li className="flex items-center gap-2 font-mono text-admin-text-primary">
+                      <div className="w-1.5 h-1.5 rounded-full bg-admin-accent" />
+                      GOOGLE_REFRESH_TOKEN
+                    </li>
+                  </ul>
+                  <p className="text-xs text-admin-text-muted mt-3">
+                    These must be set using the Supabase CLI: 
+                    <br /><code className="text-[10px] bg-admin-bg-surface px-1 py-0.5 rounded border border-admin-border mt-1 inline-block">npx supabase secrets set ...</code>
+                  </p>
+                  <p className="text-xs text-admin-text-muted mt-2">
+                    To generate the token, run <code className="text-[10px] bg-admin-bg-surface px-1 py-0.5 rounded border border-admin-border inline-block">node scripts/get-google-refresh-token.mjs</code> locally.
+                  </p>
                 </div>
               </div>
             </CardContent>
