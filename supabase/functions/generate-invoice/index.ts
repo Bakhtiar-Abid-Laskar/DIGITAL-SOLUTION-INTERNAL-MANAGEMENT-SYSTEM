@@ -54,7 +54,7 @@ async function fetchInvoiceData(
 ): Promise<SvgInvoiceInput> {
   const { data: inv, error: invErr } = await supabase
     .from('invoices')
-    .select('*, invoice_items(*)')
+    .select('*, invoice_items(*), customer:customers(address, name, phone, email, gstin)')
     .eq('id', invoiceId)
     .single();
 
@@ -83,11 +83,11 @@ async function fetchInvoiceData(
   return {
     invoiceNo: inv.invoice_code || '—',
     invoiceDate: inv.created_at || new Date().toISOString(),
-    customerName: inv.customer_name || 'Walk-in Customer',
-    customerAddress: '—',   // invoices table has no address field; use phone as fallback
-    customerPhone: inv.customer_contact || '—',
-    customerEmail: inv.customer_email || '',
-    customerGstin: inv.customer_gstin || undefined,
+    customerName: inv.customer_name || inv.customer?.name || 'Walk-in Customer',
+    customerAddress: inv.customer_address || inv.customer?.address || '—',
+    customerPhone: inv.customer_contact || inv.customer?.phone || '—',
+    customerEmail: inv.customer_email || inv.customer?.email || '',
+    customerGstin: inv.customer_gstin || inv.customer?.gstin || undefined,
     items,
     totals,
   };
@@ -99,7 +99,7 @@ async function fetchJobReceiptData(
 ): Promise<SvgInvoiceInput> {
   const { data: job, error: jobErr } = await supabase
     .from('jobs')
-    .select('*, billing_legacy(*), job_materials(*)')
+    .select('*, billing_legacy(*), job_materials(*), customer:customers(address, name, phone, email, gstin), job_type_ref:job_types!jobs_job_type_ref_id_fkey(id, title, customer_charge_amount)')
     .eq('id', jobId)
     .single();
 
@@ -118,20 +118,21 @@ async function fetchJobReceiptData(
     };
   });
 
-  // Add labour as a line item if set
-  if (Number(billing.labour_charge) > 0) {
+  // Add service / job-type charge as a line item if the job has a linked service type
+  const serviceCharge = Number(job.job_type_ref?.customer_charge_amount) || 0;
+  const serviceTitle = job.job_type_ref?.title || null;
+  if (serviceCharge > 0) {
     materials.push({
       sn: materials.length + 1,
-      description: 'Labour / Service Charge',
+      description: serviceTitle || 'Service Charge',
       qty: 1,
-      rate: Number(billing.labour_charge),
-      amount: Number(billing.labour_charge),
+      rate: serviceCharge,
+      amount: serviceCharge,
     });
   }
 
-  const partsTotal = Number(billing.parts_total) || 0;
-  const labourCharge = Number(billing.labour_charge) || 0;
-  const subtotal = partsTotal + labourCharge;
+  const partsTotal = (job.job_materials || []).reduce((s: number, m: any) => s + (Number(m.quantity) || 1) * (Number(m.unit_cost) || 0), 0);
+  const subtotal = partsTotal + serviceCharge;
   const taxPct = Number(billing.tax_percent) || 0;
   const tax = subtotal * taxPct / 100;
   const discount = Number(billing.discount) || 0;
@@ -140,13 +141,13 @@ async function fetchJobReceiptData(
   return {
     invoiceNo: job.job_code || jobId.slice(0, 8).toUpperCase(),
     invoiceDate: job.created_at || new Date().toISOString(),
-    customerName: job.customer_name || 'Walk-in Customer',
-    customerAddress: job.customer_address || '—',
-    customerPhone: job.customer_contact || '—',
-    customerEmail: job.customer_email || '',
-    customerGstin: undefined,
+    customerName: job.customer_name || job.customer?.name || 'Walk-in Customer',
+    customerAddress: job.customer_address || job.customer?.address || '—',
+    customerPhone: job.customer_contact || job.customer?.phone || '—',
+    customerEmail: job.customer_email || job.customer?.email || '',
+    customerGstin: job.customer_gstin || job.customer?.gstin || undefined,
     items: materials.length > 0 ? materials : [{
-      sn: 1, description: 'Service / Repair', qty: 1,
+      sn: 1, description: serviceTitle || 'Service / Repair', qty: 1,
       rate: subtotal, amount: subtotal,
     }],
     totals: { subtotal, discount, tax, total },
@@ -159,7 +160,7 @@ async function fetchSaleData(
 ): Promise<SvgInvoiceInput> {
   const { data: sale, error: saleErr } = await supabase
     .from('sales')
-    .select('*, sale_items(*)')
+    .select('*, sale_items(*), customer:customers(address, name, phone, email, gstin)')
     .eq('id', saleId)
     .single();
 
@@ -186,11 +187,11 @@ async function fetchSaleData(
   return {
     invoiceNo: sale.invoice_number || sale.sale_code || '—',
     invoiceDate: sale.created_at || new Date().toISOString(),
-    customerName: sale.customer_name || 'Walk-in Customer',
-    customerAddress: '—',
-    customerPhone: sale.customer_contact || '—',
-    customerEmail: '',
-    customerGstin: sale.customer_gstin || undefined,
+    customerName: sale.customer_name || sale.customer?.name || 'Walk-in Customer',
+    customerAddress: sale.customer_address || sale.customer?.address || '—',
+    customerPhone: sale.customer_contact || sale.customer?.phone || '—',
+    customerEmail: sale.customer_email || sale.customer?.email || '',
+    customerGstin: sale.customer_gstin || sale.customer?.gstin || undefined,
     items,
     totals: { subtotal, discount, tax, total },
   };
@@ -208,8 +209,10 @@ async function uploadToDrive(
 
   const invoiceDateObj = new Date(invoiceDate);
   const year = String(invoiceDateObj.getFullYear());
-  const month = monthName(invoiceDateObj.getMonth() + 1);
-  const folderId = await ensureFolderPath(token, ['Invoices', year, month]);
+  const month = String(invoiceDateObj.getMonth() + 1).padStart(2, '0');
+  
+  const folderName = docType === 'sale' ? 'SALE BILL' : 'JOBS BILL';
+  const folderId = await ensureFolderPath(token, [folderName, year, month]);
 
   const safeRef = sanitizeFilenameSegment(refCode);
   const filename = `${docType}-${safeRef}.html`;
@@ -236,21 +239,17 @@ async function persistDriveLink(
   driveLink: string,
   fileId: string
 ): Promise<void> {
-  if (docType === 'final' && invoiceId) {
-    // invoices table does not have a drive_link column yet — write to billing_legacy if jobId exists
-    if (jobId) {
-      await supabase
-        .from('billing_legacy')
-        .update({ drive_link: driveLink, drive_file_id: fileId })
-        .eq('job_id', jobId);
-    }
-  } else if (docType === 'receipt' && jobId) {
+  if ((docType === 'final' || docType === 'receipt') && invoiceId) {
     await supabase
-      .from('billing_legacy')
+      .from('invoices')
       .update({ drive_link: driveLink, drive_file_id: fileId })
-      .eq('job_id', jobId);
+      .eq('id', invoiceId);
+  } else if (docType === 'sale' && saleId) {
+    await supabase
+      .from('sales')
+      .update({ drive_link: driveLink, drive_file_id: fileId })
+      .eq('id', saleId);
   }
-  // sales table: no drive_link column — silently skip (can be added later)
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -354,15 +353,20 @@ Deno.serve(async (req: Request) => {
       });
     } catch (driveErr: any) {
       console.error('[generate-invoice] Drive upload failed (non-fatal):', driveErr.message);
-      // Queue for retry if billing_legacy job is involved
-      if (body.jobId) {
+      // Queue for retry
+      const refId = body.invoiceId || body.saleId || body.jobId;
+      const refTable = body.saleId ? 'sales' : 'invoices';
+      
+      if (refId) {
         try {
           await supabase.from('pending_uploads').insert({
             type: body.docType,
-            reference_id: body.jobId,
-            reference_table: 'billing_legacy',
+            reference_id: refId,
+            reference_table: refTable,
             payload_json: {
               jobId: body.jobId,
+              invoiceId: body.invoiceId,
+              saleId: body.saleId,
               docType: body.docType,
               filename: `${body.docType}-${sanitizeFilenameSegment(invoiceInput.invoiceNo)}.html`,
               htmlContent: html,

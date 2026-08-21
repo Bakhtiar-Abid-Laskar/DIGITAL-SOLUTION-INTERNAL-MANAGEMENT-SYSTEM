@@ -62,25 +62,38 @@ serve(async (req: Request) => {
       })
     }
 
-    // Fetch the billing and job details
-    const { data: billing, error: billingError } = await supabase
-      .from('billing')
+    // Fetch the invoice and job details
+    let { data: invoice, error: invoiceError } = await supabase
+      .from('invoices')
       .select('*')
       .eq('job_id', jobId)
-      .single()
+      .maybeSingle()
 
-    if (billingError || !billing) {
-      throw new Error(`Failed to fetch billing for job ${jobId}`)
+    if (!invoice) {
+      const { data: legacyBilling } = await supabase
+        .from('billing_legacy')
+        .select('*')
+        .eq('job_id', jobId)
+        .maybeSingle()
+      if (legacyBilling) {
+        invoice = {
+          parts_total: legacyBilling.parts_total,
+          labour_charge: legacyBilling.labour_charge,
+          total_tax: (legacyBilling.grand_total || 0) - (legacyBilling.parts_total || 0) - (legacyBilling.labour_charge || 0),
+          discount: legacyBilling.discount,
+          grand_total: legacyBilling.grand_total,
+        }
+      }
     }
 
     const { data: job, error: jobError } = await supabase
       .from('jobs')
-      .select('job_code, customer_name, customer_email, device_type')
+      .select('job_code, customer_name, customer_email, device_type_id')
       .eq('id', jobId)
       .single()
       
     if (jobError) {
-      throw new Error(`Failed to fetch job for billing ${billing.id}: ${jobError.message}`)
+      throw new Error(`Failed to fetch job: ${jobError.message}`)
     }
 
     const targetEmail = payload.customer_email || job.customer_email;
@@ -107,13 +120,12 @@ serve(async (req: Request) => {
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2>RepairShop Invoice</h2>
         <p>Hi ${job.customer_name},</p>
-        <p>Thank you for choosing RepairShop for your ${job.device_type} repair (Job: <strong>${job.job_code}</strong>).</p>
+        <p>Thank you for choosing RepairShop for your ${job.device_type_id || 'device'} repair (Job: <strong>${job.job_code}</strong>).</p>
         <hr style="border-top: 1px solid #ccc; margin: 20px 0;" />
-        <p><strong>Parts Total:</strong> ₹${billing.parts_total}</p>
-        <p><strong>Labour Charge:</strong> ₹${billing.labour_charge}</p>
-        <p><strong>Tax:</strong> ${billing.tax_percent}%</p>
-        <p><strong>Discount:</strong> ₹${billing.discount}</p>
-        <h3 style="color: #2E9E52;"><strong>Grand Total:</strong> ₹${billing.grand_total}</h3>
+        <p><strong>Subtotal:</strong> ₹${invoice?.subtotal || invoice?.parts_total || 0}</p>
+        <p><strong>Tax:</strong> ₹${invoice?.total_tax || 0}</p>
+        <p><strong>Discount:</strong> ₹${invoice?.discount || 0}</p>
+        <h3 style="color: #2E9E52;"><strong>Grand Total:</strong> ₹${invoice?.grand_total || 0}</h3>
         <hr style="border-top: 1px solid #ccc; margin: 20px 0;" />
         <p>If you have any questions, please reply to this email.</p>
         <p>Best regards,<br/>RepairShop Team</p>

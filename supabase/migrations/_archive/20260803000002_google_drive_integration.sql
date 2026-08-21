@@ -111,7 +111,7 @@ create policy "No direct access to pending_uploads"
 -- ============================================================================
 
 -- Latest export result per type (used by admin panel status widgets)
-create or replace view public.export_jobs_latest as
+create or replace view public.export_jobs_latest with (security_invoker = true) as
   select distinct on (type)
     id, type, status, target_month, drive_file_id, drive_link,
     error_message, started_at, completed_at
@@ -119,7 +119,7 @@ create or replace view public.export_jobs_latest as
   order by type, started_at desc;
 
 -- Count of uploads stuck after 3 failed attempts (admin panel warning banner)
-create or replace view public.stuck_uploads as
+create or replace view public.stuck_uploads with (security_invoker = true) as
   select count(*) as count
   from public.pending_uploads
   where attempts >= 3;

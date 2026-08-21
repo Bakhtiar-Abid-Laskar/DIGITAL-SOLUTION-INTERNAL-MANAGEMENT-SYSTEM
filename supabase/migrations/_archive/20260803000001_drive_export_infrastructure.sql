@@ -118,7 +118,7 @@ create policy "No direct access to pending_uploads"
 -- Helpful view for admin panel: latest export per type
 -- ============================================================================
 
-create or replace view public.export_jobs_latest as
+create or replace view public.export_jobs_latest with (security_invoker = true) as
   select distinct on (type)
     id, type, status, target_month, drive_file_id, drive_link,
     error_message, started_at, completed_at

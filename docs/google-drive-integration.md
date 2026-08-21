@@ -1,170 +1,83 @@
-# Google Drive Integration — Team Reference
+# Google Drive Integration
 
-## Overview
+This app integrates with Google Drive to store large backup reports, generated attendance reports, and photos.
 
-RepairShop automatically exports data and media to a dedicated Google Drive account using OAuth 2.0. No service account is involved — this uses a personal Gmail account's 15 GB free quota.
+Because we are uploading to a personal, free Google Drive account, **we must use the OAuth 2.0 (Refresh Token) method**. Google strictly limits "Service Accounts" to 0 bytes of storage on free personal accounts, preventing them from uploading files directly.
 
----
+By using OAuth 2.0, the backend authorizes itself as *you*, utilizing your personal 15GB of free storage.
 
-## Drive Folder Structure
+## Step 1: Create Google Cloud Credentials
 
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project or select an existing one.
+3. In the search bar, search for **APIs & Services**.
+4. Click **Enable APIs and Services**, search for **Google Drive API**, and click **Enable**.
+5. On the left sidebar, go to **OAuth consent screen**.
+   - Choose **External** (if you don't have a Workspace account).
+   - Fill in the required fields (App name, support email, developer contact).
+   - Click **Save and Continue** through the Scopes page (no need to add scopes here).
+   - Add your own email under **Test users** and click **Save**.
+6. On the left sidebar, go to **Credentials**.
+7. Click **+ CREATE CREDENTIALS** > **OAuth client ID**.
+8. Select **Web application**.
+9. Under **Authorized redirect URIs**, add exactly: `http://localhost:3000/oauth2callback`.
+10. Click **Create**.
+11. You will be shown a **Client ID** and **Client Secret**. Keep this window open or copy them down.
+
+## Step 2: Generate the Refresh Token
+
+To allow the Edge Functions to upload in the background, we need a permanent "Refresh Token". I have created a script to make this extremely easy.
+
+1. Open your terminal in the `RepairShop` project root folder.
+2. Run the script:
+   ```bash
+   node scripts/get-google-refresh-token.mjs
+   ```
+3. Paste your **Client ID** and press Enter.
+4. Paste your **Client Secret** and press Enter.
+5. Your browser will automatically open to a Google Login page.
+6. Log in with your personal Google account (the same one you added as a Test User). 
+   *(Note: You may see a warning saying "Google hasn't verified this app". Click **Advanced** and then **Go to [App Name] (unsafe)**)*.
+7. Click **Continue** to grant the app access to your Google Drive.
+8. The browser will say "Authorization successful", and your terminal will print out the Supabase commands to run!
+
+## Step 3: Set Secrets in Supabase
+
+Run the commands output by the script in your terminal to securely store the tokens in Supabase:
+
+```bash
+npx supabase secrets set GOOGLE_CLIENT_ID="your_client_id"
+npx supabase secrets set GOOGLE_CLIENT_SECRET="your_client_secret"
+npx supabase secrets set GOOGLE_REFRESH_TOKEN="your_refresh_token"
 ```
-My Drive/
-├── Data Export/
-│   └── 2026/
-│       └── August/
-│           └── August 2026 digital solution backup.xlsx
-├── Attendance Report/
-│   └── 2026/
-│       └── August/
-│           ├── rahul-kumar-082026.xlsx
-│           └── arshad-ali-082026.xlsx
-├── Attendance Selfies/
-│   └── 2026/
-│       └── August/
-│           └── StaffName/
-│               ├── staffname-20260801-checkin.webp
-│               └── staffname-20260801-checkout.webp
-├── Onsite Photos/
-│   └── 2026/
-│       └── August/
-│           └── RS-2026-0042/
-│               └── technician-name-20260803-143022.webp
-├── Invoices/
-│   └── 2026/
-│       └── August/
-│           └── INV-001-customer-name.pdf
-└── Receipts/
-    └── 2026/
-        └── August/
-            └── RS-2026-0042-customer-name.pdf
+
+Then, deploy your functions so they pick up the new variables:
+
+```bash
+npx supabase functions deploy
 ```
 
 ---
 
-## Scheduled Exports (Automatic)
+## Folder Structure
 
-| Job | Schedule | What it does |
-|---|---|---|
-| `monthly-drive-export` | 1st of month, 20:00 UTC (1:30 AM IST) | Exports Jobs, Sales, Stock Snapshot xlsx |
-| `monthly-attendance-export` | 1st of month, 20:30 UTC (2:00 AM IST) | Exports per-staff attendance xlsx files |
-| `retry-pending-uploads` | Every 15 minutes | Retries failed Drive uploads from queue |
+Once configured, the Edge Functions will automatically structure your Drive like this:
 
-Verify schedules: `select jobname, schedule, active from cron.job;`
+- **REPORTS / YYYY / MM**
+  - `Monthly_Data_MMYY.xlsx` (Jobs, Sales, Inventory)
+- **ATTENDANCE REPORTS / YYYY / MM**
+  - `StaffName_MMYY.xlsx`
+- **STAFF_ATTENDCE_IMG / YYYY / MM**
+  - `StaffName_DDMMYY.jpg`
+- **JOBS BILL / YYYY / MM**
+  - `Invoice_JobID.pdf`
+- **SALE BILL / YYYY / MM**
+  - `Invoice_SaleID.pdf`
+- **ONSITE_VISIT_IMG / YYYY / MM**
+  - `JobID_A.jpg` (Arrival)
+  - `JobID_D.jpg` (Departure)
+  - `JobID_DEVICE_IMG.jpg` (Device)
 
----
+## Manual Removal
 
-## Manual Triggers (Admin Panel)
-
-Both export functions can be triggered manually from the admin panel's Settings or Reports page:
-- **Export Monthly Data** — generates the xlsx for any selected month
-- **Export Attendance Reports** — generates per-staff xlsx files for any selected month
-
-Both buttons show a loading state and return a clickable Drive link on success.
-
----
-
-## Edge Functions
-
-| Function | Purpose |
-|---|---|
-| `export-monthly-data` | Monthly Jobs/Sales/Stock xlsx |
-| `export-attendance-reports` | Per-staff attendance xlsx |
-| `upload-attendance-selfie` | Selfie WebP → Drive + links attendance row |
-| `upload-job-photo` | Onsite WebP → Drive + links onsite_visits row |
-| `process-pending-uploads` | Retry worker for failed Drive uploads |
-| `test-drive-auth` | One-time auth verification (remove after setup) |
-
----
-
-## Secrets Required
-
-Set via `npx supabase secrets set <KEY>=<VALUE>`:
-
-| Secret | Description |
-|---|---|
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID from Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret |
-| `GOOGLE_REFRESH_TOKEN` | Long-lived refresh token (never expires unless revoked) |
-
-**Never commit these values.** They live only in Supabase Edge Function secrets.
-
----
-
-## One-Time Setup Steps
-
-### If you need to regenerate the refresh token (e.g. token was revoked):
-
-1. Ensure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set as environment variables locally.
-2. Run the token generation script:
-   ```bash
-   GOOGLE_CLIENT_ID=<id> GOOGLE_CLIENT_SECRET=<secret> node scripts/get-google-refresh-token.mjs
-   ```
-3. Open the printed URL in the browser as the Drive owner's Gmail account.
-4. Copy the printed refresh token.
-5. Update the Supabase secret:
-   ```bash
-   npx supabase secrets set GOOGLE_REFRESH_TOKEN=<new-token>
-   ```
-6. Redeploy affected Edge Functions:
-   ```bash
-   npx supabase functions deploy export-monthly-data
-   npx supabase functions deploy export-attendance-reports
-   npx supabase functions deploy upload-attendance-selfie
-   npx supabase functions deploy upload-job-photo
-   npx supabase functions deploy process-pending-uploads
-   ```
-7. Verify with `test-drive-auth` Edge Function.
-
----
-
-## pg_cron Migrations — Placeholder Substitution Required
-
-**Before applying migrations `20260803000002` and `20260803000005`**, replace these placeholders:
-
-| Placeholder | Replace with |
-|---|---|
-| `<project-ref>` | Your Supabase project reference (Settings → General) |
-| `<anon-key>` | Your Supabase anon key (Settings → API — it's the public key, safe to use here) |
-
-The service role key is **never** placed in pg_cron SQL.
-
----
-
-## Draining Stuck Uploads
-
-If the admin panel shows stuck uploads (failed after 3 attempts):
-
-1. Check `pending_uploads` table for `attempts >= 3` rows.
-2. Review the `last_error` column to understand why the upload failed.
-3. If the issue is resolved (e.g. Drive auth was revoked and has been fixed):
-   - Reset stuck rows: `UPDATE pending_uploads SET attempts = 0 WHERE attempts >= 3;`
-   - The retry worker will pick them up within 15 minutes.
-4. If the original image is gone from Supabase Storage, the row must be manually removed.
-
----
-
-## Drive Quota Monitoring
-
-The export system uses the **personal Gmail account's 15 GB free quota**. Monitor usage:
-- Go to [drive.google.com/drive/quota](https://drive.google.com/drive/quota)
-- Or: Google Account → Manage Storage
-
-**Estimated storage per month:**
-- Monthly xlsx: ~500 KB – 2 MB
-- Attendance xlsx (per staff): ~50–200 KB each
-- Selfie WebP (per checkin/checkout): ~100–300 KB each (after 1280px / 0.78 quality compression)
-- Invoice PDF: ~50–200 KB each
-
-For a team of 5 staff, estimated monthly usage: **~30–80 MB/month**.
-Free 15 GB = roughly **2–4 years** before needing Google One paid storage.
-
----
-
-## Supabase Edge Function Limits (as of August 2026)
-
-> Update this section if Supabase changes its limits.
-
-- Free tier: 500,000 invocations/month, 400 MB memory per invocation, wall-clock time varies.
-- The export functions paginate data at 500 rows per query to stay within memory/time limits.
-- If the monthly data export times out on very large datasets, reduce `PAGE_SIZE` in `exportWorkbook.ts`.
+Because photos are backed up to Drive *instead* of Supabase Storage, deleting a job or attendance record from the Supabase Database will **not** automatically delete the photo from Google Drive. To save space, you must delete old photos manually from Drive.

@@ -81,7 +81,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    if (body.year && body.month) {
+    if (typeof body.month === 'string' && body.month.includes('-')) {
+      const [y, m] = body.month.split('-');
+      year = Number(y);
+      month = Number(m);
+      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) throw new Error('Invalid month format. Expected YYYY-MM');
+    } else if (body.year && body.month) {
       year = Number(body.year);
       month = Number(body.month);
       if (isNaN(year) || isNaN(month) || month < 1 || month > 12) throw new Error('Invalid year/month');
@@ -99,7 +104,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const mName = monthName(month);
-  const mmYYYY = `${String(month).padStart(2, '0')}${year}`;
+  const mmYYYY = `${String(month).padStart(2, '0')}${String(year).slice(-2)}`;
 
   // -------------------------------------------------------------------------
   // Fetch all active staff
@@ -122,7 +127,7 @@ Deno.serve(async (req: Request) => {
   let folderId: string;
   try {
     const token = await getAccessToken();
-    folderId = await ensureFolderPath(token, ['Attendance Report', String(year), mName]);
+    folderId = await ensureFolderPath(token, ['ATTENDANCE REPORTS', String(year), String(month).padStart(2, '0')]);
   } catch (e: any) {
     return new Response(JSON.stringify({ error: `Drive folder setup failed: ${e.message}` }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -146,7 +151,7 @@ Deno.serve(async (req: Request) => {
 
   for (const staff of staffList) {
     const safeName = sanitizeFilenameSegment(staff.name); // e.g. 'rahul-kumar'
-    const filename = `${safeName}-${mmYYYY}.xlsx`;         // e.g. 'rahul-kumar-082026.xlsx'
+    const filename = `${safeName}_${mmYYYY}.xlsx`;         // e.g. 'rahul-kumar_0826.xlsx'
 
     try {
       const xlsxBytes = await buildStaffAttendanceWorkbook(

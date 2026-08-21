@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Admin panel build
+admin-panel/
+admin-panel/.next/
+admin-panel/node_modules/
+
+# Mobile builds
+RepairShopApp/android/
+RepairShopApp/ios/
+RepairShopApp/.expo/
+RepairShopApp/dist/
+RepairShopApp/node_modules/
+RepairShopApp/.maestro/
+RepairShopApp/.claude/
+
+# Caches & large archives
+.expo/
+dist/
+build/
+**/build/
+**/.gradle/
+**/.cxx/
+**/intermediates/
+*.zip
+*.apk
+*.exe
+*.pdf
+*.log
+*.sql
+*.txt
+coverage/
+.git/

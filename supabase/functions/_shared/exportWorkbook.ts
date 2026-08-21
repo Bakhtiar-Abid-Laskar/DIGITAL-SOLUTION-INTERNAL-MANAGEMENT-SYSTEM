@@ -145,7 +145,7 @@ export async function buildMonthlyWorkbook(
         customer_name,
         customer_contact,
         customer_email,
-        device_type,
+        device_type_id,
         reported_issue,
         remarks,
         work_notes,
@@ -156,7 +156,7 @@ export async function buildMonthlyWorkbook(
         completed_at,
         receptionist:receptionist_id(name),
         technician:technician_id(name),
-        billing(parts_total, labour_charge, tax_percent, discount, grand_total, payment_status, payment_method)
+        invoices(subtotal, total_tax, discount, grand_total, status, payment_method)
       `)
       .gte('created_at', startIST)
       .lte('created_at', endIST)
@@ -165,30 +165,32 @@ export async function buildMonthlyWorkbook(
   );
 
   const jobsSheet = XLSX.utils.json_to_sheet(
-    jobRows.map(j => ({
-      'Job Code': j.job_code,
-      'Customer Name': j.customer_name,
-      'Contact': j.customer_contact,
-      'Email': j.customer_email ?? '',
-      'Device': j.device_type,
-      'Issue': j.reported_issue,
-      'Remarks': j.remarks ?? '',
-      'Work Notes': j.work_notes ?? '',
-      'Type': j.job_type,
-      'Priority': j.priority,
-      'Status': j.status,
-      'Receptionist': j.receptionist?.name ?? '',
-      'Technician': j.technician?.name ?? '',
-      'Created At': fmt(j.created_at),
-      'Completed At': fmt(j.completed_at),
-      'Parts Total': currency(j.billing?.parts_total),
-      'Labour': currency(j.billing?.labour_charge),
-      'Tax %': j.billing?.tax_percent ?? 0,
-      'Discount': currency(j.billing?.discount),
-      'Grand Total': currency(j.billing?.grand_total),
-      'Payment Method': j.billing?.payment_method ?? '',
-      'Payment Status': j.billing?.payment_status ?? '',
-    }))
+    jobRows.map(j => {
+      const inv = j.invoices && j.invoices.length > 0 ? j.invoices[0] : null;
+      return {
+        'Job Code': j.job_code,
+        'Customer Name': j.customer_name,
+        'Contact': j.customer_contact,
+        'Email': j.customer_email ?? '',
+        'Device': j.device_type_id ?? '',
+        'Issue': j.reported_issue,
+        'Remarks': j.remarks ?? '',
+        'Work Notes': j.work_notes ?? '',
+        'Type': j.job_type,
+        'Priority': j.priority,
+        'Status': j.status,
+        'Receptionist': j.receptionist?.name ?? '',
+        'Technician': j.technician?.name ?? '',
+        'Created At': fmt(j.created_at),
+        'Completed At': fmt(j.completed_at),
+        'Subtotal': currency(inv?.subtotal),
+        'Total Tax': currency(inv?.total_tax),
+        'Discount': currency(inv?.discount),
+        'Grand Total': currency(inv?.grand_total),
+        'Payment Method': inv?.payment_method ?? '',
+        'Payment Status': inv?.status ?? '',
+      };
+    })
   );
 
   // -----------------------------------------------------------------------
@@ -208,7 +210,7 @@ export async function buildMonthlyWorkbook(
         payment_mode,
         created_at,
         created_by:created_by(name),
-        sale_items(item_name, quantity, unit_price, total_price)
+        sale_items(item_name, quantity, unit_price)
       `)
       .gte('created_at', startIST)
       .lte('created_at', endIST)
@@ -243,7 +245,7 @@ export async function buildMonthlyWorkbook(
   const stockRows = await paginateQuery<any>((from, to) =>
     supabase
       .from('inventory')
-      .select('item_name, unit, quantity, low_stock_threshold, cost_price, selling_price, last_updated')
+      .select('item_name, unit, quantity, low_stock_threshold, cost_price, selling_rate, last_updated')
       .order('item_name', { ascending: true })
       .range(from, to)
   );
@@ -255,7 +257,7 @@ export async function buildMonthlyWorkbook(
       'Qty on Hand': i.quantity,
       'Reorder Threshold': i.low_stock_threshold,
       'Cost Price': currency(i.cost_price),
-      'Selling Price': currency(i.selling_price),
+      'Selling Price': currency(i.selling_rate),
       'Last Updated': fmtDate(i.last_updated),
     }))
   );

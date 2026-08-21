@@ -158,13 +158,13 @@ Deno.serve(async (req: Request) => {
         if (!jobId) throw new Error('Missing jobId in invoice pending_upload payload');
 
         if (driveAlreadyUploaded && existingDriveLink) {
-          // Sub-case A: Drive file already exists — just write the link to billing
+          // Sub-case A: Drive file already exists — just write the link to invoices
           const { error: updateError } = await supabaseAdmin
-            .from('billing')
+            .from('invoices')
             .update({ drive_link: existingDriveLink, drive_file_id: driveFileId })
             .eq('job_id', jobId);
 
-          if (updateError) throw new Error(`billing update error: ${updateError.message}`);
+          if (updateError) throw new Error(`invoices update error: ${updateError.message}`);
           driveLink = existingDriveLink;
           linkColumn = 'drive_link';
 
@@ -189,13 +189,12 @@ Deno.serve(async (req: Request) => {
           driveLink = webViewLink;
           linkColumn = 'drive_link';
 
-          // Write drive link to billing row
           const { error: updateError } = await supabaseAdmin
-            .from('billing')
+            .from('invoices')
             .update({ drive_link: webViewLink, drive_file_id: fileId })
             .eq('job_id', jobId);
 
-          if (updateError) throw new Error(`billing update error: ${updateError.message}`);
+          if (updateError) throw new Error(`invoices update error: ${updateError.message}`);
         }
       }
 

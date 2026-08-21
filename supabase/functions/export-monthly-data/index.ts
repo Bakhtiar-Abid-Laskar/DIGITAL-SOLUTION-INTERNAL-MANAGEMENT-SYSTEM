@@ -78,7 +78,14 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    if (body.year && body.month) {
+    if (typeof body.month === 'string' && body.month.includes('-')) {
+      const [y, m] = body.month.split('-');
+      year = Number(y);
+      month = Number(m);
+      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+        throw new Error('Invalid month format. Expected YYYY-MM');
+      }
+    } else if (body.year && body.month) {
       year = Number(body.year);
       month = Number(body.month);
       if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -99,8 +106,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
-  const mName = monthName(month); // e.g. 'August'
-  const filename = `${mName} ${year} digital solution backup.xlsx`;
+  const mm = String(month).padStart(2, '0');
+  const yy = String(year).slice(-2);
+  const filename = `Monthly_Data_${mm}${yy}.xlsx`;
 
   // -------------------------------------------------------------------------
   // Log the export attempt
@@ -149,7 +157,7 @@ Deno.serve(async (req: Request) => {
   // -------------------------------------------------------------------------
   try {
     const token = await getAccessToken();
-    const folderId = await ensureFolderPath(token, ['Data Export', String(year), mName]);
+    const folderId = await ensureFolderPath(token, ['REPORTS', String(year), String(month).padStart(2, '0')]);
     const { fileId, webViewLink } = await uploadFileToDrive(token, {
       name: filename,
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
