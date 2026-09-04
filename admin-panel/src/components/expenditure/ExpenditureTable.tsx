@@ -12,12 +12,15 @@ const TYPE_LABELS: Record<PaymentType, string> = {
   materials_purchase: 'Materials Purchase',
   daily_expenditure: 'Daily Expenditure',
   office_development: 'Office Development',
+  staff_salary: 'Staff Salary',
 };
 
 const TYPE_BADGE_CLASSES: Record<string, string> = {
+  advance_salary: 'bg-admin-accent-dim text-admin-accent border-admin-accent/20',
   materials_purchase: 'bg-admin-progress-bg text-admin-progress-fg border-admin-progress-fg/20',
   daily_expenditure: 'bg-admin-urgent-bg text-admin-urgent-fg border-admin-urgent-fg/20',
   office_development: 'bg-admin-accent-dim text-admin-accent border-admin-accent/20',
+  staff_salary: 'bg-admin-success-bg text-admin-success-fg border-admin-success-fg/20',
 };
 
 interface Props {

@@ -1,4 +1,5 @@
-import React from 'react';
+"use client";
+import React, { useState } from 'react';
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
@@ -8,6 +9,7 @@ import { formatCurrency } from '@repairshop/shared';
 import { openInvoicePrint } from '@/lib/invoiceClient';
 import { useToast } from "@/components/common/ToastProvider";
 import { CreateJobFormState } from '@/app/(admin)/jobs/new/reducer';
+import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
 
 interface JobSuccessCardProps {
   createdJob: Job;
@@ -18,6 +20,26 @@ interface JobSuccessCardProps {
 export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccessCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [printState, setPrintState] = useState<PrintProgressState | null>(null);
+
+  const handlePrintReceipt = async () => {
+    if (!createdJob) return;
+    setPrintState({ isOpen: true, percent: 15, message: 'Preparing customer intake receipt...' });
+    try {
+      await openInvoicePrint(
+        {
+          docType: 'receipt',
+          jobId: createdJob.id,
+        },
+        (percent, message) => setPrintState({ isOpen: true, percent, message })
+      );
+      setPrintState({ isOpen: true, percent: 100, message: 'Print dialog opened', isComplete: true });
+      setTimeout(() => setPrintState(null), 1200);
+    } catch (e: any) {
+      setPrintState(null);
+      showToast(e.message || 'Failed to open receipt', 'error');
+    }
+  };
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto mt-10">
@@ -42,17 +64,7 @@ export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccess
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
             <Button
-              onClick={async () => {
-                if (!createdJob) return;
-                try {
-                  await openInvoicePrint({
-                    docType: 'receipt',
-                    jobId: createdJob.id,
-                  });
-                } catch (e: any) {
-                  showToast(e.message || 'Failed to open receipt', 'error');
-                }
-              }}
+              onClick={handlePrintReceipt}
               leftIcon={<Printer size={18} />}
             >
               Print Receipt
@@ -66,6 +78,9 @@ export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccess
           </div>
         </div>
       </Card>
+
+      {/* Modern Print Progress Modal */}
+      <PrintProgressModal state={printState} onClose={() => setPrintState(null)} />
     </div>
   );
 }

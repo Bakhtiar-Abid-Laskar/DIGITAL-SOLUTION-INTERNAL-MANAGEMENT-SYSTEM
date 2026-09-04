@@ -173,9 +173,11 @@ export default function MaterialsPage() {
         };
       });
 
-      // Prefer dedicated material_allotments; if empty, use job_materials
-      const combined = formattedAllotments.length > 0 ? formattedAllotments : formattedJobMats;
-      setAllotments(combined);
+      // Combine both dedicated holding allotments and active job materials without discarding either
+      const combinedMaterials = [...formattedAllotments, ...formattedJobMats].sort(
+        (a, b) => new Date(b.allotted_at).getTime() - new Date(a.allotted_at).getTime()
+      );
+      setAllotments(combinedMaterials);
     } catch (err: any) {
       console.error("Error fetching materials:", err.message);
       setError(err.message || "Failed to load materials data.");

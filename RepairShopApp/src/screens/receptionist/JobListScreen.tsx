@@ -28,16 +28,18 @@ export default function JobListScreen() {
     'In Progress': 0,
     'Waiting for Materials': 0,
     Completed: 0,
+    Urgent: 0,
   });
 
   const fetchTabCounts = async () => {
     try {
-      const [allRes, recRes, progRes, waitRes, compRes] = await Promise.all([
+      const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact', head: true }),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
       ]);
 
       setCounts({
@@ -46,6 +48,7 @@ export default function JobListScreen() {
         'In Progress': progRes.count || 0,
         'Waiting for Materials': waitRes.count || 0,
         Completed: compRes.count || 0,
+        Urgent: urgRes.count || 0,
       });
     } catch (err) {
       console.error('Error fetching status tab counts:', err);
@@ -150,6 +153,7 @@ export default function JobListScreen() {
     { label: 'In Progress', value: 'In Progress', count: counts['In Progress'] },
     { label: 'Waiting', value: 'Waiting for Materials', count: counts['Waiting for Materials'] },
     { label: 'Completed', value: 'Completed', count: counts['Completed'] },
+    { label: 'Urgent', value: 'Urgent', count: counts['Urgent'] },
   ];
 
   return (

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, Job } from "@repairshop/shared";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/common/ToastProvider";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
@@ -124,6 +125,7 @@ const technicianQuery = (id: string) => `/jobs?technician=${encodeURIComponent(i
 
 export default function OverviewPage() {
   const router = useRouter();
+  const { profile, sessionUser } = useAuth();
   const { showToast } = useToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,58 +137,55 @@ export default function OverviewPage() {
   const [recentTechnician, setRecentTechnician] = useState("All");
 
   const fetchMaterialReturns = useCallback(async (): Promise<MaterialReturn[]> => {
-    const allotments = await supabase
-      .from("material_allotments")
-      .select(`
-        id,
-        technician_id,
-        qty,
-        status,
-        created_at,
-        products ( name, unit ),
-        users ( name ),
-        source_job_material:source_job_material_id (
+    const [allotments, fallback] = await Promise.all([
+      supabase
+        .from("material_allotments")
+        .select(`
+          id,
+          technician_id,
+          quantity,
+          status,
+          allotted_at,
+          inventory ( item_name, unit ),
+          product:products ( name, unit ),
+          technician:users!material_allotments_technician_id_fkey ( name ),
+          job:jobs ( id, job_code )
+        `)
+        .eq("status", "allotted")
+        .order("allotted_at", { ascending: false })
+        .limit(8),
+        
+      supabase
+        .from("job_materials")
+        .select(`
+          id,
+          material_name,
+          quantity,
+          status,
+          checkout_status,
+          created_at,
+          technician_id,
           job_id,
+          technicians:users!job_materials_technician_id_fkey ( name ),
           jobs ( job_code )
-        )
-      `)
-      .eq("status", "allotted")
-      .order("created_at", { ascending: false })
-      .limit(8);
+        `)
+        .or("status.eq.allotted,checkout_status.eq.checked_out")
+        .order("created_at", { ascending: false })
+        .limit(8)
+    ]);
 
-    if (!allotments.error) {
-      return (allotments.data || []).map((row: any) => ({
-        id: row.id,
-        material_name: row.products?.name || "Material",
-        quantity: numberValue(row.qty),
-        technician_name: row.users?.name || "Unassigned",
-        job_id: row.source_job_material?.job_id,
-        job_code: row.source_job_material?.jobs?.job_code,
-        created_at: row.created_at,
-        source: "material_allotments",
-      }));
-    }
+    const formattedAllotments: MaterialReturn[] = (allotments.data as any[] || []).map((row: any) => ({
+      id: row.id,
+      material_name: row.inventory?.item_name || row.product?.name || "Material",
+      quantity: numberValue(row.quantity),
+      technician_name: row.technician?.name || "Unassigned",
+      job_id: row.job?.id,
+      job_code: row.job?.job_code,
+      created_at: row.allotted_at || new Date().toISOString(),
+      source: "material_allotments",
+    }));
 
-    const fallback = await supabase
-      .from("job_materials")
-      .select(`
-        id,
-        material_name,
-        quantity,
-        status,
-        created_at,
-        technician_id,
-        job_id,
-        technicians:users!job_materials_technician_id_fkey ( name ),
-        jobs ( job_code )
-      `)
-      .eq("status", "allotted")
-      .order("created_at", { ascending: false })
-      .limit(8);
-
-    if (fallback.error) return [];
-
-    return (fallback.data || []).map((row: any) => ({
+    const formattedJobMats: MaterialReturn[] = (fallback.data as any[] || []).map((row: any) => ({
       id: row.id,
       material_name: row.material_name,
       quantity: numberValue(row.quantity),
@@ -196,6 +195,13 @@ export default function OverviewPage() {
       created_at: row.created_at,
       source: "job_materials",
     }));
+
+    // Combine both sources, newest first, max 8 items
+    const combined = [...formattedAllotments, ...formattedJobMats]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 8);
+
+    return combined;
   }, []);
 
   const fetchDashboardData = useCallback(async (isRefresh = false) => {
@@ -224,7 +230,7 @@ export default function OverviewPage() {
         supabase
           .from("payments")
           .select("id, type, amount, description, created_at")
-          .in("type", ["materials_purchase", "daily_expenditure", "office_development"])
+          .in("type", ["materials_purchase", "daily_expenditure", "office_development", "staff_salary"])
           .order("created_at", { ascending: false })
           .limit(250),
         supabase
@@ -278,12 +284,18 @@ export default function OverviewPage() {
     window.addEventListener("focus", onFocus);
     const interval = window.setInterval(() => fetchDashboardData(true), 60000);
 
+    let timeoutId: number;
+    const debouncedFetch = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => fetchDashboardData(true), 1500);
+    };
+
     const channel = supabase
       .channel(`admin-operations-overview-${Date.now()}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, () => fetchDashboardData(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => fetchDashboardData(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => fetchDashboardData(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () => fetchDashboardData(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, debouncedFetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, debouncedFetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, debouncedFetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, debouncedFetch)
       .subscribe();
 
     return () => {
@@ -483,8 +495,10 @@ export default function OverviewPage() {
 
     try {
       setReturningId(material.id);
-      const { error: returnError } = await supabase.rpc("return_material_allotment", {
+      const currentUserId = profile?.id || sessionUser?.id || null;
+      const { error: returnError } = await supabase.rpc("return_allocated_material", {
         p_allotment_id: material.id,
+        p_user_id: currentUserId,
       });
       if (returnError) throw returnError;
       showToast("Material returned to inventory.", "success");

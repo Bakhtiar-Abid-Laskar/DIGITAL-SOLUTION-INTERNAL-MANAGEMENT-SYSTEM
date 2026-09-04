@@ -31,6 +31,7 @@ export default function ReceptionistStack() {
       <Stack.Screen name="AnalyticsScreen" component={AnalyticsScreen} />
       <Stack.Screen name="InventoryScreen" component={InventoryScreen} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Customers" component={CustomersScreen} />
       <Stack.Screen name="AllottedMaterialsScreen" component={AllottedMaterialsScreen} />

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ChevronDown, Trophy, TrendingUp } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import AppHeader from '../../components/common/AppHeader';
@@ -40,6 +40,7 @@ function generateMonthOptions(): string[] {
 }
 
 export default function ReportsScreen() {
+  const navigation = useNavigation<any>();
   const bottomPadding = useBottomInsetPadding('nav');
   const [loading, setLoading] = useState(true);
 
@@ -83,14 +84,27 @@ export default function ReportsScreen() {
       setInProgress(inp);
       setCompleted(comp);
 
-      // 2. Revenue for the month
-      const { data: bills } = await supabase
-        .from('billing')
-        .select('grand_total, job_id')
-        .gte('created_at', start)
-        .lt('created_at', nextMonth);
+      // 2. Revenue for the month (Invoices + Counter Sales)
+      const [invoicesRes, salesRes] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select('grand_total, job_id')
+          .neq('status', 'cancelled')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
+        supabase
+          .from('sales')
+          .select('grand_total')
+          .neq('payment_status', 'cancelled')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
+      ]);
 
-      const rev = (bills || []).reduce((sum, b) => sum + (b.grand_total || 0), 0);
+      const invoiceBills = invoicesRes.data || [];
+      const counterSales = salesRes.data || [];
+      const invoiceTotal = invoiceBills.reduce((sum, b: any) => sum + (Number(b.grand_total) || 0), 0);
+      const salesTotal = counterSales.reduce((sum, s: any) => sum + (Number(s.grand_total) || 0), 0);
+      const rev = invoiceTotal + salesTotal;
       setTotalRevenue(rev);
 
       // 3. Technician leaderboard — completed jobs in this month
@@ -101,8 +115,8 @@ export default function ReportsScreen() {
           const techJobs = allJobs.filter(j => j.technician_id === t.id && j.status === 'Completed');
           let techRev = 0;
           techJobs.forEach(tj => {
-            const bill = bills?.find(b => b.job_id === tj.id);
-            if (bill && bill.grand_total) techRev += bill.grand_total;
+            const invoice = invoiceBills.find((b: any) => b.job_id === tj.id);
+            if (invoice && invoice.grand_total) techRev += Number(invoice.grand_total) || 0;
           });
           return { id: t.id, name: t.name, completedJobs: techJobs.length, revenue: techRev };
         });
@@ -160,29 +174,29 @@ export default function ReportsScreen() {
 
               <View style={styles.chartContainer}>
                 <View style={styles.chartArea}>
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'Received' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{received}</Text>
                     </View>
                     <View style={[styles.bar, { height: Math.max(getBarHeight(received), 4), backgroundColor: colors.accentBlue }]} />
                     <Text style={styles.barLabel}>Received</Text>
-                  </View>
+                  </AppPressable>
 
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'In Progress' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{inProgress}</Text>
                     </View>
                     <View style={[styles.bar, { height: Math.max(getBarHeight(inProgress), 4), backgroundColor: colors.accentOrange }]} />
                     <Text style={styles.barLabel}>In Progress</Text>
-                  </View>
+                  </AppPressable>
 
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'Completed' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{completed}</Text>
                     </View>
                     <View style={[styles.bar, { height: Math.max(getBarHeight(completed), 4), backgroundColor: colors.success }]} />
                     <Text style={styles.barLabel}>Completed</Text>
-                  </View>
+                  </AppPressable>
                 </View>
               </View>
 
@@ -218,7 +232,7 @@ export default function ReportsScreen() {
                   else if (index === 2) badgeBg = '#CD7F32';            // bronze — no token equivalent, kept intentionally
 
                   return (
-                    <View key={tech.id} style={styles.leaderboardRow}>
+                    <AppPressable key={tech.id} style={styles.leaderboardRow} onPress={() => navigation.navigate('Jobs', { filter: 'All' })}>
                       <View style={[styles.rankBadge, { backgroundColor: badgeBg }]}>
                         {index < 3
                           ? <Trophy size={14} color={colors.textInverse} />
@@ -232,7 +246,7 @@ export default function ReportsScreen() {
                         <Text style={styles.techJobs}>{tech.completedJobs} jobs</Text>
                         <Text style={styles.techRev}>{formatCurrency(tech.revenue)}</Text>
                       </View>
-                    </View>
+                    </AppPressable>
                   );
                 })
               )}

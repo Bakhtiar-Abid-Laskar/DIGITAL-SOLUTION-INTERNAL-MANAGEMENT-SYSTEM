@@ -10,7 +10,7 @@ import SalaryScreen from '../screens/shared/SalaryScreen';
 import { colors, typography, spacing, radius } from '../tokens';
 
 import BottomSheet from '../components/common/BottomSheet';
-import { Plus, DollarSign, Wrench } from 'lucide-react-native';
+import { PlusSquare, Receipt, Wrench } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const Tab = createBottomTabNavigator();
@@ -57,7 +57,7 @@ export default function ReceptionistTabs() {
             }}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accentBlue + '20' }]}>
-              <Plus color={colors.accentBlue} size={24} />
+              <PlusSquare color={colors.accentBlue} size={24} />
             </View>
             <View>
               <Text style={typography.h3}>New Job</Text>
@@ -73,7 +73,7 @@ export default function ReceptionistTabs() {
             }}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accentGreen + '20' }]}>
-              <DollarSign color={colors.accentGreen} size={24} />
+              <Receipt color={colors.accentGreen} size={24} />
             </View>
             <View>
               <Text style={typography.h3}>New Sale</Text>

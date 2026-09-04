@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Briefcase, Users, Package, Boxes, BarChart3, Wallet, FileText, Settings, Tag, X, Receipt, CreditCard, CalendarDays, UserCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 const NAV_ITEMS = [
   { label: 'Overview', href: '/', icon: LayoutDashboard },
@@ -31,16 +31,70 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile } = useAuth();
+  const asideRef = useRef<HTMLElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
-  // Close on Escape key for accessibility
+  // Focus trap, Escape close, and focus restoration
   useEffect(() => {
+    if (!isOpen) {
+      if (previouslyFocusedElementRef.current) {
+        previouslyFocusedElementRef.current.focus();
+        previouslyFocusedElementRef.current = null;
+      }
+      return;
+    }
+
+    // Save currently focused trigger element before opening drawer
+    if (document.activeElement instanceof HTMLElement) {
+      previouslyFocusedElementRef.current = document.activeElement;
+    }
+
+    // Auto-focus first focusable element inside drawer
+    const focusTimer = setTimeout(() => {
+      if (!asideRef.current) return;
+      const focusables = asideRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length > 0) {
+        focusables[0].focus();
+      }
+    }, 50);
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && onClose) {
-        onClose();
+      if (e.key === 'Escape') {
+        if (onClose) onClose();
+        return;
+      }
+
+      // Trap Tab key navigation within mobile drawer (< 1024px)
+      if (e.key === 'Tab' && window.innerWidth < 1024 && asideRef.current) {
+        const focusables = asideRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+
+        const firstElement = focusables[0];
+        const lastElement = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
+
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   return (
@@ -55,10 +109,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       )}
 
       {/* Sidebar Content */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-60 bg-admin-sidebar-bg flex flex-col my-4 ml-4 rounded-2xl border border-white/10 shadow-card shrink-0 overflow-hidden transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:mr-2",
-        isOpen ? "translate-x-0" : "-translate-x-[120%]"
-      )}>
+      <aside 
+        ref={asideRef}
+        role={isOpen ? "dialog" : undefined}
+        aria-modal={isOpen ? "true" : undefined}
+        aria-label="Navigation Sidebar"
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-60 bg-admin-sidebar-bg flex flex-col my-4 ml-4 rounded-2xl border border-white/10 shadow-card shrink-0 overflow-hidden transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:mr-2",
+          isOpen ? "translate-x-0" : "-translate-x-[120%]"
+        )}
+      >
         <div className="h-16 flex items-center justify-between px-5 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 overflow-hidden p-1 border border-white/10">
@@ -75,7 +135,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
         
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto custom-scrollbar overscroll-contain">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             const Icon = item.icon;
@@ -88,14 +148,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   if (window.innerWidth < 1024 && onClose) onClose();
                 }}
                 className={cn(
-                  "flex items-center gap-3 px-3.5 py-3 rounded-lg transition-all duration-150 ease-in-out text-sm font-medium border-l-4",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 ease-in-out text-sm font-medium border-l-4",
                   isActive 
                     ? "bg-admin-sidebar-active-bg text-admin-sidebar-active border-admin-sidebar-accent-border shadow-sm" 
                     : "text-slate-300 border-transparent hover:bg-white/10 hover:text-white"
                 )}
               >
                 <Icon size={18} className={cn("transition-colors duration-150 shrink-0", isActive ? "text-admin-accent" : "text-slate-400")} />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}

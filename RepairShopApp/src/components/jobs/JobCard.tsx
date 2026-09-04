@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Job } from '../../types/job';
 import { colors, radius, shadow, spacing, typography, SPRING, getStatusCard, getPriorityCard } from '../../tokens';
+import StatusBadge from './StatusBadge';
 
 interface JobCardProps {
   job: Job & { technician_name?: string };
@@ -49,9 +50,17 @@ const JobCard = React.memo(function JobCard({ job, onPress, index = 0, isTechnic
 
 
 
+  const isUrgent = job.priority === 'Urgent';
+  const cardBorderColor = isUrgent ? colors.statusUrgentFg : colors.border;
+  const cardBorderWidth = isUrgent ? 1.5 : 1;
+
   const card = (
     <AnimatedPressable
-      style={[styles.card, animatedStyle]}
+      style={[
+        styles.card, 
+        animatedStyle, 
+        { borderColor: cardBorderColor, borderWidth: cardBorderWidth }
+      ]}
       onPress={() => onPress(job.id)}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -61,15 +70,15 @@ const JobCard = React.memo(function JobCard({ job, onPress, index = 0, isTechnic
     >
       {/* Job code + status label row */}
       <View style={styles.headerRow}>
-        <Text style={[styles.jobCode, { color: ink }]} numberOfLines={1}>
-          {job.job_code}
-        </Text>
-        {/* Badge background = darker tint (using Fg color with opacity over background) */}
-        <View style={[styles.statusChip, { backgroundColor: ink + '1A' }]}>
-          <Text style={[styles.statusChipText, { color: ink }]}>
-            {job.status === 'Waiting for Materials' ? 'Waiting' : job.status}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 }}>
+          <Text style={[styles.jobCode, { color: colors.textPrimary }]} numberOfLines={1}>
+            {job.job_code}
           </Text>
+          {isUrgent && (
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.statusUrgentFg }} />
+          )}
         </View>
+        <StatusBadge status={job.status} isUrgent={isUrgent && job.status !== 'Completed'} />
       </View>
 
       {/* Customer + device */}
@@ -88,19 +97,6 @@ const JobCard = React.memo(function JobCard({ job, onPress, index = 0, isTechnic
             ? `Tech: ${job.technician_name}`
             : getTimeAgo(job.created_at)}
         </Text>
-        {job.priority !== 'Normal' && (
-          <View style={[
-            styles.priorityChip,
-            { backgroundColor: priorityBg }
-          ]}>
-            <Text style={[
-              styles.priorityChipText,
-              { color: priorityColor }
-            ]}>
-              {job.priority}
-            </Text>
-          </View>
-        )}
       </View>
     </AnimatedPressable>
   );

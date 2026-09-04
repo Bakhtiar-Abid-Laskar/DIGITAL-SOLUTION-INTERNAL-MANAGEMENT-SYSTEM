@@ -28,7 +28,7 @@ export function ServiceCatalogCard({ form, catalogItems, catalogLoading, onSelec
             onChange={(e) => onSelectServiceCatalog(e.target.value)}
             disabled={catalogLoading}
           >
-            <option value="">-- Custom / Generic Service Repair --</option>
+            <option value="">-- To Be Diagnosed by Technician (Optional at Intake) --</option>
             {catalogItems.map(item => (
               <option key={item.id} value={item.id}>
                 {item.title} ({formatCurrency(item.customer_charge_amount)})
@@ -54,7 +54,7 @@ export function ServiceCatalogCard({ form, catalogItems, catalogLoading, onSelec
           </div>
         ) : (
           <div className="bg-admin-bg-subtle/60 border border-admin-border rounded-xl p-4 text-xs text-admin-text-muted">
-            Select a pre-configured service catalog item to automatically record standard customer pricing and staff incentives.
+            Service type can be left blank at intake and selected by the assigned technician upon device diagnosis.
           </div>
         )}
       </div>

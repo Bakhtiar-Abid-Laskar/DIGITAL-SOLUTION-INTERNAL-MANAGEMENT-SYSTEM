@@ -15,6 +15,7 @@ import {
   Menu,
   Edit3,
   Banknote,
+  DollarSign,
 } from 'lucide-react-native';
 import { colors, FLAT_TAB_HEIGHT, shadow } from '../tokens';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +39,7 @@ const ICONS: Record<string, React.ElementType> = {
   More:          Menu,
   Salary:        Banknote,
   Payments:      Banknote,
+  Sales:         DollarSign,
 };
 
 // Route names that render as the center FAB instead of a normal tab

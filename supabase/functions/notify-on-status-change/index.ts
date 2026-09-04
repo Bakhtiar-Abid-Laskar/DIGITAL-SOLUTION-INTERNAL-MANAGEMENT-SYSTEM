@@ -3,25 +3,43 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 import { sendPushNotification } from '../_shared/notifications.ts'
+import { sendCustomerWhatsApp } from '../_shared/whatsappClient.ts'
 
 declare const Deno: any;
 
 serve(async (req: Request) => {
 
   try {
-    const signature = req.headers.get('webhook-signature')
+    const signature = req.headers.get('webhook-signature') || req.headers.get('x-webhook-secret')
     const authHeader = req.headers.get('Authorization')
     const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET')
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     
-    const isAuthorized =
-      !webhookSecret ||
-      (signature && signature === webhookSecret) ||
-      (authHeader && serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) ||
-      (authHeader && authHeader.startsWith('Bearer '));
+    let isAuthorized = false
+
+    if (webhookSecret && signature && signature === webhookSecret) {
+      isAuthorized = true
+    } else if (serviceRoleKey && authHeader && authHeader === `Bearer ${serviceRoleKey}`) {
+      isAuthorized = true
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '').trim()
+      if (token && anonKey && token === anonKey) {
+        isAuthorized = true
+      } else if (token && token.length > 20) {
+        const supabaseAuthCheck = createClient(
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        )
+        const { data: authData, error: authErr } = await supabaseAuthCheck.auth.getUser(token)
+        if (!authErr && authData?.user) {
+          isAuthorized = true
+        }
+      }
+    }
 
     if (!isAuthorized) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing webhook credentials' }), {
         headers: { 'Content-Type': 'application/json' },
         status: 401,
       })
@@ -135,6 +153,101 @@ serve(async (req: Request) => {
               jobId: newJob.id,
             })
           }))
+        }
+
+        // 3. Automated Customer WhatsApp Notifications
+        if (newJob.customer_contact) {
+          const customerName = newJob.customer_name || 'Customer';
+
+          if (newJob.status === 'Completed') {
+            // Check if an invoice or billing amount exists
+            let totalNotice = '';
+            try {
+              const { data: inv } = await supabase
+                .from('invoices')
+                .select('grand_total')
+                .eq('job_id', newJob.id)
+                .maybeSingle();
+
+              if (inv?.grand_total && Number(inv.grand_total) > 0) {
+                totalNotice = `\n💰 *Total Amount:* ₹${Number(inv.grand_total).toFixed(2)}\n`;
+              }
+            } catch (_) {
+              // Non-critical, continue without total
+            }
+
+            const readyMsg = `Hello ${customerName},\n\n` +
+              `🎉 Great news! Your device for Job *${newJob.job_code}* has been successfully repaired and is *READY FOR PICKUP*.\n` +
+              totalNotice +
+              `\nPlease visit *Digital Solution* during shop hours with your intake receipt to collect your device.\n\n` +
+              `Thank you for trusting Digital Solution!`;
+
+            await sendCustomerWhatsApp(supabase, {
+              phone: newJob.customer_contact,
+              customerName: newJob.customer_name,
+              eventType: 'JOB_COMPLETED',
+              messageText: readyMsg,
+              jobId: newJob.id,
+            });
+
+          } else if (newJob.status === 'Delivered') {
+            // Customer collected device -> Send Google Form Review Link
+            let reviewUrl = 'https://forms.gle/DigiSolutionReview';
+            try {
+              const { data: ws } = await supabase
+                .from('whatsapp_settings')
+                .select('google_review_url')
+                .eq('is_active', true)
+                .limit(1)
+                .maybeSingle();
+
+              if (ws?.google_review_url?.trim()) {
+                reviewUrl = ws.google_review_url.trim();
+              }
+            } catch (_) {}
+
+            const reviewMsg = `Hello ${customerName},\n\n` +
+              `Thank you for collecting your device for Job *${newJob.job_code}* from *Digital Solution*!\n\n` +
+              `We hope you are delighted with the service. We would greatly appreciate 30 seconds of your time to share your feedback on our Google Form:\n\n` +
+              `⭐ *Google Review Link:* ${reviewUrl}\n\n` +
+              `Your feedback helps us continuously improve. Have a wonderful day!`;
+
+            await sendCustomerWhatsApp(supabase, {
+              phone: newJob.customer_contact,
+              customerName: newJob.customer_name,
+              eventType: 'REVIEW_REQUEST',
+              messageText: reviewMsg,
+              jobId: newJob.id,
+            });
+
+          } else if (newJob.status === 'Waiting for Materials') {
+            const partsMsg = `Hello ${customerName},\n\n` +
+              `Update on your repair Job *${newJob.job_code}*:\n` +
+              `Our technician has inspected your device and ordered required replacement parts. Work will resume immediately upon their arrival.\n\n` +
+              `We will keep you updated. Digital Solution.`;
+
+            await sendCustomerWhatsApp(supabase, {
+              phone: newJob.customer_contact,
+              customerName: newJob.customer_name,
+              eventType: 'JOB_STATUS_CHANGED',
+              messageText: partsMsg,
+              jobId: newJob.id,
+            });
+
+          } else if (newJob.status === 'In Progress') {
+            const progressMsg = `Hello ${customerName},\n\n` +
+              `Update on your repair Job *${newJob.job_code}*:\n` +
+              `Our technician has begun active repair work on your device. We will notify you as soon as testing and repairs are complete.\n\n` +
+              `Thank you for your patience! Digital Solution.`;
+
+            await sendCustomerWhatsApp(supabase, {
+              phone: newJob.customer_contact,
+              customerName: newJob.customer_name,
+              eventType: 'JOB_STATUS_CHANGED',
+              messageText: progressMsg,
+              jobId: newJob.id,
+            });
+          }
         }
       } // End of Status Changed Branch
 

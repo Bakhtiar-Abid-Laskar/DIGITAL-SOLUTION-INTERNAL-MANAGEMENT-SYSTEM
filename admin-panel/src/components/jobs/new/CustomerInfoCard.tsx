@@ -5,7 +5,7 @@ import { Textarea } from "@/components/common/Textarea";
 import { User as UserIcon, MapPin, Mail, Phone, FileText } from "lucide-react";
 import { CreateJobFormState } from '@/app/(admin)/jobs/new/reducer';
 import { CustomerTypeahead } from '@/components/customers/CustomerTypeahead';
-import { Customer } from '@repairshop/shared';
+import { Customer, formatPhoneInput } from '@repairshop/shared';
 
 interface CustomerInfoCardProps {
   form: CreateJobFormState;
@@ -68,8 +68,11 @@ export function CustomerInfoCard({
             </label>
             <Input 
               value={form.customer_contact}
-              onChange={(e) => onChange('customer_contact', e.target.value)}
-              placeholder="e.g. 9876543210"
+              onChange={(e) => {
+                const formatted = formatPhoneInput(e.target.value);
+                onChange('customer_contact', formatted);
+              }}
+              placeholder="+91 98765 43210"
               type="tel"
               className={errors.customer_contact ? 'border-admin-urgent-fg' : ''}
             />

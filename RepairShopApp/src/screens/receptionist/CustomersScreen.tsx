@@ -33,6 +33,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Customer, CustomerAuditLog, formatCurrency } from '@repairshop/shared';
 import AppHeader from '../../components/common/AppHeader';
 import Button from '../../components/common/Button';
+import EmptyState from '../../components/common/EmptyState';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import { useToast } from '../../context/ToastContext';
 
@@ -65,7 +66,7 @@ export default function CustomersScreen() {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('search_customers', {
+      const { data, error } = await supabase.rpc('search_customers_v2', {
         p_query: debouncedSearch.trim(),
         p_limit: 50,
       });
@@ -245,16 +246,18 @@ export default function CustomersScreen() {
             setRefreshing(true);
             fetchCustomers();
           }}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={11}
+          removeClippedSubviews={true}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <User size={48} color={colors.border} />
-              <Text style={styles.emptyTitle}>No customers found</Text>
-              <Text style={styles.emptySubtext}>
-                {debouncedSearch
-                  ? "Try searching with a different name or phone number"
-                  : "Customers will automatically appear here as jobs and sales are recorded"}
-              </Text>
-            </View>
+            <EmptyState
+              icon={User}
+              message="No customers found"
+              subMessage={debouncedSearch
+                ? "Try searching with a different name or phone number"
+                : "Customers will automatically appear here as jobs and sales are recorded"}
+            />
           }
         />
       )}

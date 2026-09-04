@@ -86,7 +86,7 @@ export default function HolidayCalendarForm() {
 
   return (
     <div className={styles.card}>
-      <h2 className={styles.cardTitle}>📅 Official Company Holiday Calendar</h2>
+      <h2 className={styles.cardTitle}>Official Company Holiday Calendar</h2>
       <p className={styles.hint}>Configured holidays are automatically excluded from working-day attendance deduction rules.</p>
 
       {/* Add Holiday Form */}

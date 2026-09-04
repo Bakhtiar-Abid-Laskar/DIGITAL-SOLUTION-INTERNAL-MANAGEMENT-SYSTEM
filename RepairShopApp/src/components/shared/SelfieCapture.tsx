@@ -128,29 +128,70 @@ export default function SelfieCapture({
       
       setIsCameraActive(false);
 
-      // Fetch location with fallback
+      // Fetch location with multi-tier graceful fallback (10s High -> 6s Balanced -> Last Known -> Degraded indoor fallback)
       setLoadingState('gps');
-      let location;
+      let location: Location.LocationObject | null = null;
       let lowAccuracy = false;
+
       try {
         const enabled = await Location.hasServicesEnabledAsync();
         if (!enabled) {
           throw new Error('LOCATION_DISABLED');
         }
+        // Tier 1: High accuracy GPS with 10s timeout
         location = await Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GPS_TIMEOUT')), 8000))
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GPS_TIMEOUT')), 10000))
         ]);
       } catch (err: any) {
         if (err.message === 'LOCATION_DISABLED') {
           throw new Error('Location services are disabled on this device. Please turn on GPS.');
         }
+
         lowAccuracy = true;
-        showToast({ title: 'Low GPS Signal', message: 'High accuracy failed, falling back to approximate location.', type: 'error' });
-        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        // Tier 2: Balanced / approximate accuracy fallback
+        try {
+          location = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('BALANCED_TIMEOUT')), 6000))
+          ]);
+          showToast({ 
+            title: 'Weak GPS Signal', 
+            message: 'High accuracy timed out. Using approximate location for admin review.', 
+            type: 'error' 
+          });
+        } catch (tier2Err) {
+          // Tier 3: Last known cached location
+          try {
+            location = await Location.getLastKnownPositionAsync();
+            if (location) {
+              showToast({ 
+                title: 'Weak GPS Signal', 
+                message: 'Using cached location. Check-in marked for admin review.', 
+                type: 'error' 
+              });
+            }
+          } catch (tier3Err) {
+            location = null;
+          }
+        }
       }
 
-      // Validate GPS before uploading
+      // Tier 4: If completely unavailable (e.g. basement workshop / shielded indoor repair room)
+      if (!location) {
+        lowAccuracy = true;
+        showToast({
+          title: 'Indoor GPS Fallback',
+          message: 'GPS unavailable indoors. Check-in permitted with "Weak GPS" flag for Admin Approval.',
+          type: 'error'
+        });
+      }
+
+      const finalLat = location?.coords?.latitude ?? 0;
+      const finalLng = location?.coords?.longitude ?? 0;
+      const isWeakSignal = lowAccuracy || !location || (location.coords?.accuracy ? location.coords.accuracy > 100 : false);
+
+      // Validate GPS against geofence if coordinates were successfully acquired
       let isAtLocation = true;
       if (validateLocation && location?.coords) {
         const validationResult = await validateLocation(location.coords.latitude, location.coords.longitude);
@@ -160,6 +201,9 @@ export default function SelfieCapture({
           return;
         }
         isAtLocation = validationResult.atLocation;
+      } else if (!location) {
+        // Without coordinates, geofence cannot be verified automatically
+        isAtLocation = false;
       }
 
       // Compress photo
@@ -174,10 +218,10 @@ export default function SelfieCapture({
         uri: photo.uri,
         driveFileId: fileId,
         driveLink: link,
-        gpsLat: location.coords.latitude,
-        gpsLng: location.coords.longitude,
-        lowAccuracy: location.coords.accuracy ? location.coords.accuracy > 50 : false,
-        atLocation: isAtLocation
+        gpsLat: finalLat,
+        gpsLng: finalLng,
+        lowAccuracy: isWeakSignal,
+        atLocation: isAtLocation && !isWeakSignal
       });
 
     } catch (e: any) {

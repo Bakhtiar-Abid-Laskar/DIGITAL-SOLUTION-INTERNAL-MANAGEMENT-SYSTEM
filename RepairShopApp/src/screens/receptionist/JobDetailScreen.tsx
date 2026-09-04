@@ -3,7 +3,6 @@ import { View, StyleSheet, Alert, Linking, Text } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 
-import { printInvoice } from '../../lib/invoiceService';
 import { Printer, MessageCircle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Job, JobMaterial } from '../../types/job';
@@ -22,12 +21,14 @@ import LineItemTable from '../../components/shared/LineItemTable';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
+import { usePdfGenerator } from '../../context/PdfProgressContext';
 
 export default function JobDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const jobId = route.params?.jobId;
   const { showToast } = useToast();
+  const { generatePdf } = usePdfGenerator();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -202,9 +203,11 @@ export default function JobDetailScreen() {
               style={styles.secondaryBtn}
               onPress={async () => {
                 if (!job) return;
-                try {
-                  await printInvoice({ docType: 'receipt', jobId: job.id });
-                } catch (e: any) { showToast({ title: 'Print Failed', message: e.message, type: 'error' }); }
+                await generatePdf({
+                  request: { docType: 'receipt', jobId: job.id },
+                  title: 'Generating Job Receipt',
+                  mode: 'print',
+                });
               }}
             >
               <Printer size={18} color={colors.textPrimary} />

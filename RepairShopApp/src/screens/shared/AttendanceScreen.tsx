@@ -2,8 +2,9 @@ import { AppPressable } from '../../components/common/AppPressable';
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, 
-  FlatList, Modal, Image, RefreshControl, Alert, ActivityIndicator
+  FlatList, Modal, RefreshControl, Alert, ActivityIndicator
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -103,8 +104,9 @@ const SelfieCard = React.memo(function SelfieCard({
             <Image
               source={{ uri: imageUrl }}
               style={styles.selfieImage}
-              resizeMode="cover"
-              onLoadEnd={() => setImageLoaded(true)}
+              contentFit="cover"
+              cachePolicy="disk"
+              onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
             {!imageLoaded && (
@@ -315,7 +317,7 @@ export default function AttendanceScreen() {
     if (!user) return;
     try {
       setProcessing(true);
-      const isAtLocation = data.atLocation ?? true;
+      const isAtLocation = (data.atLocation ?? true) && !data.lowAccuracy;
       const reviewStatus = isAtLocation ? 'approved' : 'pending';
 
       if (mode === 'checkin') {
@@ -348,7 +350,10 @@ export default function AttendanceScreen() {
         if (error) throw new Error(error.message);
       }
       await fetchAttendance();
-      showToast({ title: 'Success', message: `Successfully ${mode === 'checkin' ? 'checked in' : 'checked out'}.`, type: 'success' });
+      const successMsg = data.lowAccuracy
+        ? `Checked ${mode === 'checkin' ? 'in' : 'out'} with Weak GPS (submitted for admin approval).`
+        : `Successfully ${mode === 'checkin' ? 'checked in' : 'checked out'}.`;
+      showToast({ title: data.lowAccuracy ? 'Pending Review' : 'Success', message: successMsg, type: data.lowAccuracy ? 'info' : 'success' });
     } catch (err: any) {
       const msg: string = err?.message || '';
       if (msg.includes('LEAVE_CONFLICT')) {
@@ -711,11 +716,15 @@ export default function AttendanceScreen() {
             <View style={styles.modalImageContainer}>
               {selectedImage?.url ? (
                 <>
-                  <Image 
-                    source={{ uri: selectedImage.url }} 
-                    style={styles.fullImage} 
-                    resizeMode="contain"
-                    onLoadEnd={() => setModalImageLoaded(true)}
+                  <Image
+                    source={{ uri: selectedImage.url }}
+                    style={styles.fullImage}
+                    contentFit="contain"
+                    cachePolicy="disk"
+                    onLoad={() => setModalImageLoaded(true)}
+                    onError={() => {
+                      setModalImageLoaded(true);
+                    }}
                   />
                   {!modalImageLoaded && (
                     <View style={styles.modalLoadingBox}>

@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { AppPressable } from '../common/AppPressable';
+import { ChevronRight } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../tokens';
 
 interface Props {
@@ -7,9 +9,10 @@ interface Props {
   presentDays: number;
   halfdayCount: number;
   leaveCount: number;
+  onPress?: () => void;
 }
 
-export function SalaryAttendanceSummary({ workingDays, presentDays, halfdayCount, leaveCount }: Props) {
+export function SalaryAttendanceSummary({ workingDays, presentDays, halfdayCount, leaveCount, onPress }: Props) {
   const stats = [
     { label: 'Working Days', value: workingDays },
     { label: 'Present',      value: presentDays },
@@ -17,16 +20,34 @@ export function SalaryAttendanceSummary({ workingDays, presentDays, halfdayCount
     { label: 'Leave',        value: leaveCount },
   ];
 
-  return (
+  const cardContent = (
     <View style={styles.card}>
-      {stats.map(({ label, value }) => (
-        <View key={label} style={styles.attBox}>
-          <Text style={styles.attValue}>{value ?? '—'}</Text>
-          <Text style={styles.attLabel}>{label}</Text>
+      <View style={styles.statsRow}>
+        {stats.map(({ label, value }) => (
+          <View key={label} style={styles.attBox}>
+            <Text style={styles.attValue}>{value ?? '—'}</Text>
+            <Text style={styles.attLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      {onPress && (
+        <View style={styles.footerLink}>
+          <Text style={styles.footerText}>View Attendance Records</Text>
+          <ChevronRight size={14} color={colors.primary} />
         </View>
-      ))}
+      )}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <AppPressable onPress={onPress} activeOpacity={0.8}>
+        {cardContent}
+      </AppPressable>
+    );
+  }
+
+  return cardContent;
 }
 
 const styles = StyleSheet.create({
@@ -37,6 +58,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.lg,
+  },
+  statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
@@ -52,4 +75,19 @@ const styles = StyleSheet.create({
   },
   attValue: { ...typography.h3, color: colors.textPrimary, fontSize: 20 },
   attLabel: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  footerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  footerText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
 });

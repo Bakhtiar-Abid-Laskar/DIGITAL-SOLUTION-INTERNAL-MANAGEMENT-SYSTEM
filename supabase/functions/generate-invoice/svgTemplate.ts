@@ -23,8 +23,10 @@ export type SvgLineItem = {
   sn: number;
   description: string;
   serialNumber?: string;
+  hsnCode?: string;
+  taxPercent?: number;
   qty: number;
-  rate: number;      // per-unit, inclusive of tax
+  rate: number;      // per-unit selling price snapshotted at bill creation
   amount: number;    // qty * rate
 };
 
@@ -43,6 +45,7 @@ export type SvgInvoiceInput = {
   customerPhone: string;
   customerEmail: string;
   customerGstin?: string;
+  deviceSerialNumber?: string;
   items: SvgLineItem[];
   totals: SvgTotals;
 };
@@ -95,7 +98,13 @@ const DESC_WRAP_DY = 16;         // px offset per tspan wrap line
  * Splits description into SVG tspan lines for wrapping within the DESCRIPTION column.
  * Returns the SVG markup and the total extra height added by wrapping.
  */
-function buildDescriptionTspan(desc: string, serialNumber: string | undefined, baseY: number): {
+function buildDescriptionTspan(
+  desc: string,
+  serialNumber: string | undefined,
+  hsnCode: string | undefined,
+  taxPercent: number | undefined,
+  baseY: number
+): {
   markup: string;
   extraHeight: number;
 } {
@@ -114,22 +123,27 @@ function buildDescriptionTspan(desc: string, serialNumber: string | undefined, b
   }
   if (current) lines.push(current);
 
-  // Add serial number as a faint sub-line if present
-  const snLine = serialNumber ? `S/N: ${serialNumber}` : null;
+  // Build metadata sub-line: HSN, Serial Number, Tax %
+  const subMetaParts: string[] = [];
+  if (hsnCode) subMetaParts.push(`HSN: ${hsnCode}`);
+  if (serialNumber) subMetaParts.push(`S/N: ${serialNumber}`);
+  if (taxPercent !== undefined && taxPercent !== null) subMetaParts.push(`GST: ${taxPercent}%`);
+  const subMetaLine = subMetaParts.length > 0 ? subMetaParts.join(' | ') : null;
 
   let markup = `<text x="90" y="${baseY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a">`;
   markup += `<tspan x="90" dy="0">${x(lines[0])}</tspan>`;
   for (let i = 1; i < lines.length; i++) {
     markup += `<tspan x="90" dy="${DESC_WRAP_DY}">${x(lines[i])}</tspan>`;
   }
-  if (snLine) {
-    markup += `<tspan x="90" dy="${DESC_WRAP_DY}" font-size="9" fill="#8a8f9c">${x(snLine)}</tspan>`;
+  if (subMetaLine) {
+    markup += `<tspan x="90" dy="${DESC_WRAP_DY}" font-size="8.5" fill="#64748B">${x(subMetaLine)}</tspan>`;
   }
   markup += `</text>`;
 
-  const extraHeight = (lines.length - 1) * DESC_WRAP_DY + (snLine ? DESC_WRAP_DY : 0);
+  const extraHeight = (lines.length - 1) * DESC_WRAP_DY + (subMetaLine ? DESC_WRAP_DY : 0);
   return { markup, extraHeight };
 }
+
 
 /**
  * Splits terms into SVG tspan lines for wrapping within a fixed ~230px column.
@@ -187,8 +201,11 @@ function buildItemRows(items: SvgLineItem[]): { page1Markup: string; overflow: S
     const { markup: descMarkup, extraHeight } = buildDescriptionTspan(
       item.description,
       item.serialNumber,
+      item.hsnCode,
+      item.taxPercent,
       currentY
     );
+
     const rowH = ROW_HEIGHT + extraHeight;
 
     // Check if this row fits on page 1
@@ -215,8 +232,8 @@ function buildItemRows(items: SvgLineItem[]): { page1Markup: string; overflow: S
     // AMOUNT — right-anchored at x=744
     markup += `<text x="744" y="${currentY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="700" text-anchor="end">${x(formatINR(item.amount))}</text>`;
 
-    // Thin bottom separator line for each row
-    markup += `<line x1="50" y1="${currentY - 15 + rowH}" x2="744" y2="${currentY - 15 + rowH}" stroke="#e4e9f4" stroke-width="0.8"/>`;
+    // Thin bottom separator line for each row (darkened for better definition)
+    markup += `<line x1="50" y1="${currentY - 15 + rowH}" x2="744" y2="${currentY - 15 + rowH}" stroke="#8a8f9c" stroke-width="1.0"/>`;
 
     currentY += rowH;
     rowIndex++;
@@ -314,7 +331,7 @@ function buildSvgPage(
 
   <rect x="474" y="${baseTotalsY+74}" width="270" height="34" rx="6" fill="url(#headerBlue)" filter="url(#softShadow)"/>
   <polygon points="474,${baseTotalsY+74} 490,${baseTotalsY+74} 474,${baseTotalsY+84}" fill="#ffffff" opacity="0.18"/>
-  <text x="490" y="${baseTotalsY+96}" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" fill="#ffffff">TOTAL DUE</text>
+  <text x="490" y="${baseTotalsY+96}" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" fill="#ffffff">Total</text>
   <text id="total" x="730" y="${baseTotalsY+96}" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="end">${totalTxt}</text>
 
   <!-- ===================== CLOSING NOTES ===================== -->
@@ -356,8 +373,8 @@ function buildSvgPage(
   <rect x="0" y="0" width="5" height="1123" fill="url(#edgeBar)"/>
 
   <!-- faint geometric watermark hexagons -->
-  <polygon points="397,340 500,401 500,523 397,584 294,523 294,401" fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.03"/>
-  <polygon points="397,378 470,421 470,504 397,547 324,504 324,421" fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.03"/>
+  <polygon points="397,340 500,401 500,523 397,584 294,523 294,401" fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.015"/>
+  <polygon points="397,378 470,421 470,504 397,547 324,504 324,421" fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.015"/>
 
   <!-- CORNER MOTIF: TOP-LEFT -->
   <g id="corner-tl">

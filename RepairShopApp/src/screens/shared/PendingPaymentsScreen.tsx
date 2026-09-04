@@ -7,8 +7,9 @@ import { AppPressable } from '../../components/common/AppPressable';
 import EmptyState from '../../components/common/EmptyState';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { formatCurrency, formatDate, useDebounceValue, createWhatsAppUrl } from '@repairshop/shared';
-import { Search, CreditCard, Receipt, MessageCircle, CheckCircle } from 'lucide-react-native';
+import { Search, CreditCard, MessageCircle, CheckCircle } from 'lucide-react-native';
 import ErrorState from '../../components/common/ErrorState';
+import { useToast } from '../../context/ToastContext';
 
 interface PendingPayment {
   id: string;
@@ -20,10 +21,12 @@ interface PendingPayment {
   amount_paid: number;
   balance: number;
   created_at: string;
+  job_id?: string | null;
 }
 
 export default function PendingPaymentsScreen() {
   const navigation = useNavigation<any>();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +54,7 @@ export default function PendingPaymentsScreen() {
           created_at,
           paid_at,
           job_id,
-          jobs ( job_code )
+          jobs ( job_code, customer_name, customer_contact )
         `)
         .gt('grand_total', 0)
         .neq('status', 'cancelled');  // cancelled invoices are voided — never pending
@@ -66,16 +69,28 @@ export default function PendingPaymentsScreen() {
         
         if (balance > 0) {
           const isJob = !!inv.job_id;
+          
+          let name = inv.customer_name;
+          if (!name || name.trim() === '') {
+            name = (isJob && inv.jobs) ? inv.jobs.customer_name : 'Unknown';
+          }
+          
+          let contact = inv.customer_contact;
+          if (!contact || contact.trim() === '') {
+            contact = (isJob && inv.jobs) ? inv.jobs.customer_contact : '';
+          }
+
           combined.push({
             id: inv.id,
             type: isJob ? 'Job' : 'Sale',
             reference: (isJob && inv.jobs) ? inv.jobs.job_code : inv.invoice_code,
-            customer_name: inv.customer_name || 'Unknown',
-            customer_contact: inv.customer_contact || '',
+            customer_name: (name || 'Unknown').replace(/\n/g, ' ').trim(),
+            customer_contact: (contact || '').replace(/\n/g, ' ').trim(),
             grand_total: total,
             amount_paid: paid,
             balance: balance,
-            created_at: inv.created_at
+            created_at: inv.created_at,
+            job_id: inv.job_id || null,
           });
         }
       });
@@ -114,20 +129,17 @@ export default function PendingPaymentsScreen() {
           text: "Confirm", 
           onPress: async () => {
             try {
-              const { error: updateError } = await supabase
-                .from('invoices')
-                .update({ 
-                  amount_paid: item.grand_total,
-                  status: 'paid',
-                  paid_at: new Date().toISOString()
-                })
-                .eq('id', item.id);
+              const { error: updateError } = await supabase.rpc('record_payment', {
+                p_invoice_id: item.id,
+                p_amount: item.grand_total,
+                p_payment_method: 'Cash',
+              });
                 
               if (updateError) throw updateError;
               
               fetchPayments();
             } catch (err: any) {
-              Alert.alert("Error", err.message || "Failed to update payment status.");
+              showToast({ title: 'Error', message: err.message || "Failed to update payment status.", type: 'error' });
             }
           }
         }
@@ -135,29 +147,54 @@ export default function PendingPaymentsScreen() {
     );
   };
 
+
   const handleNotifyCustomer = async (item: PendingPayment) => {
     if (!item.customer_contact) {
-      Alert.alert("Error", "No contact number available for this customer.");
+      showToast({ title: 'Error', message: "No contact number available for this customer.", type: 'error' });
       return;
     }
-    
+
+    try {
+      showToast({ title: 'Sending WhatsApp...', message: `Notifying ${item.customer_name}`, type: 'info' });
+      const { data, error } = await supabase.functions.invoke('notify-on-finance-event', {
+        body: {
+          action: 'SEND_PENDING_REMINDER',
+          phone: item.customer_contact,
+          customerName: item.customer_name,
+          reference: item.reference,
+          balanceDue: item.balance,
+          totalAmount: item.grand_total,
+          jobId: item.type === 'Job' ? item.id : undefined,
+          saleId: item.type === 'Sale' ? item.id : undefined,
+        },
+      });
+
+      if (!error && data?.success) {
+        showToast({ title: 'WhatsApp Sent', message: `Reminder delivered to ${item.customer_name}`, type: 'success' });
+        return;
+      }
+    } catch {
+      // Fall through to client deep link
+    }
+
+    // Fallback: Open WhatsApp app directly
     const msg = `Hello ${item.customer_name}, a payment of ₹${item.balance.toFixed(2)} is pending for ${item.reference}. Please arrange the payment at your earliest convenience. Thank you.`;
     const url = createWhatsAppUrl(item.customer_contact, msg);
     
     if (!url) {
-      Alert.alert("Error", "Could not format the contact number for WhatsApp.");
+      showToast({ title: 'Error', message: "Could not format the contact number for WhatsApp.", type: 'error' });
       return;
     }
     
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
-        Alert.alert("Error", "WhatsApp is not installed on this device.");
+        showToast({ title: 'Error', message: "WhatsApp is not installed on this device.", type: 'error' });
         return;
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Error", "Could not open WhatsApp.");
+      showToast({ title: 'Error', message: "Could not open WhatsApp.", type: 'error' });
     }
   };
 
@@ -177,11 +214,17 @@ export default function PendingPaymentsScreen() {
     return (
       <AppPressable 
         style={styles.card} 
-        onPress={() => navigation.navigate('SaleDetail', { invoiceId: item.id })}
+        onPress={() => {
+          if (item.type === 'Job' && item.job_id) {
+            navigation.navigate('Billing', { jobId: item.job_id });
+          } else {
+            navigation.navigate('SaleDetail', { invoiceId: item.id });
+          }
+        }}
       >
         <View style={styles.cardHeader}>
           <View style={styles.badgeRow}>
-            <Receipt size={16} color={colors.primary} />
+            <CreditCard size={16} color={colors.primary} />
             <Text style={styles.codeText}>{item.reference}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: isUnpaid ? colors.accentRed + '20' : colors.accentOrange + '20' }]}>
@@ -194,8 +237,8 @@ export default function PendingPaymentsScreen() {
         <View style={styles.cardBody}>
           <View style={styles.customerInfo}>
             <Text style={styles.customerText} numberOfLines={1}>{item.customer_name}</Text>
-            {!!item.customer_contact && <Text style={styles.contactText}>{item.customer_contact}</Text>}
-            <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+            {!!item.customer_contact && <Text style={styles.contactText} numberOfLines={1}>{item.customer_contact}</Text>}
+            <Text style={styles.dateText} numberOfLines={1}>{formatDate(item.created_at)}</Text>
           </View>
           
           <View style={styles.amountsBox}>
@@ -254,8 +297,8 @@ export default function PendingPaymentsScreen() {
       ) : filtered.length === 0 ? (
         <EmptyState 
           icon={<CreditCard size={48} color={colors.textMuted} />}
-          heading="No pending payments"
-          subtext={searchQuery ? "No records match your search." : "All accounts are settled and paid up."}
+          message="No pending payments"
+          subMessage={searchQuery ? "No records match your search." : "All accounts are settled and paid up."}
         />
       ) : (
         <FlatList

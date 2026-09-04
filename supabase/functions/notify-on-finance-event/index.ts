@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 import { sendPushNotification } from '../_shared/notifications.ts'
+import { sendCustomerWhatsApp } from '../_shared/whatsappClient.ts'
 
 declare const Deno: any;
 
@@ -153,11 +154,112 @@ serve(async (req: Request) => {
           }));
         }
 
-        return new Response(JSON.stringify({ success: true, message: 'Sale notification sent' }), {
+        // Customer WhatsApp: Sale Receipt + Google Form Review Link
+        if (record.customer_contact) {
+          let reviewUrl = 'https://forms.gle/DigiSolutionReview';
+          try {
+            const { data: ws } = await supabase
+              .from('whatsapp_settings')
+              .select('google_review_url')
+              .eq('is_active', true)
+              .limit(1)
+              .maybeSingle();
+
+            if (ws?.google_review_url?.trim()) {
+              reviewUrl = ws.google_review_url.trim();
+            }
+          } catch (_) {}
+
+          const saleMsg = `Hello ${record.customer_name || 'Customer'},\n\n` +
+            `Thank you for your purchase at *Digital Solution*!\n\n` +
+            `🧾 *Sale Code:* ${saleCode}\n` +
+            `💰 *Grand Total:* ${amountStr}\n` +
+            (record.payment_mode ? `💳 *Payment Mode:* ${record.payment_mode}\n` : '') +
+            `\nWe appreciate your business! Please take 30 seconds to share your shopping experience with us:\n\n` +
+            `⭐ *Google Review Link:* ${reviewUrl}\n\n` +
+            `Have a wonderful day!`;
+
+          await sendCustomerWhatsApp(supabase, {
+            phone: record.customer_contact,
+            customerName: record.customer_name,
+            eventType: 'SALE_CREATED',
+            messageText: saleMsg,
+            saleId: record.id,
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Sale notification processed' }), {
           headers: { 'Content-Type': 'application/json' },
           status: 200,
         });
       }
+    }
+
+    // ── 5. DIRECT ACTION: SEND INVOICE PDF TO CUSTOMER ───────────────────────
+    if (payload.type === 'SEND_INVOICE_PDF' || payload.action === 'SEND_INVOICE_PDF') {
+      const { phone, customerName, documentUrl, invoiceCode, grandTotal, jobId, saleId } = payload;
+
+      if (!phone) {
+        return new Response(JSON.stringify({ error: 'Missing customer phone number' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 400,
+        });
+      }
+
+      const caption = `Hello ${customerName || 'Customer'}, here is your official invoice ${invoiceCode || ''} from Digital Solution.\n\n` +
+        (grandTotal ? `Total: ₹${Number(grandTotal).toFixed(2)}\n\n` : '') +
+        `Thank you for your business!`;
+
+      const result = await sendCustomerWhatsApp(supabase, {
+        phone,
+        customerName,
+        eventType: 'INVOICE_PDF',
+        messageText: caption,
+        documentUrl: documentUrl || undefined,
+        documentFilename: `${invoiceCode || 'Invoice'}.pdf`,
+        jobId,
+        saleId,
+      });
+
+      return new Response(JSON.stringify(result), {
+        headers: { 'Content-Type': 'application/json' },
+        status: result.success ? 200 : 500,
+      });
+    }
+
+    // ── 6. DIRECT ACTION: SEND PENDING PAYMENT REMINDER ───────────────────────
+    if (payload.type === 'SEND_PENDING_REMINDER' || payload.action === 'SEND_PENDING_REMINDER') {
+      const { phone, customerName, reference, balanceDue, totalAmount, dueDate, jobId, saleId } = payload;
+
+      if (!phone) {
+        return new Response(JSON.stringify({ error: 'Missing customer phone number' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 400,
+        });
+      }
+
+      const reminderMsg = `Hello ${customerName || 'Customer'},\n\n` +
+        `This is a friendly payment reminder from *Digital Solution*.\n\n` +
+        `📋 *Reference:* ${reference || 'Repair Service'}\n` +
+        (totalAmount ? `💰 *Total Bill:* ₹${Number(totalAmount).toFixed(2)}\n` : '') +
+        `⚠️ *Outstanding Balance Due:* *₹${Number(balanceDue || 0).toFixed(2)}*\n` +
+        (dueDate ? `📅 *Due Date:* ${dueDate}\n` : '') +
+        `\nPlease arrange the payment at your earliest convenience via Cash, Card, or UPI.\n\n` +
+        `For questions or assistance, please contact Digital Solution. Thank you!`;
+
+      const result = await sendCustomerWhatsApp(supabase, {
+        phone,
+        customerName,
+        eventType: 'PAYMENT_PENDING',
+        messageText: reminderMsg,
+        jobId,
+        saleId,
+      });
+
+      return new Response(JSON.stringify(result), {
+        headers: { 'Content-Type': 'application/json' },
+        status: result.success ? 200 : 500,
+      });
     }
 
     return new Response(JSON.stringify({ error: 'Payload ignored' }), {

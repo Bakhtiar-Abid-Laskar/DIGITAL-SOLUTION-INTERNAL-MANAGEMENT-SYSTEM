@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) {
             setSessionUser(null);
             setProfile(null);
-            if (pathname !== '/login') {
+            if (window.location.pathname !== '/login') {
               router.push('/login');
             }
           }
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) {
             setSessionUser(null);
             setProfile(null);
-            if (pathname !== '/login') {
+            if (window.location.pathname !== '/login') {
               router.push('/login');
             }
           }
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router, pathname]);
+  }, [router]); // Removed pathname to prevent re-subscription on every route change
 
   // Re-fetch profile when browser tab regains focus (picks up role/is_active changes)
   useEffect(() => {

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "7e33115f-5b88-4cf1-9b16-8fdbde6e562b"
+      }
+    },
+    "android": {
+      "package": "com.bakhtiarabid02.repairshopworkspace"
+    }
+  }
+}

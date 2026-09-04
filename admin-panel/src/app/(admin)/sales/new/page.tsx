@@ -13,9 +13,10 @@ import { useToast } from "@/components/common/ToastProvider";
 import { formatCurrency, Customer } from "@repairshop/shared";
 import { openInvoicePrint } from '@/lib/invoiceClient';
 import { CustomerTypeahead } from "@/components/customers/CustomerTypeahead";
+import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
 import { 
   ArrowLeft, CheckCircle2, Plus, PlusCircle, Printer, Trash2, 
-  User as UserIcon, ShoppingBag, CreditCard, Package, Search 
+  User as UserIcon, ShoppingBag, CreditCard, Package, Search, Tag, Hash, X 
 } from "lucide-react";
 
 // Types matching the RPC signatures
@@ -26,6 +27,8 @@ type InvoiceLineParams = {
   selling_rate?: number | null;
   selling_amount?: number | null;
   serial_number?: string | null;
+  hsn_code?: string | null;
+  tax_percent?: number | null;
   cgst_rate?: number | null;
   sgst_rate?: number | null;
   igst_rate?: number | null;
@@ -46,6 +49,8 @@ type PreviewInvoiceResponse = {
     quantity: number;
     selling_rate: number;
     taxable_amount: number;
+    hsn_code?: string;
+    tax_percent?: number;
     cgst_rate: number;
     cgst_amount: number;
     sgst_rate: number;
@@ -65,10 +70,8 @@ interface InvoiceLineForm {
   rate_input: string; // string for input typing
   amount_input: string; // string for input typing
   serial_number: string;
-  // custom service tax rates if no product
-  cgst_rate: number;
-  sgst_rate: number;
-  igst_rate: number;
+  hsn_code: string;
+  tax_percent: number; // defaults to 18
   tax_mode: 'exclusive' | 'inclusive';
 }
 
@@ -80,9 +83,8 @@ const emptyItem: InvoiceLineForm = {
   rate_input: "",
   amount_input: "",
   serial_number: "",
-  cgst_rate: 9,
-  sgst_rate: 9,
-  igst_rate: 18,
+  hsn_code: "",
+  tax_percent: 18,
   tax_mode: "exclusive"
 };
 
@@ -92,6 +94,7 @@ export default function CreateSalePage() {
   const [loading, setLoading] = useState(false);
   const [createdInvoiceCode, setCreatedInvoiceCode] = useState<string | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
+  const [printState, setPrintState] = useState<PrintProgressState | null>(null);
 
   // Form State
   const [form, setForm] = useState({
@@ -188,7 +191,6 @@ export default function CreateSalePage() {
   // Update preview whenever items or form inputs change
   useEffect(() => {
     const runPreview = async () => {
-      // Don't preview if empty
       if (!items.some(i => i.item_name?.trim() || i.product_id || (i.rate_input && i.quantity))) {
         setPreview(null);
         return;
@@ -204,10 +206,10 @@ export default function CreateSalePage() {
             quantity: Math.max(1, Number(i.quantity) || 1),
             selling_rate: i.rate_input ? Number(i.rate_input) : null,
             selling_amount: i.amount_input ? Number(i.amount_input) : null,
-            cgst_rate: i.product_id ? null : Number(i.cgst_rate) || 0,
-            sgst_rate: i.product_id ? null : Number(i.sgst_rate) || 0,
-            igst_rate: i.product_id ? null : Number(i.igst_rate) || 0,
-            tax_mode: i.product_id ? null : (i.tax_mode || 'exclusive')
+            serial_number: i.serial_number || null,
+            hsn_code: i.hsn_code || null,
+            tax_percent: Number(i.tax_percent) || 18,
+            tax_mode: i.tax_mode || 'exclusive'
           }));
 
         if (payloadItems.length === 0) {
@@ -218,21 +220,18 @@ export default function CreateSalePage() {
         const { data, error } = await supabase.rpc('preview_invoice', {
           p_items: payloadItems,
           p_tax_regime: form.tax_regime,
-          p_discount: Math.max(0, Number(form.discount) || 0)
+          p_discount: 0
         });
 
         if (error) {
           console.warn("Preview RPC notice:", error.message || error);
-          // Safe fallback preview calculation for non-RPC or custom items
           let subtotal = 0;
           let totalTax = 0;
           const calculatedItems = payloadItems.map(item => {
             const rate = item.selling_rate || (item.selling_amount ? item.selling_amount / item.quantity : 0);
             const lineSub = rate * item.quantity;
             subtotal += lineSub;
-            const taxPct = form.tax_regime === 'intra_state' 
-              ? ((item.cgst_rate || 0) + (item.sgst_rate || 0))
-              : (item.igst_rate || 0);
+            const taxPct = Number(item.tax_percent) || 18;
             const lineTax = (lineSub * taxPct) / 100;
             totalTax += lineTax;
             return {
@@ -240,24 +239,25 @@ export default function CreateSalePage() {
               quantity: item.quantity,
               selling_rate: rate,
               taxable_amount: lineSub,
-              cgst_rate: item.cgst_rate || 0,
+              hsn_code: item.hsn_code || undefined,
+              tax_percent: taxPct,
+              cgst_rate: form.tax_regime === 'intra_state' ? taxPct / 2 : 0,
               cgst_amount: form.tax_regime === 'intra_state' ? lineTax / 2 : 0,
-              sgst_rate: item.sgst_rate || 0,
+              sgst_rate: form.tax_regime === 'intra_state' ? taxPct / 2 : 0,
               sgst_amount: form.tax_regime === 'intra_state' ? lineTax / 2 : 0,
-              igst_rate: item.igst_rate || 0,
+              igst_rate: form.tax_regime === 'inter_state' ? taxPct : 0,
               igst_amount: form.tax_regime === 'inter_state' ? lineTax : 0,
               line_total: lineSub + lineTax
             };
           });
-          const discount = Math.max(0, Number(form.discount) || 0);
-          const grandTotal = Math.max(0, subtotal + totalTax - discount);
+          const grandTotal = Math.max(0, subtotal + totalTax);
           setPreview({
             subtotal,
             total_cgst: form.tax_regime === 'intra_state' ? totalTax / 2 : 0,
             total_sgst: form.tax_regime === 'intra_state' ? totalTax / 2 : 0,
             total_igst: form.tax_regime === 'inter_state' ? totalTax : 0,
             total_tax: totalTax,
-            discount,
+            discount: 0,
             round_off: 0,
             grand_total: grandTotal,
             items: calculatedItems
@@ -274,10 +274,9 @@ export default function CreateSalePage() {
       }
     };
 
-    // Debounce the preview slightly
     const timeout = setTimeout(runPreview, 300);
     return () => clearTimeout(timeout);
-  }, [items, form.tax_regime, form.discount]);
+  }, [items, form.tax_regime]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -290,10 +289,9 @@ export default function CreateSalePage() {
     items.forEach((item, index) => {
       if (!item.item_name?.trim() && !item.product_id) newErrors[`item_${index}`] = "Name required";
       if (Number(item.quantity) <= 0) newErrors[`qty_${index}`] = "> 0";
-      if (!item.rate_input && !item.amount_input) newErrors[`rate_${index}`] = "Rate or Amount required";
+      if (!item.rate_input && !item.amount_input) newErrors[`rate_${index}`] = "Rate required";
     });
 
-    if (Number(form.discount) < 0) newErrors.discount = "Cannot be negative";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -304,24 +302,24 @@ export default function CreateSalePage() {
 
   const handleProductSelect = (index: number, inv: any) => {
     if (!inv) {
-      updateItem(index, { inventory_id: "", product_id: null, item_name: "", rate_input: "", amount_input: "", serial_number: "" });
+      updateItem(index, { inventory_id: "", product_id: null, item_name: "", rate_input: "", amount_input: "", serial_number: "", hsn_code: "" });
       return;
     }
     const productName = getProductName(inv);
     const prod = Array.isArray(inv.products) ? inv.products[0] : inv.products;
     const rate = inv.selling_rate ? Number(inv.selling_rate) : 0;
     const qty = items[index].quantity || 1;
+    const defaultTax = prod?.cgst_rate ? (Number(prod.cgst_rate) + Number(prod.sgst_rate)) : 18;
     
     updateItem(index, {
       inventory_id: inv.id,
       product_id: inv.product_id,
       item_name: productName,
+      hsn_code: prod?.hsn_sac || "",
+      tax_percent: defaultTax,
       rate_input: rate ? String(rate) : "",
       amount_input: rate ? String(rate * qty) : "",
       serial_number: "",
-      cgst_rate: prod?.cgst_rate || 0,
-      sgst_rate: prod?.sgst_rate || 0,
-      igst_rate: prod?.igst_rate || 0,
       tax_mode: prod?.tax_mode || 'exclusive'
     });
   };
@@ -341,10 +339,9 @@ export default function CreateSalePage() {
           selling_rate: i.rate_input ? Number(i.rate_input) : null,
           selling_amount: i.amount_input ? Number(i.amount_input) : null,
           serial_number: i.serial_number || null,
-          cgst_rate: i.product_id ? null : i.cgst_rate,
-          sgst_rate: i.product_id ? null : i.sgst_rate,
-          igst_rate: i.product_id ? null : i.igst_rate,
-          tax_mode: i.product_id ? null : i.tax_mode
+          hsn_code: i.hsn_code || null,
+          tax_percent: Number(i.tax_percent) || 18,
+          tax_mode: i.tax_mode || 'exclusive'
         }));
 
       // Central Customer Directory: Upsert or link customer
@@ -375,20 +372,16 @@ export default function CreateSalePage() {
         p_customer_gstin: form.customer_gstin || null,
         p_tax_regime: form.tax_regime,
         p_items: payloadItems,
-        p_discount: Number(form.discount) || 0,
+        p_discount: 0,
         p_payment_method: form.payment_method,
         p_status: form.status,
         p_notes: form.notes || null,
         p_job_id: null,
-        // amount_paid is now written atomically inside create_invoice().
-        // Pass explicit value only when the user typed one; otherwise pass null
-        // so the RPC auto-derives: status='paid' → grand_total, 'draft' → 0.
         p_amount_paid: form.amount_paid !== "" ? Number(form.amount_paid) : null
       });
 
       if (error) throw new Error(error.message);
 
-      // Link invoice to central customer record
       if (data?.invoice_id && customerId) {
         await supabase
           .from('invoices')
@@ -423,14 +416,24 @@ export default function CreateSalePage() {
           <Button variant="outline" leftIcon={<ArrowLeft size={16} />} onClick={() => router.push("/sales")}>
             Back to Invoices
           </Button>
-          <Button leftIcon={<Printer size={16} />} onClick={() => {
-            if (createdInvoiceId && preview) {
-              openInvoicePrint({
-                docType: 'final',
-                invoiceId: createdInvoiceId,
-              });
-            }
-          }}>
+          <Button 
+            leftIcon={<Printer size={16} />} 
+            onClick={async () => {
+              if (!createdInvoiceId) return;
+              setPrintState({ isOpen: true, percent: 15, message: 'Preparing invoice document...' });
+              try {
+                await openInvoicePrint(
+                  { docType: 'final', invoiceId: createdInvoiceId },
+                  (percent, message) => setPrintState({ isOpen: true, percent, message })
+                );
+                setPrintState({ isOpen: true, percent: 100, message: 'Print dialog opened', isComplete: true });
+                setTimeout(() => setPrintState(null), 1200);
+              } catch (e: any) {
+                setPrintState(null);
+                showToast(e.message || 'Failed to print invoice', 'error');
+              }
+            }}
+          >
             Print Invoice
           </Button>
           <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => {
@@ -442,16 +445,23 @@ export default function CreateSalePage() {
             New Invoice
           </Button>
         </div>
+
+        <PrintProgressModal state={printState} onClose={() => setPrintState(null)} />
       </div>
     );
   }
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto pb-20">
-      <PageHeader
-        title="Create Invoice"
-        description="Generate a new invoice or cash receipt."
-      />
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-admin-text-muted">
+          <ArrowLeft size={16} />
+        </Button>
+        <PageHeader 
+          title="New Counter Sale" 
+          description="Create an itemized GST invoice with per-line editable tax & prices"
+        />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Card>
@@ -462,42 +472,44 @@ export default function CreateSalePage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="col-span-1 lg:col-span-2">
+            <div className="col-span-1 md:col-span-2">
               <label className="block text-sm font-medium text-admin-text-secondary mb-1">Customer Name *</label>
               <CustomerTypeahead
                 name={form.customer_name}
                 selectedCustomerId={form.customer_id}
-                onChangeName={(val) => setForm({ ...form, customer_name: val, customer_id: null })}
-                onSelectCustomer={(cust) => setForm({
-                  ...form,
-                  customer_id: cust.id,
-                  customer_name: cust.name,
-                  customer_contact: cust.phone || form.customer_contact,
-                  customer_email: cust.email || form.customer_email,
-                  customer_gstin: cust.gstin || form.customer_gstin,
-                  customer_address: cust.address || form.customer_address,
-                })}
-                onClearCustomer={() => setForm({ ...form, customer_id: null })}
+                onSelectCustomer={(c: Customer) => {
+                  setForm(prev => ({
+                    ...prev,
+                    customer_id: c.id,
+                    customer_name: c.name,
+                    customer_contact: c.phone || "",
+                    customer_email: c.email || "",
+                    customer_gstin: c.gstin || "",
+                    customer_address: c.address || "",
+                  }));
+                }}
+                onChangeName={(val: string) => setForm(prev => ({ ...prev, customer_name: val, customer_id: null }))}
+                onClearCustomer={() => setForm(prev => ({ ...prev, customer_id: null }))}
                 error={errors.customer_name}
                 placeholder="Search existing customer or enter name..."
               />
             </div>
+
             <div className="col-span-1 lg:col-span-2">
-              <label htmlFor="field-ashk0g" className="block text-sm font-medium text-admin-text-secondary mb-1">Contact Number *</label>
-              <Input id="field-ashk0g" type="tel" value={form.customer_contact} onChange={(e) => setForm({...form, customer_contact: e.target.value})} error={!!errors.customer_contact} />
+              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Contact Number *</label>
+              <Input type="tel" value={form.customer_contact} onChange={(e) => setForm({...form, customer_contact: e.target.value})} error={!!errors.customer_contact} />
             </div>
             <div className="col-span-1 lg:col-span-2">
-              <label htmlFor="field-0mk4rt" className="block text-sm font-medium text-admin-text-secondary mb-1">Email (Optional)</label>
-              <Input id="field-0mk4rt" type="email" value={form.customer_email} onChange={(e) => setForm({...form, customer_email: e.target.value})} />
+              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Email (Optional)</label>
+              <Input type="email" value={form.customer_email} onChange={(e) => setForm({...form, customer_email: e.target.value})} />
             </div>
             <div className="col-span-1 lg:col-span-2">
-              <label htmlFor="field-g08t2w" className="block text-sm font-medium text-admin-text-secondary mb-1">GSTIN (Optional)</label>
-              <Input id="field-g08t2w" value={form.customer_gstin} onChange={(e) => setForm({...form, customer_gstin: e.target.value})} />
+              <label className="block text-sm font-medium text-admin-text-secondary mb-1">GSTIN (Optional)</label>
+              <Input value={form.customer_gstin} onChange={(e) => setForm({...form, customer_gstin: e.target.value})} />
             </div>
             <div className="col-span-1 md:col-span-2 lg:col-span-4">
-              <label htmlFor="field-address" className="block text-sm font-medium text-admin-text-secondary mb-1">Billing & Delivery Address (Optional)</label>
+              <label className="block text-sm font-medium text-admin-text-secondary mb-1">Billing & Delivery Address (Optional)</label>
               <Textarea
-                id="field-address"
                 rows={2}
                 value={form.customer_address}
                 onChange={(e) => setForm({ ...form, customer_address: e.target.value })}
@@ -513,11 +525,11 @@ export default function CreateSalePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingBag size={18} className="text-admin-accent" />
-                <CardTitle>Invoice Items</CardTitle>
+                <CardTitle>Itemized Charges</CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                 <label htmlFor="field-7k3zn8" className="text-sm font-medium text-admin-text-secondary">Tax Regime:</label>
-                 <Select id="field-7k3zn8" value={form.tax_regime} onChange={(e) => setForm({...form, tax_regime: e.target.value as any})} className="py-1 text-sm h-8">
+                 <label className="text-sm font-medium text-admin-text-secondary">Tax Regime:</label>
+                 <Select value={form.tax_regime} onChange={(e) => setForm({...form, tax_regime: e.target.value as any})} className="py-1 text-sm h-8">
                    <option value="intra_state">Intra-State (CGST + SGST)</option>
                    <option value="inter_state">Inter-State (IGST)</option>
                  </Select>
@@ -529,17 +541,25 @@ export default function CreateSalePage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border">
                   <tr>
-                    <th className="px-4 py-3 font-medium w-1/3">Item / Service</th>
-                    <th className="px-4 py-3 font-medium w-40">Serial No.</th>
-                    <th className="px-4 py-3 font-medium w-24">Qty</th>
-                    <th className="px-4 py-3 font-medium w-32">Rate (₹)</th>
-                    <th className="px-4 py-3 font-medium w-32">Amount (₹)</th>
-                    <th className="px-4 py-3 font-medium w-12 text-center"></th>
+                    <th className="px-4 py-3 font-medium w-2/5">Item / Service</th>
+                    <th className="px-3 py-3 font-medium w-28">HSN/SAC</th>
+                    <th className="px-3 py-3 font-medium w-32">Serial No.</th>
+                    <th className="px-3 py-3 font-medium w-20 text-center">Qty</th>
+                    <th className="px-3 py-3 font-medium w-28 text-right">Price (₹)</th>
+                    <th className="px-3 py-3 font-medium w-24 text-right">Tax (%)</th>
+                    <th className="px-3 py-3 font-medium w-28 text-right">Line Total</th>
+                    <th className="px-3 py-3 font-medium w-10 text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-admin-border">
                   {items.map((item, index) => {
                     const isSelectedFromCatalog = Boolean(item.inventory_id && item.product_id);
+                    const qty = Number(item.quantity) || 1;
+                    const price = Number(item.rate_input) || 0;
+                    const taxRate = Number(item.tax_percent) || 18;
+                    const lineSub = qty * price;
+                    const lineTax = lineSub * (taxRate / 100);
+                    const lineTotal = lineSub + lineTax;
 
                     return (
                       <tr key={index} className="bg-admin-bg-surface">
@@ -549,7 +569,7 @@ export default function CreateSalePage() {
                               <div className="relative flex-1">
                                 <Input
                                   aria-label="Item / Service Name"
-                                  placeholder="Type to search catalog or enter custom item..."
+                                  placeholder="Search catalog or type custom item..."
                                   value={item.item_name}
                                   onChange={(e) => {
                                     updateItem(index, { 
@@ -593,7 +613,7 @@ export default function CreateSalePage() {
                                   onClick={() => handleProductSelect(index, null)}
                                   className="text-xs text-admin-text-muted hover:text-admin-danger px-1"
                                 >
-                                  ✕
+                                  <X size={13} />
                                 </button>
                               )}
                             </div>
@@ -681,27 +701,39 @@ export default function CreateSalePage() {
                                 <span>Catalog Product Linked</span>
                               </div>
                             )}
-
-                            <div className="text-xs text-admin-text-muted mt-1">
-                              {(() => {
-                                const itemTax = preview?.items?.[index];
-                                if (!itemTax) return null;
-                                const taxSum = (itemTax.cgst_amount || 0) + (itemTax.sgst_amount || 0) + (itemTax.igst_amount || 0);
-                                return <span>Tax: {formatCurrency(taxSum)}</span>;
-                              })()}
-                            </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 align-top">
-                          <Input aria-label="Serial Number" 
-                            type="text" placeholder="S/N (Optional)"
-                            value={item.serial_number}
-                            onChange={(e) => updateItem(index, { serial_number: e.target.value })}
+
+                        {/* HSN Code */}
+                        <td className="px-3 py-3 align-top">
+                          <Input
+                            aria-label="HSN Code"
+                            type="text"
+                            placeholder="HSN"
+                            value={item.hsn_code || ""}
+                            onChange={(e) => updateItem(index, { hsn_code: e.target.value })}
+                            className="text-xs"
                           />
                         </td>
-                        <td className="px-4 py-3 align-top">
-                          <Input aria-label="Field" 
-                            type="number" min="1" 
+
+                        {/* Serial Number */}
+                        <td className="px-3 py-3 align-top">
+                          <Input
+                            aria-label="Serial Number" 
+                            type="text"
+                            placeholder="S/N (Optional)"
+                            value={item.serial_number}
+                            onChange={(e) => updateItem(index, { serial_number: e.target.value })}
+                            className="text-xs"
+                          />
+                        </td>
+
+                        {/* Quantity */}
+                        <td className="px-3 py-3 align-top">
+                          <Input
+                            aria-label="Quantity" 
+                            type="number"
+                            min="1" 
                             value={item.quantity}
                             onChange={(e) => {
                               const qty = Number(e.target.value);
@@ -712,11 +744,18 @@ export default function CreateSalePage() {
                               });
                             }}
                             error={!!errors[`qty_${index}`]}
+                            className="text-xs text-center"
                           />
                         </td>
-                        <td className="px-4 py-3 align-top">
-                          <Input aria-label="Rate" 
-                            type="number" step="0.01" min="0" placeholder="Rate"
+
+                        {/* Price (Rate) */}
+                        <td className="px-3 py-3 align-top">
+                          <Input
+                            aria-label="Rate" 
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
                             value={item.rate_input}
                             onChange={(e) => {
                               const rate = Number(e.target.value);
@@ -727,22 +766,42 @@ export default function CreateSalePage() {
                               });
                             }}
                             error={!!errors[`rate_${index}`]}
+                            className="text-xs text-right"
                           />
                         </td>
-                        <td className="px-4 py-3 align-top">
-                          <Input aria-label="Amount" 
-                            type="number" step="0.01" min="0" placeholder="Amount"
-                            value={item.amount_input}
-                            onChange={(e) => updateItem(index, { amount_input: e.target.value, rate_input: "" })}
+
+                        {/* Tax % */}
+                        <td className="px-3 py-3 align-top">
+                          <Input
+                            aria-label="Tax %" 
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="18"
+                            value={String(item.tax_percent ?? 18)}
+                            onChange={(e) => updateItem(index, { tax_percent: parseFloat(e.target.value) || 0 })}
+                            className="text-xs text-right"
                           />
                         </td>
-                        <td className="px-4 py-3 align-top text-center pt-5">
+
+                        {/* Line Total */}
+                        <td className="px-3 py-3 align-top text-right">
+                          <div className="text-sm font-bold text-admin-text-primary">
+                            {formatCurrency(lineTotal)}
+                          </div>
+                          <div className="text-[10px] text-admin-text-muted">
+                            Tax: {formatCurrency(lineTax)}
+                          </div>
+                        </td>
+
+                        {/* Trash */}
+                        <td className="px-3 py-3 align-top text-center pt-4">
                           <button 
                             type="button" 
                             onClick={() => setItems(curr => curr.length > 1 ? curr.filter((_, i) => i !== index) : curr)}
                             className="text-admin-text-muted hover:text-admin-danger transition-colors p-1"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size={16} />
                           </button>
                         </td>
                       </tr>
@@ -770,15 +829,15 @@ export default function CreateSalePage() {
               </CardHeader>
               <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="field-ys6nct" className="block text-sm font-medium text-admin-text-secondary mb-1">Status</label>
-                  <Select id="field-ys6nct" value={form.status} onChange={(e) => setForm({...form, status: e.target.value as any})}>
+                  <label className="block text-sm font-medium text-admin-text-secondary mb-1">Status</label>
+                  <Select value={form.status} onChange={(e) => setForm({...form, status: e.target.value as any})}>
                     <option value="paid">Paid</option>
                     <option value="draft">Draft (Unpaid)</option>
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="field-554kq6" className="block text-sm font-medium text-admin-text-secondary mb-1">Payment Method</label>
-                  <Select id="field-554kq6" value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value as any})}>
+                  <label className="block text-sm font-medium text-admin-text-secondary mb-1">Payment Method</label>
+                  <Select value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value as any})}>
                     <option value="Cash">Cash</option>
                     <option value="Card">Card</option>
                     <option value="UPI">UPI</option>
@@ -787,7 +846,7 @@ export default function CreateSalePage() {
                   </Select>
                 </div>
                 <div className="md:col-span-2">
-                  <label htmlFor="field-5zssix" className="block text-sm font-medium text-admin-text-secondary mb-1">Internal Notes (Optional)</label>
+                  <label className="block text-sm font-medium text-admin-text-secondary mb-1">Internal Notes (Optional)</label>
                   <Textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} rows={3} />
                 </div>
               </CardContent>
@@ -797,27 +856,16 @@ export default function CreateSalePage() {
           <div className="lg:col-span-1">
             <Card className="sticky top-6">
               <CardHeader className="pb-4 border-b border-admin-border bg-admin-bg-subtle">
-                <CardTitle>Summary</CardTitle>
+                <CardTitle>Bill Totals</CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-admin-text-secondary">Subtotal:</span>
+                  <span className="text-admin-text-secondary">Subtotal (Pre-Tax):</span>
                   <span className="font-medium text-admin-text-primary">
                     {formatCurrency(preview?.subtotal || 0)}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm items-center">
-                  <span className="text-admin-text-secondary">Discount (₹):</span>
-                  <div className="w-24">
-                    <Input id="field-5zssix" 
-                      type="number" min="0" step="0.01" 
-                      value={form.discount} 
-                      onChange={(e) => setForm({...form, discount: e.target.value})} 
-                      error={!!errors.discount}
-                      className="text-right h-8 py-1"
-                    />
-                  </div>
-                </div>
+                
                 {form.tax_regime === 'intra_state' ? (
                   <>
                     <div className="flex justify-between text-sm">
@@ -841,35 +889,93 @@ export default function CreateSalePage() {
                     </span>
                   </div>
                 )}
-                
+
                 <div className="flex justify-between text-sm">
-                  <span className="text-admin-text-secondary">Round Off:</span>
+                  <span className="text-admin-text-secondary">Total Tax:</span>
                   <span className="font-medium text-admin-text-primary">
-                    {formatCurrency(preview?.round_off || 0)}
+                    {formatCurrency(preview?.total_tax || 0)}
                   </span>
                 </div>
                 
                 <div className="pt-4 border-t border-admin-border flex justify-between items-center">
                   <span className="text-base font-bold text-admin-text-primary">Grand Total:</span>
-                  <span className="text-xl font-bold text-admin-accent">
+                  <span className="text-xl font-extrabold text-admin-accent">
                     {formatCurrency(preview?.grand_total || 0)}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
-                  <span className="text-sm font-medium text-admin-text-secondary">Amount Paid (₹):</span>
-                  <div className="w-24">
-                    <Input 
-                      type="number" min="0" step="0.01" 
-                      placeholder={(form.status === 'paid' ? preview?.grand_total || 0 : 0).toString()}
-                      value={form.amount_paid} 
-                      onChange={(e) => setForm({...form, amount_paid: e.target.value})} 
-                      className="text-right h-8 py-1"
-                    />
+                {/* Amount Paid & Fast Cash */}
+                <div className="space-y-2 pt-2 border-t border-admin-border">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-admin-text-secondary">Amount Paid (₹):</span>
+                    <div className="w-32">
+                      <Input 
+                        type="number" min="0" step="0.01" 
+                        placeholder={(form.status === 'paid' ? preview?.grand_total || 0 : 0).toString()}
+                        value={form.amount_paid} 
+                        onChange={(e) => setForm({...form, amount_paid: e.target.value})} 
+                        className="text-right h-8 py-1 text-xs font-semibold"
+                        aria-label="Amount Paid"
+                      />
+                    </div>
                   </div>
+
+                  {/* Fast Cash Shortcuts */}
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-admin-text-muted uppercase tracking-wider">
+                      Fast Cash
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setForm({
+                          ...form, 
+                          amount_paid: String(preview?.grand_total || 0),
+                          payment_method: 'Cash',
+                          status: 'paid'
+                        })}
+                        className="px-2 py-0.5 text-xs rounded border border-admin-border bg-admin-bg-surface hover:bg-admin-bg-subtle text-admin-text-secondary font-medium transition-colors"
+                      >
+                        Exact
+                      </button>
+                      {[500, 1000, 2000].map((denomination) => (
+                        <button
+                          key={denomination}
+                          type="button"
+                          onClick={() => setForm({
+                            ...form, 
+                            amount_paid: String(denomination),
+                            payment_method: 'Cash',
+                            status: denomination >= (preview?.grand_total || 0) ? 'paid' : form.status
+                          })}
+                          className="px-2 py-0.5 text-xs rounded border border-admin-border bg-admin-bg-surface hover:bg-admin-bg-subtle text-admin-text-secondary font-medium transition-colors"
+                        >
+                          ₹{denomination}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Change Due / Balance Due */}
+                  {Number(form.amount_paid || 0) > (preview?.grand_total || 0) && (
+                    <div className="flex justify-between items-center text-xs p-2 rounded bg-admin-accent-dim border border-admin-accent/20">
+                      <span className="font-semibold text-admin-text-primary">Change to Return:</span>
+                      <span className="font-extrabold text-admin-accent-text text-sm">
+                        {formatCurrency(Number(form.amount_paid) - (preview?.grand_total || 0))}
+                      </span>
+                    </div>
+                  )}
+                  {form.amount_paid !== "" && Number(form.amount_paid || 0) < (preview?.grand_total || 0) && (
+                    <div className="flex justify-between items-center text-xs p-2 rounded bg-admin-bg-surface border border-admin-border">
+                      <span className="text-admin-text-secondary">Balance Remaining:</span>
+                      <span className="font-bold text-admin-urgent-fg">
+                        {formatCurrency((preview?.grand_total || 0) - Number(form.amount_paid || 0))}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
-                <div className="pt-6">
+                <div className="pt-4">
                   <Button type="submit" className="w-full" disabled={loading} isLoading={loading}>
                     Create Invoice
                   </Button>

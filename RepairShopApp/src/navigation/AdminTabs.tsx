@@ -4,12 +4,11 @@ import { AppPressable } from '../components/common/AppPressable';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import OverviewScreen from '../screens/admin/OverviewScreen';
 import InventoryScreen from '../screens/shared/InventoryScreen';
-import StaffScreen from '../screens/admin/StaffScreen';
-import ReportsScreen from '../screens/admin/ReportsScreen';
+import SalesListScreen from '../screens/shared/SalesListScreen';
 import AdminJobsScreen from '../screens/admin/AdminJobsScreen';
 import CustomTabBar from './CustomTabBar';
 import BottomSheet from '../components/common/BottomSheet';
-import { Plus, DollarSign } from 'lucide-react-native';
+import { PlusSquare, Receipt } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, typography, spacing, radius } from '../tokens';
 
@@ -30,7 +29,7 @@ export default function AdminTabs() {
         tabBar={props => <CustomTabBar {...props} />}
         screenOptions={{ headerShown: false }}
       >
-        <Tab.Screen name="Overview" component={OverviewScreen} />
+        <Tab.Screen name="Dashboard" component={OverviewScreen} />
         <Tab.Screen name="Jobs" component={AdminJobsScreen} />
         <Tab.Screen
           name="Add"
@@ -42,8 +41,8 @@ export default function AdminTabs() {
             },
           })}
         />
-        <Tab.Screen name="Users" component={StaffScreen} />
-        <Tab.Screen name="Reports" component={ReportsScreen} />
+        <Tab.Screen name="Sales" component={SalesListScreen} />
+        <Tab.Screen name="Inventory" component={InventoryScreen} />
       </Tab.Navigator>
 
       <BottomSheet visible={quickActionsVisible} onClose={() => setQuickActionsVisible(false)}>
@@ -57,7 +56,7 @@ export default function AdminTabs() {
             }}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accentBlue + '20' }]}>
-              <Plus color={colors.accentBlue} size={24} />
+              <PlusSquare color={colors.accentBlue} size={24} />
             </View>
             <View>
               <Text style={typography.h3}>New Job</Text>
@@ -73,27 +72,11 @@ export default function AdminTabs() {
             }}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accentGreen + '20' }]}>
-              <DollarSign color={colors.accentGreen} size={24} />
+              <Receipt color={colors.accentGreen} size={24} />
             </View>
             <View>
               <Text style={typography.h3}>New Sale</Text>
               <Text style={typography.caption}>Sell an accessory or part</Text>
-            </View>
-          </AppPressable>
-
-          <AppPressable
-            style={styles.quickActionCard}
-            onPress={() => {
-              setQuickActionsVisible(false);
-              navigation.navigate('SalesList');
-            }}
-          >
-            <View style={[styles.iconBox, { backgroundColor: colors.accentTeal + '20' }]}>
-              <DollarSign color={colors.accentTeal} size={24} />
-            </View>
-            <View>
-              <Text style={typography.h3}>Sales</Text>
-              <Text style={typography.caption}>View all completed jobs and sales</Text>
             </View>
           </AppPressable>
         </View>

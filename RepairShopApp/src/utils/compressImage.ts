@@ -5,11 +5,11 @@ export async function compressImage(uri: string): Promise<string> {
     const manipResult = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 1080 } }],
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      { compress: 0.7, format: ImageManipulator.SaveFormat.WEBP }
     );
     return manipResult.uri;
   } catch (error) {
     console.error('Image compression failed:', error);
-    return uri; // Fallback to original uri if compression fails
+    return uri; 
   }
 }

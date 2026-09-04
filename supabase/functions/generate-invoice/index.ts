@@ -54,7 +54,7 @@ async function fetchInvoiceData(
 ): Promise<SvgInvoiceInput> {
   const { data: inv, error: invErr } = await supabase
     .from('invoices')
-    .select('*, invoice_items(*), customer:customers(address, name, phone, email, gstin)')
+    .select('*, invoice_items(*), customer:customers(address, name, phone, email, gstin), job:jobs(serial_number, job_code)')
     .eq('id', invoiceId)
     .single();
 
@@ -63,10 +63,16 @@ async function fetchInvoiceData(
   const items: SvgLineItem[] = (inv.invoice_items || []).map((it: any, idx: number) => {
     const qty = Number(it.quantity) || 1;
     const rate = Number(it.selling_rate) || 0;
+    const taxPct = it.tax_percent !== undefined && it.tax_percent !== null
+      ? Number(it.tax_percent)
+      : Number(it.cgst_rate || 0) + Number(it.sgst_rate || 0) || Number(it.igst_rate || 0) || 18;
+
     return {
       sn: idx + 1,
       description: it.item_name || '—',
       serialNumber: it.serial_number || undefined,
+      hsnCode: it.hsn_code || undefined,
+      taxPercent: taxPct,
       qty,
       rate,
       amount: qty * rate,
@@ -88,10 +94,12 @@ async function fetchInvoiceData(
     customerPhone: inv.customer_contact || inv.customer?.phone || '—',
     customerEmail: inv.customer_email || inv.customer?.email || '',
     customerGstin: inv.customer_gstin || inv.customer?.gstin || undefined,
+    deviceSerialNumber: inv.job?.serial_number || undefined,
     items,
     totals,
   };
 }
+
 
 async function fetchJobReceiptData(
   supabase: any,

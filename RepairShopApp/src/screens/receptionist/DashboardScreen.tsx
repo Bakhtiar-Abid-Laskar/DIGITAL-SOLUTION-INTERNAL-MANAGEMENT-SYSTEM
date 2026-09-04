@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { getTodayDateString } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
-import { Plus, ClipboardList, Users, Bell, LogOut, User, CheckCircle, AlertTriangle, Activity, Menu, DollarSign, BarChart3, Package, MessageCircle, Mail, FileText, CreditCard } from 'lucide-react-native';
+import { PlusSquare, ClipboardList, Users, Bell, LogOut, User, CheckCircle2, AlertTriangle, Activity, Menu, Receipt, BarChart3, Package, MessageCircle, Mail, CreditCard } from 'lucide-react-native';
 import { useToast } from '../../context/ToastContext';
 import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
@@ -21,7 +21,7 @@ const formatTime = (isoString: string) => {
 
 export default function DashboardScreen() {
   const navigation = useNavigation<any>();
-  const { signOut, user, displayName } = useAuth();
+  const { signOut, user, displayName, avatarUrl } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [logoutVisible, setLogoutVisible] = useState(false);
@@ -72,11 +72,13 @@ export default function DashboardScreen() {
 
   const fetchDashboardData = async (isRefresh = false) => {
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const startOfToday = `${todayStr}T00:00:00.000Z`;
 
       const [receivedRes, inProgressRes, completedRes, urgentRes, unreadRes] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed').gte('completed_at', startOfToday),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user?.id),
       ]);
@@ -97,12 +99,20 @@ export default function DashboardScreen() {
 
   useRealtimeSubscription('jobs', fetchDashboardData);
 
+  const lastFetchTime = useRef<number>(0);
+
   useFocusEffect(
     useCallback(() => {
-      fetchDashboardData(false).then(() => {
-        isFirstMount.current = false;
-      });
-      fetchNotifications();
+      const now = Date.now();
+      // Only fetch if it's the first mount or if 5 minutes have passed
+      // Realtime subscription handles updates in between
+      if (isFirstMount.current || now - lastFetchTime.current > 5 * 60 * 1000) {
+        fetchDashboardData(false).then(() => {
+          isFirstMount.current = false;
+          lastFetchTime.current = Date.now();
+        });
+        fetchNotifications();
+      }
     }, [])
   );
 
@@ -111,9 +121,9 @@ export default function DashboardScreen() {
   };
 
   const quickActions: QuickAction[] = [
-    { id: 'new_job', label: 'New Job', icon: Plus, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
-    { id: 'new_sale', label: 'New Sale', icon: DollarSign, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
-    { id: 'sales', label: 'Sales', icon: FileText, bgColor: QUICK_ACTION_COLORS.greenTile?.bg || '#E6F4EA', iconColor: QUICK_ACTION_COLORS.greenTile?.fg || '#137333', onPress: () => navigation.navigate('SalesList') },
+    { id: 'new_job', label: 'New Job', icon: PlusSquare, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
+    { id: 'new_sale', label: 'New Sale', icon: Receipt, bgColor: QUICK_ACTION_COLORS.greenTile.bg, iconColor: QUICK_ACTION_COLORS.greenTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
+    { id: 'sales', label: 'Sales', icon: Receipt, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('SalesList') },
     { id: 'pending_payments', label: 'Pending Payments', icon: CreditCard, bgColor: '#FFF4E5', iconColor: '#E65100', onPress: () => navigation.navigate('PendingPayments') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
     { id: 'customers', label: 'Customers', icon: Users, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('Customers') },
@@ -124,7 +134,7 @@ export default function DashboardScreen() {
   const stats: StatCard[] = [
     { id: 'received', label: 'Received', value: loading ? '-' : statsData.todayTotal, type: 'total', icon: ClipboardList, onPress: () => navigateToJobs('Received') },
     { id: 'in_progress', label: 'In Progress', value: loading ? '-' : statsData.inProgress, type: 'progress', icon: Activity, onPress: () => navigateToJobs('In Progress') },
-    { id: 'completed', label: 'Completed', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle, onPress: () => navigateToJobs('Completed') },
+    { id: 'completed', label: 'Completed', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle2, onPress: () => navigateToJobs('Completed') },
     { id: 'urgent', label: 'Urgent', value: loading ? '-' : statsData.urgentPending, type: 'urgent', icon: AlertTriangle, onPress: () => navigateToJobs('Urgent') },
   ];
 
@@ -135,6 +145,7 @@ export default function DashboardScreen() {
         userName={displayName}
         workloadText={statsData.urgentPending > 0 ? `${statsData.urgentPending} urgent jobs need attention` : 'All caught up'}
         bannerColor={colors.primary}
+        avatarUrl={avatarUrl}
         avatarElement={<User color={colors.textInverse} size={24} />}
         quickActions={quickActions}
         stats={stats}
@@ -166,7 +177,30 @@ export default function DashboardScreen() {
             />
           ) : (
             notificationsData.map(notif => (
-              <AppPressable key={notif.id} style={styles.notificationCard}>
+              <AppPressable
+                key={notif.id}
+                style={styles.notificationCard}
+                onPress={() => {
+                  setNotificationsVisible(false);
+                  const msg = (notif.message || '').toLowerCase();
+                  const type = (notif.type || '').toLowerCase();
+                  if (type.includes('material_return') || msg.includes('return material') || msg.includes('material return')) {
+                    navigation.navigate('AllottedMaterialsScreen', { mode: 'all', jobId: notif.job_id });
+                  } else if (notif.job_id) {
+                    navigation.navigate('JobDetail', { jobId: notif.job_id });
+                  } else if (type.includes('salary') || type.includes('leave') || msg.includes('salary') || msg.includes('leave')) {
+                    navigation.navigate('Salary');
+                  } else if (type.includes('attendance') || msg.includes('attendance')) {
+                    navigation.navigate('Attendance');
+                  } else if (type.includes('sale') || msg.includes('sale')) {
+                    navigation.navigate('SalesList');
+                  } else if (type.includes('inventory') || type.includes('stock') || msg.includes('stock')) {
+                    navigation.navigate('InventoryScreen');
+                  } else {
+                    navigation.navigate('Notifications');
+                  }
+                }}
+              >
                 <View style={styles.notificationIcon}>
                   {notif.channel === 'whatsapp' ? (
                     <MessageCircle size={20} color={colors.accentGreen} />

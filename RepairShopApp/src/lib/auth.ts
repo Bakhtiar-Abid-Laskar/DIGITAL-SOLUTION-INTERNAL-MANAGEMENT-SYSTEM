@@ -8,13 +8,15 @@ export interface UserRow {
   email: string;
   role: UserRole;
   is_active: boolean;
+  avatar_url?: string | null;
+  avatar_drive_file_id?: string | null;
   last_login_at?: string | null;
 }
 
 export const fetchUserRow = async (userId: string): Promise<UserRow | null> => {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, role, is_active, last_login_at')
+    .select('id, name, email, role, is_active, avatar_url, avatar_drive_file_id, last_login_at')
     .eq('id', userId)
     .maybeSingle();
 

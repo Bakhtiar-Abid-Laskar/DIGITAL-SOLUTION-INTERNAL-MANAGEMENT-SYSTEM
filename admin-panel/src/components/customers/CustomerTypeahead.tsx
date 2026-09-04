@@ -45,7 +45,7 @@ export function CustomerTypeahead({
     }
     setLoading(true);
     try {
-      const { data, error: rpcError } = await supabase.rpc('search_customers', {
+      const { data, error: rpcError } = await supabase.rpc('search_customers_v2', {
         p_query: query.trim(),
         p_limit: 6,
       });

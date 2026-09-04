@@ -15,77 +15,89 @@ const FONTS = {
 // ---------------------------------------------------------------------------
 
 export const colors = {
-  // Canvas
-  background: '#FFFFFF',
-  backgroundAlt: '#F9FAFB', // subtle gray if needed, but primarily white canvas
+  // Canvas & Surfaces (Harmonized with Web Admin)
+  background: '#F8FAFC',
+  backgroundAlt: '#F1F5F9',
   surface: '#FFFFFF',
+  surfaceSubtle: '#F1F5F9',
+  surfaceHover: '#E2E8F0',
+  surfaceDark: '#0F172A',
 
-  // Text
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
+  // Semantic Web Admin Aliases
+  bgBase: '#F8FAFC',
+  bgSurface: '#FFFFFF',
+  bgSubtle: '#F1F5F9',
+  bgHover: '#E2E8F0',
+  bgDark: '#0F172A',
+
+  // Text (High Contrast Slate Hierarchy)
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#64748B',
   textInverse: '#FFFFFF',
 
-  // Status pastels & inks
-  statusReceivedBg: '#E0ECFF',   // pastel.sky
-  statusReceivedFg: '#3B5BFF',   // accent.blue
-  statusInProgressBg: '#EDE9FE', // pastel.lavender
-  statusInProgressFg: '#5B4FE9', // primary.violet
-  statusCompletedBg: '#DCFCE7',  // pastel.mint
-  statusCompletedFg: '#2E9E52',  // accent.green
-  statusWaitingBg: '#FFEDD5',    // pastel.peach / amber
-  statusWaitingFg: '#F5A524',    // accent.orange
-  statusAssignedBg: '#F3F4F6',   // gray
-  statusAssignedFg: '#6B7280',   // text.secondary
-  statusUrgentBg: '#FEE2E2',     // pastel.rose
-  statusUrgentFg: '#E5484D',     // accent.red
-  statusHighBg: '#FFEDD5',       // pastel.peach
-  statusHighFg: '#F5A524',       // accent.orange
-  statusNormalBg: '#F3F4F6',     // gray/neutral
-  statusNormalFg: '#6B7280',     // gray
+  // Status pastels & inks (Exact match with web admin badge tokens)
+  statusReceivedBg: '#E0ECFF',
+  statusReceivedFg: '#3B5BFF',
+  statusInProgressBg: '#E0F2FE',
+  statusInProgressFg: '#0284C7',
+  statusCompletedBg: '#D1FAE5',
+  statusCompletedFg: '#059669',
+  statusWaitingBg: '#FEF3C7',
+  statusWaitingFg: '#D97706',
+  statusAssignedBg: '#F1F5F9',
+  statusAssignedFg: '#475569',
+  statusUrgentBg: '#FEE2E2',
+  statusUrgentFg: '#DC2626',
+  statusHighBg: '#FEF3C7',
+  statusHighFg: '#D97706',
+  statusNormalBg: '#F1F5F9',
+  statusNormalFg: '#475569',
+  statusPendingBg: '#FEF3C7',
+  statusPendingFg: '#D97706',
 
-  // Primary brand / accents
-  primary: '#5B4FE9',
+  // Primary brand / accents (Harmonized)
+  primary: '#4F46E5',
+  accent: '#6366F1',
+  accentDark: '#4338CA',
   accentBlue: '#3B5BFF',
-  accentGreen: '#2E9E52',
-  accentRed: '#E5484D',
-  accentOrange: '#F5A524',
+  accentGreen: '#10B981',
+  accentRed: '#EF4444',
+  accentOrange: '#F59E0B',
 
   // Digital Solution Brand Tokens
   brand: {
-    navyDark: '#0A1A3A',             // header gradient start (top-left)
-    blueBright: '#1E56CC',           // header gradient end (bottom-right), primary accent
-    blueDeep: '#16233F',             // "DIGITAL" wordmark, "Welcome Back!" text
-    blueAccent: '#1E56CC',           // "SOLUTION" wordmark, links, checkbox, icon glyphs
-    buttonGradientStart: '#14337A',  // login button gradient start
-    buttonGradientEnd: '#1E70E0',    // login button gradient end
+    navyDark: '#0A1A3A',
+    blueBright: '#1E56CC',
+    blueDeep: '#16233F',
+    blueAccent: '#1E56CC',
+    buttonGradientStart: '#14337A',
+    buttonGradientEnd: '#1E70E0',
   },
   surfaceCard: '#FFFFFF',
-  surfaceInputBg: '#F3F5F9',         // pill-shaped input backgrounds
-  surfaceIconChip: '#EAF1FF',        // light blue chip behind each service icon
-  borderSubtle: '#E7EAF0',           // subtle borders
-  brandTextSecondary: '#8A94A6',     // subtitle, placeholder, service labels
+  surfaceInputBg: '#F1F5F9',
+  surfaceIconChip: '#E0ECFF',
+  borderSubtle: '#E2E8F0',
+  brandTextSecondary: '#475569',
 
   // Nav
-  navBackground: '#1C1C1E',
-  navActive: '#3B5BFF',
-  navInactive: '#8A8A8E',
+  navBackground: '#0F172A',
+  navActive: '#4F46E5',
+  navInactive: '#94A3B8',
   navTextInverse: '#FFFFFF',
 
   // Borders / dividers
-  border: '#F1F1F4',
+  border: '#E2E8F0',
+  borderStrong: '#CBD5E1',
 
   // Feedback
-  success: '#2E9E52',
-  error: '#E5484D',
-  warning: '#F5A524',
-
-  statusPendingBg: '#E0ECFF',
-  statusPendingFg: '#3B5BFF',
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
 
   // Salary badge specific
-  warningAmber: '#ca8a04',
-  warningAmberBg: '#fef9c3',
+  warningAmber: '#D97706',
+  warningAmberBg: '#FEF3C7',
 
   accentTeal: '#0D9488',
   accentTealDim: '#CCFBF1',
@@ -118,10 +130,10 @@ export const spacing = {
 
 export const radius = { 
   sm: 8, 
-  md: 14, 
-  lg: 18, 
+  md: 10, 
+  lg: 14, 
   pill: 999,
-  card: 14,
+  card: 12,
   sheet: 20,
 };
 

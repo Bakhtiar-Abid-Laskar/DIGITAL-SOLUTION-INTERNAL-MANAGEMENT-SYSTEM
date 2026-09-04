@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform,  } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useNavigation } from '@react-navigation/native';
-import { ChevronDown } from 'lucide-react-native';
+import { ChevronDown, ShieldAlert } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import AppHeader from '../../components/common/AppHeader';
 import Button from '../../components/common/Button';
@@ -33,11 +33,12 @@ export default function AdminCreateStaffScreen() {
       phone: '',
       role: 'technician' as Role,
       rolePicker: false,
+      adminConfirmVisible: false,
       saving: false,
     }
   );
 
-  const { name, email, password, phone, role, rolePicker, saving } = state;
+  const { name, email, password, phone, role, rolePicker, adminConfirmVisible, saving } = state;
 
   const validate = (): string | null => {
     if (!name.trim()) return 'Full name is required.';
@@ -47,14 +48,22 @@ export default function AdminCreateStaffScreen() {
     return null;
   };
 
-  const handleCreate = async () => {
+  const handleSubmit = () => {
     const validationError = validate();
     if (validationError) {
       showToast({ title: 'Validation Error', message: validationError, type: 'error' });
       return;
     }
 
-    setState({ saving: true });
+    if (role === 'admin') {
+      setState({ adminConfirmVisible: true });
+    } else {
+      executeCreate();
+    }
+  };
+
+  const executeCreate = async () => {
+    setState({ adminConfirmVisible: false, saving: true });
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -169,7 +178,7 @@ export default function AdminCreateStaffScreen() {
 
           <Button
             label="Create Staff Member"
-            onPress={handleCreate}
+            onPress={handleSubmit}
             loading={saving}
             style={styles.createBtn}
           />
@@ -198,6 +207,39 @@ export default function AdminCreateStaffScreen() {
             </Text>
           </AppPressable>
         ))}
+      </BottomSheet>
+
+      {/* Admin Confirmation BottomSheet */}
+      <BottomSheet visible={adminConfirmVisible} onClose={() => setState({ adminConfirmVisible: false })}>
+        <View style={styles.confirmContainer}>
+          <View style={styles.confirmIconBox}>
+            <ShieldAlert size={32} color={colors.accentRed} />
+          </View>
+          <Text style={styles.confirmTitle}>Confirm Administrator Account</Text>
+          <Text style={styles.confirmDescription}>
+            You are granting full system privileges to <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{name.trim()}</Text> ({email.trim().toLowerCase()}).
+          </Text>
+          <View style={styles.confirmWarningBox}>
+            <Text style={styles.confirmWarningText}>
+              Administrators have unrestricted access to all financial records, payroll, user management, and system configuration.
+            </Text>
+          </View>
+          <View style={styles.confirmActions}>
+            <AppPressable
+              style={styles.cancelBtn}
+              onPress={() => setState({ adminConfirmVisible: false })}
+              disabled={saving}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </AppPressable>
+            <Button
+              label="Confirm & Create"
+              onPress={executeCreate}
+              loading={saving}
+              style={styles.confirmSubmitBtn}
+            />
+          </View>
+        </View>
       </BottomSheet>
     </View>
   );
@@ -274,5 +316,70 @@ const styles = StyleSheet.create({
   roleOptionText: {
     ...typography.body,
     color: colors.textPrimary,
+  },
+  confirmContainer: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  confirmIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentRed + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  confirmTitle: {
+    ...typography.h2,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  confirmDescription: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  confirmWarningBox: {
+    backgroundColor: colors.surface,
+    borderColor: colors.accentRed + '40',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    width: '100%',
+  },
+  confirmWarningText: {
+    ...typography.caption,
+    color: colors.accentRed,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  cancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  cancelBtnText: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+  },
+  confirmSubmitBtn: {
+    flex: 1,
+    backgroundColor: colors.accentRed,
   },
 });

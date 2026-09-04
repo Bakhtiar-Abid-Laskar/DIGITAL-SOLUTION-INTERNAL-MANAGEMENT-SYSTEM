@@ -58,8 +58,8 @@ serve(async (req: Request) => {
           const { data: admins } = await supabase
             .from('users')
             .select('id, expo_push_token')
-            .eq('role', 'admin')
-            .not('expo_push_token', 'is', null)
+            .eq('role', 'admin');
+
 
           if (admins && admins.length > 0) {
             await Promise.all(admins.map(async (admin: any) => {

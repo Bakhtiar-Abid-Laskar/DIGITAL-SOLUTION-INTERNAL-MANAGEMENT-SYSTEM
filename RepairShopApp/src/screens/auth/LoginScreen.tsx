@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Linking,
   Dimensions,
+  Modal,
 } from 'react-native';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,6 +37,12 @@ import {
   Fingerprint,
   Package,
   AlertCircle,
+  Mail,
+  CheckCircle2,
+  X,
+  Send,
+  ArrowLeft,
+  KeyRound,
 } from 'lucide-react-native';
 
 import { supabase } from '../../lib/supabase';
@@ -88,6 +95,13 @@ export default function LoginScreen() {
 
   // Dynamic greeting state
   const [firstName, setFirstName] = useState<string | null>(null);
+
+  // Forgot Password modal states
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   // Focus animation states
   const emailBorder = useSharedValue(colors.borderSubtle);
@@ -194,9 +208,34 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = () => {
-    Linking.openURL('mailto:support@digitalsolution.com?subject=Password%20Reset%20Request').catch(() => {
-      triggerErrorShake('Please contact admin at support@digitalsolution.com');
-    });
+    setForgotEmail(email.trim());
+    setForgotSent(false);
+    setForgotError(null);
+    setForgotModalVisible(true);
+  };
+
+  const handleSendResetEmail = async () => {
+    const trimmed = forgotEmail.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      setForgotError('Please enter a valid registered email address.');
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotError(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed);
+      if (error) {
+        setForgotError(error.message || 'Failed to send password reset email.');
+      } else {
+        setForgotSent(true);
+      }
+    } catch (err: any) {
+      setForgotError(err.message || 'A network error occurred. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   const handleContactAdmin = () => {
@@ -437,6 +476,108 @@ export default function LoginScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* ─── FORGOT PASSWORD MODAL ─── */}
+      <Modal
+        visible={forgotModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setForgotModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalTitleContainer}>
+                <View style={styles.modalIconCircle}>
+                  <KeyRound size={20} color={colors.brand.blueAccent} />
+                </View>
+                <Text style={styles.modalTitle}>Reset Password</Text>
+              </View>
+              <AppPressable
+                style={styles.modalCloseBtn}
+                onPress={() => setForgotModalVisible(false)}
+              >
+                <X size={20} color={colors.brandTextSecondary} />
+              </AppPressable>
+            </View>
+
+            {forgotSent ? (
+              <View style={styles.modalSuccessView}>
+                <View style={styles.successIconCircle}>
+                  <CheckCircle2 size={40} color={colors.accentGreen} />
+                </View>
+                <Text style={styles.successHeadline}>Reset Link Sent!</Text>
+                <Text style={styles.successDescription}>
+                  A secure password reset email has been sent to{'\n'}
+                  <Text style={styles.successEmailHighlight}>{forgotEmail}</Text>
+                  {'\n\n'}Please check your inbox (and spam/junk folder) and click the link to reset your password.
+                </Text>
+
+                <AppPressable
+                  style={styles.modalActionPrimaryBtn}
+                  onPress={() => setForgotModalVisible(false)}
+                >
+                  <Text style={styles.modalActionPrimaryText}>Back to Login</Text>
+                </AppPressable>
+              </View>
+            ) : (
+              <View style={styles.modalFormView}>
+                <Text style={styles.modalSubtitle}>
+                  Enter your registered account email. Supabase will send a password reset link to your inbox.
+                </Text>
+
+                {forgotError && (
+                  <View style={styles.modalErrorBox}>
+                    <AlertCircle size={16} color={colors.error} style={{ marginRight: spacing.xs }} />
+                    <Text style={styles.modalErrorText}>{forgotError}</Text>
+                  </View>
+                )}
+
+                <View style={styles.modalInputWrapper}>
+                  <Mail size={18} color={colors.brandTextSecondary} style={{ marginRight: spacing.sm }} />
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Enter your registered email"
+                    placeholderTextColor={colors.brandTextSecondary}
+                    value={forgotEmail}
+                    onChangeText={(t) => {
+                      setForgotEmail(t);
+                      if (forgotError) setForgotError(null);
+                    }}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoFocus
+                  />
+                </View>
+
+                <AppPressable
+                  style={[styles.modalActionPrimaryBtn, forgotLoading && { opacity: 0.7 }]}
+                  onPress={handleSendResetEmail}
+                  disabled={forgotLoading}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Send size={16} color="#ffffff" style={{ marginRight: spacing.xs }} />
+                      <Text style={styles.modalActionPrimaryText}>Send Reset Link</Text>
+                    </>
+                  )}
+                </AppPressable>
+
+                <AppPressable
+                  style={styles.modalCancelBtn}
+                  onPress={() => setForgotModalVisible(false)}
+                  disabled={forgotLoading}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </AppPressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -720,5 +861,148 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.brand.blueAccent,
+  },
+
+  // ─── Forgot Password Modal Styles ───
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 13, 26, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.sheet,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadow.medium,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+  },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  modalIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceIconChip,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.brand.blueDeep,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    padding: spacing.xs,
+  },
+  modalFormView: {
+    gap: spacing.md,
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    color: colors.brandTextSecondary,
+    lineHeight: 18,
+  },
+  modalErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.statusUrgentBg,
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  modalErrorText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceInputBg,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: spacing.lg,
+    height: 50,
+  },
+  modalInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.brand.blueDeep,
+    paddingVertical: 0,
+  },
+  modalActionPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand.blueAccent,
+    borderRadius: radius.pill,
+    height: 48,
+    marginTop: spacing.xs,
+    ...shadow.card,
+  },
+  modalActionPrimaryText: {
+    ...typography.bodyBold,
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  modalCancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+  },
+  modalCancelText: {
+    ...typography.caption,
+    color: colors.brandTextSecondary,
+    fontWeight: '600',
+  },
+  modalSuccessView: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  successIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accentGreen + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  successHeadline: {
+    ...typography.h2,
+    color: colors.brand.blueDeep,
+    fontWeight: '700',
+  },
+  successDescription: {
+    ...typography.body,
+    color: colors.brandTextSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  successEmailHighlight: {
+    color: colors.brand.blueAccent,
+    fontWeight: '700',
   },
 });

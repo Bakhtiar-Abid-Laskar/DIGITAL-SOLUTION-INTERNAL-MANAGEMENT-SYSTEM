@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { Shield, User, Globe, Store, Bell, CheckCircle2, Cloud } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/common/Card";
@@ -18,31 +19,88 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Stub data for new settings cards
-  const [shopName, setShopName] = useState("Digital Solution");
-  const [shopAddress, setShopAddress] = useState("123 Tech Lane, Silicon Valley, CA");
+  // Shop details
+  const [shopName, setShopName] = useState("RepairShop");
+  const [shopAddress, setShopAddress] = useState("");
   const [savingShop, setSavingShop] = useState(false);
   
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [pushNotifs, setPushNotifs] = useState(true);
+
+  useEffect(() => {
+    if (profile?.name) {
+      setProfileName(profile.name);
+    }
+  }, [profile?.name]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedName = localStorage.getItem("repairshop_shop_name");
+      const savedAddr = localStorage.getItem("repairshop_shop_address");
+      if (savedName) setShopName(savedName);
+      if (savedAddr) setShopAddress(savedAddr);
+    }
+  }, []);
   
   const handleSaveProfile = async () => {
+    if (!profile?.id) {
+      showToast("User profile not loaded.", "error");
+      return;
+    }
+    if (!profileName.trim()) {
+      showToast("Full name cannot be empty.", "error");
+      return;
+    }
     setSavingProfile(true);
-    // TODO: Wire up actual profile update and password change via Supabase
-    setTimeout(() => {
-      showToast('Profile updated successfully', 'success');
+    try {
+      // 1. Update name in public.users
+      const { error: profileError } = await supabase
+        .from("users")
+        .update({
+          name: profileName.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", profile.id);
+
+      if (profileError) throw profileError;
+
+      // 2. Update password if provided
+      if (newPassword.trim().length > 0) {
+        if (newPassword.length < 6) {
+          throw new Error("Password must be at least 6 characters long.");
+        }
+        const { error: authError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+        if (authError) throw authError;
+      }
+
+      showToast("Profile updated successfully", "success");
       setNewPassword("");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update profile", "error");
+    } finally {
       setSavingProfile(false);
-    }, 1000);
+    }
   };
 
   const handleSaveShop = async () => {
+    if (!shopName.trim()) {
+      showToast("Shop name cannot be empty.", "error");
+      return;
+    }
     setSavingShop(true);
-    // TODO: Wire up actual shop settings update
-    setTimeout(() => {
-      showToast('Shop details updated successfully', 'success');
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("repairshop_shop_name", shopName.trim());
+        localStorage.setItem("repairshop_shop_address", shopAddress.trim());
+      }
+      showToast("Shop details updated successfully", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update shop details", "error");
+    } finally {
       setSavingShop(false);
-    }, 1000);
+    }
   };
 
   return (

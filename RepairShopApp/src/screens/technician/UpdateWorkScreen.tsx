@@ -4,7 +4,7 @@ import { AppPressable } from '../../components/common/AppPressable';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Job, JobMaterial, JobStatus } from '../../types/job';
+import { Job, JobMaterial, JobStatus, JobType } from '../../types/job';
 import JobDetailShell from '../../components/jobs/JobDetailShell';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import ErrorState from '../../components/common/ErrorState';
@@ -15,20 +15,28 @@ import AddMaterialModal from '../../components/materials/AddMaterialModal';
 import MaterialList from '../../components/materials/MaterialList';
 import BottomSheet from '../../components/common/BottomSheet';
 import StatusBadge from '../../components/jobs/StatusBadge';
+import Dropdown, { DropdownOption } from '../../components/shared/Dropdown';
 import { CompletionSelfieBanner } from '../../components/work/CompletionSelfieBanner';
 import { MaterialUsageModal } from '../../components/work/MaterialUsageModal';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '@repairshop/shared';
-import { Plus, ChevronDown, Package } from 'lucide-react-native';
+import { Plus, ChevronDown, Package, Tag, CheckCircle2, AlertTriangle, Wrench } from 'lucide-react-native';
 import { mapErrorToUserMessage } from '../../utils/errorMessages';
 
 const ALL_STATUS_OPTIONS: JobStatus[] = ['In Progress', 'Waiting for Materials', 'Completed'];
 
+interface CatalogItem {
+  id: string;
+  title: string;
+  customer_charge_amount: number;
+  technician_incentive: number;
+}
+
 export default function UpdateWorkScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const jobId = route.params?.jobId;
   const completionSelfieRequired: boolean = route.params?.completionSelfieRequired ?? false;
   const { showToast } = useToast();
@@ -40,6 +48,10 @@ export default function UpdateWorkScreen() {
       error: null as string | null,
       job: null as Job | null,
       materials: [] as JobMaterial[],
+      catalogItems: [] as CatalogItem[],
+      catalogLoading: false,
+      selectedCatalogId: '',
+      savingServiceType: false,
       notes: '',
       notesFocused: false,
       showMaterialModal: false,
@@ -50,22 +62,124 @@ export default function UpdateWorkScreen() {
       materialToDelete: null as string | null,
       confirmingMaterialsVisible: false,
       usageQuantities: {} as Record<string, string>,
+      selectedJobType: 'Inhouse' as JobType,
     }
   );
 
-  const { loading, error, job, materials, notes, notesFocused, showMaterialModal, updating, statusSelectorVisible, selectedStatus, deleteConfirmVisible, materialToDelete, confirmingMaterialsVisible, usageQuantities } = state;
+  const {
+    loading,
+    error,
+    job,
+    materials,
+    catalogItems,
+    catalogLoading,
+    selectedCatalogId,
+    savingServiceType,
+    notes,
+    notesFocused,
+    showMaterialModal,
+    updating,
+    statusSelectorVisible,
+    selectedStatus,
+    deleteConfirmVisible,
+    materialToDelete,
+    confirmingMaterialsVisible,
+    usageQuantities,
+    selectedJobType,
+  } = state;
+
+  const fetchCatalog = useCallback(async () => {
+    try {
+      setState({ catalogLoading: true });
+      const { data, error: catErr } = await supabase
+        .from('job_types')
+        .select('id, title, customer_charge_amount, technician_incentive')
+        .eq('is_active', true)
+        .order('title', { ascending: true });
+
+      if (catErr) {
+        console.error('Error loading job_types catalog:', catErr.message);
+      } else if (data) {
+        setState({ catalogItems: data as CatalogItem[] });
+      }
+    } catch (e: any) {
+      console.error('Exception loading job_types catalog:', e);
+    } finally {
+      setState({ catalogLoading: false });
+    }
+  }, []);
 
   const fetchJobData = async () => {
     if (!user) return;
+    if (!jobId) {
+      setState({ loading: false, error: 'No Job ID provided.' });
+      return;
+    }
+
     try {
       setState({ loading: true, error: null });
+      
       const { data: jobData, error: jobError } = await supabase
-        .from('jobs').select('*').eq('id', jobId).eq('technician_id', user.id).single();
-      if (jobError || !jobData) throw new Error('Job not found or not assigned to you.');
-      setState({ job: jobData, notes: jobData.work_notes || '', selectedStatus: jobData.status });
-      const { data: matsData } = await supabase.from('job_materials').select('*').eq('job_id', jobId);
+        .from('jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single();
+
+      if (jobError || !jobData) {
+        throw new Error('Job not found.');
+      }
+
+      // Fetch linked job_type catalog entry if present
+      let jobTypeRef = null;
+      if (jobData.job_type_ref_id) {
+        const { data: jtData } = await supabase
+          .from('job_types')
+          .select('id, title, customer_charge_amount, technician_incentive')
+          .eq('id', jobData.job_type_ref_id)
+          .maybeSingle();
+        jobTypeRef = jtData;
+      }
+
+      // Fetch assigned technicians
+      const { data: jobTechsData } = await supabase
+        .from('job_technicians')
+        .select('technician_id, removed_at')
+        .eq('job_id', jobId)
+        .is('removed_at', null);
+
+      // Check if user is assigned or has staff privileges (Admin/Receptionist)
+      const isAssigned =
+        role === 'admin' ||
+        role === 'receptionist' ||
+        jobData.technician_id === user.id ||
+        (jobTechsData && jobTechsData.some((jt: any) => jt.technician_id === user.id));
+
+      if (!isAssigned) {
+        throw new Error('This job is not assigned to you.');
+      }
+
+      const fullJob: Job = {
+        ...jobData,
+        job_type_ref: jobTypeRef,
+        job_technicians: jobTechsData || [],
+      };
+
+      setState({
+        job: fullJob,
+        notes: jobData.work_notes || '',
+        selectedStatus: jobData.status,
+        selectedCatalogId: jobData.job_type_ref_id || '',
+        selectedJobType: jobData.job_type || 'Inhouse',
+      });
+
+      const { data: matsData } = await supabase
+        .from('job_materials')
+        .select('*')
+        .eq('job_id', jobId);
+
       if (matsData) setState({ materials: matsData });
     } catch (err: any) {
+      console.error('[UpdateWorkScreen fetchJobData]', err);
       setState({ error: mapErrorToUserMessage(err) });
     } finally {
       setState({ loading: false });
@@ -74,13 +188,18 @@ export default function UpdateWorkScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!jobId) return;
       fetchJobData();
-      const channel = supabase.channel(`update-work-${jobId}`)
+      fetchCatalog();
+      const channel = supabase
+        .channel(`update-work-${jobId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${jobId}` }, fetchJobData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'job_materials', filter: `job_id=eq.${jobId}` }, fetchJobData)
         .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }, [jobId])
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [jobId, fetchCatalog])
   );
 
   const totalCost = useMemo(() =>
@@ -101,6 +220,65 @@ export default function UpdateWorkScreen() {
     } catch (err: any) {
       showToast({ title: 'Error', message: mapErrorToUserMessage(err), type: 'error' });
     }
+  };
+
+  const handleChangeJobLocationType = async (val: JobType) => {
+    setState({ selectedJobType: val });
+    try {
+      const { error } = await supabase.from('jobs').update({ job_type: val }).eq('id', jobId);
+      if (error) throw error;
+      showToast({ title: 'Success', message: `Job location type changed to ${val}`, type: 'success' });
+      await fetchJobData();
+    } catch (err: any) {
+      showToast({ title: 'Update Failed', message: mapErrorToUserMessage(err), type: 'error' });
+      fetchJobData();
+    }
+  };
+
+  const handleAssignServiceType = async () => {
+    if (!selectedCatalogId) {
+      showToast({
+        title: 'Select Service Type',
+        message: 'Please select a service / repair type from the catalog.',
+        type: 'error',
+      });
+      return;
+    }
+    setState({ savingServiceType: true });
+    try {
+      const { error: rpcError } = await supabase.rpc('set_job_service_type', {
+        p_job_id: jobId,
+        p_job_type_ref_id: selectedCatalogId,
+        p_user_id: user!.id,
+      });
+      if (rpcError) throw rpcError;
+      showToast({
+        title: 'Service Type Assigned',
+        message: 'Diagnosis confirmed. You can now log parts and update progress.',
+        type: 'success',
+      });
+      await fetchJobData();
+    } catch (err: any) {
+      showToast({
+        title: 'Assignment Failed',
+        message: mapErrorToUserMessage(err),
+        type: 'error',
+      });
+    } finally {
+      setState({ savingServiceType: false });
+    }
+  };
+
+  const handleOpenAddMaterial = () => {
+    if (!job?.job_type_ref_id) {
+      showToast({
+        title: 'Diagnosis Required',
+        message: 'Please select and confirm the Service / Repair Type before adding materials.',
+        type: 'error',
+      });
+      return;
+    }
+    setState({ showMaterialModal: true });
   };
 
   const finalizeUpdate = async () => {
@@ -136,7 +314,7 @@ export default function UpdateWorkScreen() {
         if (selectedStatus === 'Completed') {
           updates.completed_at = new Date().toISOString();
         }
-        const { error } = await supabase.from('jobs').update(updates).eq('id', jobId).eq('technician_id', user!.id);
+        const { error } = await supabase.from('jobs').update(updates).eq('id', jobId);
         if (error) throw error;
       }
 
@@ -152,6 +330,14 @@ export default function UpdateWorkScreen() {
 
   const handleUpdate = async () => {
     if (!job) return;
+    if (!job.job_type_ref_id) {
+      showToast({
+        title: 'Diagnosis Required',
+        message: 'Please select and confirm the Service / Repair Type before updating status or completing work.',
+        type: 'error',
+      });
+      return;
+    }
     setState({ statusSelectorVisible: false });
     if (selectedStatus === 'Completed' && job.status !== 'Completed') {
       const unconfirmed = materials.filter((m: any) => m.checkout_status === 'checked_out');
@@ -169,18 +355,114 @@ export default function UpdateWorkScreen() {
   if (error || !job) return <View style={styles.container}><ErrorState message={error || 'Failed to load'} onRetry={fetchJobData} /></View>;
 
   const isCompleted = job.status === 'Completed';
+  const hasServiceType = !!job.job_type_ref_id;
   const statusOptions = completionSelfieRequired ? ALL_STATUS_OPTIONS.filter(s => s !== 'Completed') : ALL_STATUS_OPTIONS;
   const unconfirmedMaterials = materials.filter((m: any) => m.checkout_status === 'checked_out');
+
+  const catalogOptions: DropdownOption[] = catalogItems.map((item: CatalogItem) => ({
+    label: `${item.title} (Charge: ₹${item.customer_charge_amount} | Incentive: ₹${item.technician_incentive})`,
+    value: item.id,
+  }));
+
+  const selectedCatalogItem = catalogItems.find((item: CatalogItem) => item.id === selectedCatalogId);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <JobDetailShell job={job}>
 
+        {/* JOB LOCATION TYPE */}
+        <SectionLabel title="JOB LOCATION" />
+        <View style={styles.card}>
+          <Dropdown
+            options={[
+              { label: 'Inhouse', value: 'Inhouse' },
+              { label: 'Onsite', value: 'Onsite' },
+            ]}
+            selectedValue={selectedJobType}
+            onSelect={(val) => handleChangeJobLocationType(val as JobType)}
+            disabled={isCompleted}
+          />
+        </View>
+
+        {/* SERVICE / REPAIR TYPE SECTION */}
+        <SectionLabel
+          title="SERVICE / REPAIR TYPE"
+          rightElement={
+            !hasServiceType ? (
+              <View style={styles.pendingBadge}>
+                <AlertTriangle size={12} color={colors.warningAmber} />
+                <Text style={styles.pendingBadgeText}>Action Required</Text>
+              </View>
+            ) : (
+              <View style={styles.confirmedBadge}>
+                <CheckCircle2 size={12} color={colors.accentGreen} />
+                <Text style={styles.confirmedBadgeText}>Diagnosed</Text>
+              </View>
+            )
+          }
+        />
+        <View style={[styles.card, !hasServiceType && styles.cardHighlight]}>
+          {!hasServiceType ? (
+            <View style={{ gap: spacing.md }}>
+              <Text style={styles.diagnosisHelperText}>
+                Diagnose the device and assign the Service / Repair Type to establish baseline labor pricing and technician incentive.
+              </Text>
+              <Dropdown
+                options={catalogOptions}
+                selectedValue={selectedCatalogId}
+                onSelect={(val) => setState({ selectedCatalogId: val })}
+                placeholder={catalogLoading ? "Loading repair catalog..." : "Select Service / Repair Type"}
+                icon={<Tag size={18} color={colors.textMuted} />}
+              />
+              {selectedCatalogItem && (
+                <View style={styles.catalogPreview}>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Base Customer Charge:</Text>
+                    <Text style={styles.previewValue}>₹{selectedCatalogItem.customer_charge_amount}</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Your Incentive:</Text>
+                    <Text style={[styles.previewValue, { color: colors.accentGreen }]}>
+                      ₹{selectedCatalogItem.technician_incentive}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              <Button
+                label="Confirm Service Type & Start Work"
+                onPress={handleAssignServiceType}
+                loading={savingServiceType}
+                disabled={!selectedCatalogId || savingServiceType}
+                variant="primary"
+                style={{ marginTop: spacing.xs }}
+              />
+            </View>
+          ) : (
+            <View style={{ gap: spacing.xs }}>
+              <View style={styles.serviceTitleRow}>
+                <Wrench size={18} color={colors.primary} />
+                <Text style={styles.serviceTitleText}>
+                  {job.job_type_ref?.title || 'Standard Service'}
+                </Text>
+              </View>
+              <View style={styles.serviceDetailsRow}>
+                <Text style={styles.serviceDetailText}>
+                  Base Rate: ₹{job.job_type_ref?.customer_charge_amount || 0}
+                </Text>
+                <Text style={styles.serviceDetailDot}>•</Text>
+                <Text style={[styles.serviceDetailText, { color: colors.accentGreen, fontWeight: '600' }]}>
+                  Incentive: ₹{job.snap_technician_incentive || job.job_type_ref?.technician_incentive || 0}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* MATERIALS */}
         <SectionLabel
           title="MATERIALS / PARTS USED"
           rightElement={!isCompleted ? (
-            <AppPressable style={styles.addBtnChip} onPress={() => setState({ showMaterialModal: true })}
+            <AppPressable style={styles.addBtnChip} onPress={handleOpenAddMaterial}
               accessibilityRole="button" accessibilityLabel="Add Material">
               <Plus size={14} color={colors.textInverse} style={{ marginRight: 4 }} />
               <Text style={styles.addBtnChipText}>Add Item</Text>
@@ -288,6 +570,87 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md,
     borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg,
+  },
+  cardHighlight: {
+    borderColor: colors.accentBlue,
+    borderWidth: 1.5,
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.warningAmberBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  pendingBadgeText: {
+    ...typography.micro,
+    color: colors.warningAmber,
+    fontWeight: '700',
+  },
+  confirmedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.statusCompletedBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  confirmedBadgeText: {
+    ...typography.micro,
+    color: colors.accentGreen,
+    fontWeight: '700',
+  },
+  diagnosisHelperText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  catalogPreview: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.xs,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previewLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  previewValue: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+  },
+  serviceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  serviceTitleText: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  serviceDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 2,
+  },
+  serviceDetailText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  serviceDetailDot: {
+    color: colors.textMuted,
   },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

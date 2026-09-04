@@ -7,38 +7,48 @@ interface ToastOptions {
   title: string;
   message?: string;
   type?: ToastType;
+  duration?: number;
+}
+
+interface ToastState extends ToastOptions {
+  id: number;
 }
 
 interface ToastContextValue {
   showToast: (options: ToastOptions) => void;
+  hideToast: () => void;
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toastOptions, setToastOptions] = useState<ToastOptions | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   const showToast = useCallback((options: ToastOptions) => {
-    setToastOptions(options);
+    setToast({ ...options, id: Date.now() });
     setIsVisible(true);
   }, []);
 
   const hideToast = useCallback(() => {
     setIsVisible(false);
+    setToast(null);
   }, []);
 
-  const contextValue = useMemo(() => ({ showToast }), [showToast]);
+  const contextValue = useMemo(() => ({ showToast, hideToast }), [showToast, hideToast]);
 
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      {toastOptions && (
+      {toast && (
         <Toast
+          key={toast.id}
+          id={toast.id}
           visible={isVisible}
-          title={toastOptions.title}
-          message={toastOptions.message}
-          type={toastOptions.type || 'info'}
+          title={toast.title}
+          message={toast.message}
+          type={toast.type || 'info'}
+          duration={toast.duration}
           onHide={hideToast}
         />
       )}
@@ -53,3 +63,4 @@ export function useToast() {
   }
   return context;
 }
+

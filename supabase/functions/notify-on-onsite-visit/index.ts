@@ -49,8 +49,8 @@ serve(async (req: Request) => {
       const { data: staff } = await supabase
         .from('users')
         .select('id, expo_push_token')
-        .in('role', ['admin', 'receptionist'])
-        .not('expo_push_token', 'is', null)
+        .in('role', ['admin', 'receptionist']);
+
 
       if (staff && staff.length > 0) {
         await Promise.all(staff.map(async (user: any) => {

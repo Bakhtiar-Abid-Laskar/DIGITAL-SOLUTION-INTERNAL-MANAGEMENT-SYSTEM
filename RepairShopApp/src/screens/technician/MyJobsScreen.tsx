@@ -34,18 +34,20 @@ export default function MyJobsScreen() {
     'In Progress': 0,
     'Waiting for Materials': 0,
     Completed: 0,
+    Urgent: 0,
   });
 
   const fetchTabCounts = async () => {
     if (!user) return;
     try {
-      const [allRes, recRes, progRes, waitRes, compRes, unreadRes] = await Promise.all([
+      const [allRes, recRes, progRes, waitRes, compRes, unreadRes, urgRes] = await Promise.all([
         supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
         supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Received'),
         supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'In Progress'),
         supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Waiting for Materials'),
         supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed'),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('priority', 'Urgent').neq('status', 'Completed'),
       ]);
 
       setCounts({
@@ -54,6 +56,7 @@ export default function MyJobsScreen() {
         'In Progress': progRes.count || 0,
         'Waiting for Materials': waitRes.count || 0,
         Completed: compRes.count || 0,
+        Urgent: urgRes.count || 0,
       });
       setUnreadCount(unreadRes.count ?? 0);
     } catch (err) {
@@ -128,7 +131,8 @@ export default function MyJobsScreen() {
     useCallback(() => {
       let cancelled = false;
       if (route.params?.filter) {
-        setActiveTab(route.params.filter);
+        const targetFilter = route.params.filter === 'Completed Today' ? 'Completed' : route.params.filter;
+        setActiveTab(targetFilter);
         navigation.setParams({ filter: undefined });
       }
       setPage(0);
@@ -189,6 +193,7 @@ export default function MyJobsScreen() {
     { label: 'In Progress', value: 'In Progress', count: counts['In Progress'] },
     { label: 'Waiting', value: 'Waiting for Materials', count: counts['Waiting for Materials'] },
     { label: 'Completed', value: 'Completed', count: counts['Completed'] },
+    { label: 'Urgent', value: 'Urgent', count: counts['Urgent'] },
   ];
 
   return (
@@ -207,8 +212,7 @@ export default function MyJobsScreen() {
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       showPriorityFilter={false}
-      isDashboard={true}
-      unreadCount={unreadCount}
+      isDashboard={false}
     />
   );
 }

@@ -39,8 +39,20 @@ export function SalaryHeroCard({ record, downloadingId, onDownload }: Props) {
       <Text style={styles.heroAmount}>{fmt.format(record.net_salary)}</Text>
 
       <View style={styles.heroRow}>
-        <Text style={styles.heroMetaText}>Gross: {fmt.format(record.gross_salary)}</Text>
-        <Text style={styles.heroMetaText}>Deductions: −{fmt.format(record.gross_salary - record.net_salary)}</Text>
+        <Text style={styles.heroMetaText}>Earnings: {fmt.format(
+          (record.monthly_salary_base || 0) + 
+          (record.bonus_amount || 0) + 
+          (record.overtime_pay || 0) + 
+          (record.incentive_amount || 0)
+        )}</Text>
+        <Text style={styles.heroMetaText}>Deductions: −{fmt.format(
+          (record.late_deduction || 0) + 
+          (record.early_deduction || 0) + 
+          (record.leave_deduction || 0) + 
+          (record.halfday_deduction_total || 0) + 
+          (record.absence_deduction_total || 0) + 
+          (record.advance_deducted || 0)
+        )}</Text>
       </View>
 
       {!isPreview ? (

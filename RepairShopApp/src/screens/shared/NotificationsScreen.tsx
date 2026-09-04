@@ -221,6 +221,21 @@ export default function NotificationsScreen() {
       fetchTabCounts();
     }
 
+    const msg = (item.message || '').toLowerCase();
+    const type = (item.type || '').toLowerCase();
+
+    // 1. Material return reminder (prioritized over generic job_id)
+    if (type.includes('material_return') || msg.includes('return material') || msg.includes('material return')) {
+      if (role === 'technician') {
+        navigation.navigate('TechnicianRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'scoped', jobId: item.job_id } });
+      } else if (role === 'admin') {
+        navigation.navigate('AdminRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'all', jobId: item.job_id } });
+      } else if (role === 'receptionist') {
+        navigation.navigate('ReceptionistRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'all', jobId: item.job_id } });
+      }
+      return;
+    }
+
     if (item.job_id) {
       if (role === 'admin') {
         navigation.navigate('AdminRoot', { screen: 'AdminJobDetail', params: { jobId: item.job_id } });
@@ -228,6 +243,67 @@ export default function NotificationsScreen() {
         navigation.navigate('ReceptionistRoot', { screen: 'JobDetail', params: { jobId: item.job_id } });
       } else if (role === 'technician') {
         navigation.navigate('TechnicianRoot', { screen: 'UpdateWork', params: { jobId: item.job_id } });
+      }
+    } else {
+
+      if (
+        type.includes('salary') ||
+        type.includes('payroll') ||
+        type.includes('leave') ||
+        msg.includes('salary') ||
+        msg.includes('payroll') ||
+        msg.includes('payslip') ||
+        msg.includes('leave')
+      ) {
+        if (role === 'admin') {
+          navigation.navigate('AdminRoot', { screen: 'Salary' });
+        } else if (role === 'receptionist') {
+          navigation.navigate('ReceptionistRoot', { screen: 'ReceptionistTabs', params: { screen: 'Salary' } });
+        } else if (role === 'technician') {
+          navigation.navigate('TechnicianRoot', { screen: 'TechnicianTabs', params: { screen: 'Salary' } });
+        }
+      } else if (
+        type.includes('attendance') ||
+        type.includes('checkin') ||
+        type.includes('late') ||
+        msg.includes('attendance') ||
+        msg.includes('check-in') ||
+        msg.includes('check in') ||
+        msg.includes('late')
+      ) {
+        if (role === 'admin') {
+          navigation.navigate('AdminRoot', { screen: 'StaffAttendanceOverview' });
+        } else if (role === 'receptionist') {
+          navigation.navigate('ReceptionistRoot', { screen: 'ReceptionistTabs', params: { screen: 'Attendance' } });
+        } else if (role === 'technician') {
+          navigation.navigate('TechnicianRoot', { screen: 'TechnicianTabs', params: { screen: 'Attendance' } });
+        }
+      } else if (
+        type.includes('inventory') ||
+        type.includes('stock') ||
+        msg.includes('inventory') ||
+        msg.includes('stock') ||
+        msg.includes('threshold')
+      ) {
+        if (role === 'admin') {
+          navigation.navigate('AdminRoot', { screen: 'Inventory' });
+        } else if (role === 'receptionist') {
+          navigation.navigate('ReceptionistRoot', { screen: 'InventoryScreen' });
+        }
+      } else if (type.includes('sale') || msg.includes('sale') || msg.includes('counter sale')) {
+        if (role === 'admin') {
+          navigation.navigate('AdminRoot', { screen: 'SalesList' });
+        } else if (role === 'receptionist') {
+          navigation.navigate('ReceptionistRoot', { screen: 'SalesList' });
+        }
+      } else if (type.includes('material') || msg.includes('material') || msg.includes('allotted')) {
+        if (role === 'admin') {
+          navigation.navigate('AdminRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'all' } });
+        } else if (role === 'receptionist') {
+          navigation.navigate('ReceptionistRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'all' } });
+        } else if (role === 'technician') {
+          navigation.navigate('TechnicianRoot', { screen: 'AllottedMaterialsScreen', params: { mode: 'scoped' } });
+        }
       }
     }
   }, [fetchTabCounts, role, navigation]);

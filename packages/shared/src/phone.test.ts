@@ -1,4 +1,4 @@
-import { cleanPhoneNumber, createWhatsAppUrl, formatIndianPhoneForWhatsApp } from './phone';
+import { cleanPhoneNumber, createWhatsAppUrl, formatIndianPhoneForWhatsApp, validateAndNormalizeIndianPhone, formatPhoneInput } from './phone';
 
 describe('Phone Normalization & WhatsApp Utilities (@repairshop/shared/phone.ts)', () => {
   describe('cleanPhoneNumber', () => {
@@ -63,6 +63,76 @@ describe('Phone Normalization & WhatsApp Utilities (@repairshop/shared/phone.ts)
       const url = createWhatsAppUrl('9876543210', 'Total: ₹1,500.00 & Status: Done');
       expect(url).toContain('%E2%82%B91%2C500.00');
       expect(url).toContain('%26');
+    });
+  });
+
+  describe('validateAndNormalizeIndianPhone', () => {
+    it('validates a standard 10-digit Indian phone number', () => {
+      const res = validateAndNormalizeIndianPhone('9876543210');
+      expect(res.isValid).toBe(true);
+      expect(res.clean10).toBe('9876543210');
+      expect(res.e164).toBe('+919876543210');
+      expect(res.formatted).toBe('+91 98765 43210');
+      expect(res.error).toBeUndefined();
+    });
+
+    it('strips leading 0 correctly and validates', () => {
+      const res = validateAndNormalizeIndianPhone('09876543210');
+      expect(res.isValid).toBe(true);
+      expect(res.clean10).toBe('9876543210');
+      expect(res.e164).toBe('+919876543210');
+    });
+
+    it('strips +91 or 91 country code correctly and validates', () => {
+      const res1 = validateAndNormalizeIndianPhone('+91 98765 43210');
+      expect(res1.isValid).toBe(true);
+      expect(res1.clean10).toBe('9876543210');
+
+      const res2 = validateAndNormalizeIndianPhone('919876543210');
+      expect(res2.isValid).toBe(true);
+      expect(res2.clean10).toBe('9876543210');
+    });
+
+    it('rejects numbers not starting with 6, 7, 8, or 9', () => {
+      const res = validateAndNormalizeIndianPhone('1234567890');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('start with 6, 7, 8, or 9');
+    });
+
+    it('rejects numbers with fewer or more than 10 digits', () => {
+      const resShort = validateAndNormalizeIndianPhone('987654');
+      expect(resShort.isValid).toBe(false);
+      expect(resShort.error).toContain('must be exactly 10 digits');
+
+      const resLong = validateAndNormalizeIndianPhone('987654321099');
+      expect(resLong.isValid).toBe(false);
+      expect(resLong.error).toContain('must be exactly 10 digits');
+    });
+
+    it('rejects empty input', () => {
+      const res = validateAndNormalizeIndianPhone('');
+      expect(res.isValid).toBe(false);
+    });
+  });
+
+  describe('formatPhoneInput', () => {
+    it('formats raw digits as +91 XXXXX XXXXX', () => {
+      expect(formatPhoneInput('9876543210')).toBe('+91 98765 43210');
+    });
+
+    it('strips leading zeros and non-digits', () => {
+      expect(formatPhoneInput('098765 43210')).toBe('+91 98765 43210');
+      expect(formatPhoneInput('(987) 654-3210')).toBe('+91 98765 43210');
+    });
+
+    it('handles partial typing', () => {
+      expect(formatPhoneInput('987')).toBe('+91 987');
+      expect(formatPhoneInput('98765')).toBe('+91 98765');
+      expect(formatPhoneInput('987654')).toBe('+91 98765 4');
+    });
+
+    it('returns empty string on empty input', () => {
+      expect(formatPhoneInput('')).toBe('');
     });
   });
 });

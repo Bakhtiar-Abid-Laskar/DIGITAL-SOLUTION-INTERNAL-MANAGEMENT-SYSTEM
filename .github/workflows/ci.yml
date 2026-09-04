@@ -1,0 +1,40 @@
+name: CI Quality & Test Suite
+
+on:
+  push:
+    branches: [ master, main, fix/*, feature/* ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test-and-typecheck:
+    name: Full-Stack Test & Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Typecheck Mobile App (RepairShopApp)
+        run: |
+          cd RepairShopApp
+          npx tsc --noEmit
+
+      - name: Typecheck Web Admin Panel (admin-panel)
+        run: |
+          cd admin-panel
+          npx tsc --noEmit
+
+      - name: Run Full Jest Test Suite with Coverage
+        run: |
+          cd admin-panel
+          npx jest --rootDir .. --coverage --coverageThreshold='{"packages/shared/src/": {"statements": 90, "branches": 80, "functions": 85, "lines": 90}}'

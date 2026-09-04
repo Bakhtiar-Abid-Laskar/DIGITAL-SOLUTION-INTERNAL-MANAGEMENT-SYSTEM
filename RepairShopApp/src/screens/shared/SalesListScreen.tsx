@@ -10,6 +10,7 @@ import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { formatDate, useDebounceValue } from '@repairshop/shared';
 import { Receipt, FileText, Search } from 'lucide-react-native';
 import { TextInput } from 'react-native';
+import StatusBadge from '../../components/jobs/StatusBadge';
 
 export type UnifiedSaleItem = {
   id: string;
@@ -113,9 +114,7 @@ export default function SalesListScreen() {
             <Text style={styles.customerText} numberOfLines={1}>{item.customer_name}</Text>
             <Text style={styles.dateText}>{item.date ? formatDate(item.date) : 'Unknown Date'}</Text>
           </View>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{item.status}</Text>
-          </View>
+          <StatusBadge status={item.status === 'paid' ? 'Completed' : (item.status === 'cancelled' ? 'Urgent' : 'Waiting')} />
         </View>
       </AppPressable>
     );
@@ -145,8 +144,8 @@ export default function SalesListScreen() {
       ) : items.length === 0 ? (
         <EmptyState 
           icon={<Receipt size={48} color={colors.textMuted} />}
-          heading="No Sales Found"
-          subtext="Completed jobs and direct sales will appear here."
+          message="No Sales Found"
+          subMessage="Completed jobs and direct sales will appear here."
         />
       ) : (
         <FlatList

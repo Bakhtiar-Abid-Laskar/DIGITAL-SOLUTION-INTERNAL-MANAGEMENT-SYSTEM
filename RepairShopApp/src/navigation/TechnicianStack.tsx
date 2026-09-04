@@ -7,6 +7,7 @@ import UpdateWorkScreen from '../screens/technician/UpdateWorkScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import AllottedMaterialsScreen from '../screens/shared/AllottedMaterialsScreen';
+import TechnicianReportsScreen from '../screens/technician/TechnicianReportsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,7 +19,9 @@ export default function TechnicianStack() {
       <Stack.Screen name="UpdateWork" component={UpdateWorkScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="AllottedMaterialsScreen" component={AllottedMaterialsScreen} />
+      <Stack.Screen name="TechnicianReports" component={TechnicianReportsScreen} />
     </Stack.Navigator>
   );
 }

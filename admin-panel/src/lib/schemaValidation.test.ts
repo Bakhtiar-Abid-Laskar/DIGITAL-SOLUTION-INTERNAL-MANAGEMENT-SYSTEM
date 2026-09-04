@@ -11,7 +11,7 @@ export const VALID_JOB_STATUSES = ['Received', 'In Progress', 'Waiting for Mater
 export const VALID_PRIORITIES = ['Normal', 'High', 'Urgent'] as const;
 export const VALID_DEVICE_TYPES = ['Laptop', 'PC', 'Other'] as const;
 export const VALID_ATTENDANCE_STATUSES = ['Present', 'Halfday', 'Leave', 'Absent'] as const;
-export const VALID_PAYMENT_TYPES = ['advance_salary', 'materials_purchase', 'daily_expenditure', 'office_development'] as const;
+export const VALID_PAYMENT_TYPES = ['advance_salary', 'materials_purchase', 'daily_expenditure', 'office_development', 'staff_salary'] as const;
 
 describe('Database Schema Invariant & Model Validation', () => {
   describe('Identifier Code Formats', () => {
@@ -71,6 +71,7 @@ describe('Database Schema Invariant & Model Validation', () => {
       expect(VALID_PAYMENT_TYPES).toContain('materials_purchase');
       expect(VALID_PAYMENT_TYPES).toContain('daily_expenditure');
       expect(VALID_PAYMENT_TYPES).toContain('office_development');
+      expect(VALID_PAYMENT_TYPES).toContain('staff_salary');
     });
   });
 });

@@ -11,6 +11,11 @@ coverage/
 *.tsbuildinfo
 diagnostics*.json
 lint-baseline.txt
+*.apk
+*.exe
+*.zip
+temp_inventory.csv
+test_run_results.json
 
 # ─── SECRET FILES — NEVER COMMIT ───────────────────────────────────────────
 # Firebase service-account private keys (rotate immediately if already committed)

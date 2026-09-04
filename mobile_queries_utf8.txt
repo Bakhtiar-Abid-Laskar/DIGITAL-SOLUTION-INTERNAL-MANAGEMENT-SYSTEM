@@ -1,0 +1,354 @@
+﻿
+--- \components\materials\AddMaterialModal.tsx ---
+[Line 65]:
+const { data, error } = await supabase.from('inventory')
+
+[Line 128]:
+const { error } = await supabase.storage.from('onsite-visits').upload(path, formData, { upsert: true });
+
+[Line 145]:
+const { error } = await supabase.from('job_materials').insert({
+        job_id: jobId, material_name: name.trim(), qty_taken: q, quantity: q,
+        unit_cost: c, product_id: selectedProductId || null, photo_url, checkout_status: 'checked_out',
+      });
+
+
+--- \components\shared\SelfieCapture.tsx ---
+[Line 126]:
+const { error } = await supabase.storage.from(storageBucket).upload(path, formData, { upsert: true });
+
+
+--- \context\AppConfigContext.tsx ---
+[Line 61]:
+supabase.from('ui_job_statuses').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_priorities').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_service_locations').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_payment_statuses').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_sale_statuses').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_payment_methods').select('*').order('sort_order', { ascending: true }),
+        supabase.from('ui_roles').select('*').order('sort_order', { ascending: true })
+
+
+--- \hooks\usePushNotifications.ts ---
+[Line 131]:
+const { error: updateError } = await supabase.rpc('update_my_push_token', {
+                new_token: token.data
+              });
+
+
+--- \screens\admin\AdminJobDetailScreen.tsx ---
+[Line 100]:
+await supabase.from('job_technicians').delete().eq('job_id', jobId);
+
+[Line 108]:
+const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+
+
+--- \screens\admin\AdminJobsScreen.tsx ---
+[Line 37]:
+supabase.from('jobs').select('id', { count: 'exact', head: true }),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+      ]);
+
+
+--- \screens\admin\ExpenditureScreen.tsx ---
+[Line 169]:
+const { error } = await supabase.from('payments').insert({
+        type: formType,
+        amount,
+        description: formDescription.trim() || null,
+        created_by: user?.id ?? null,
+      });
+
+
+--- \screens\admin\ReportsScreen.tsx ---
+[Line 97]:
+const { data: techs } = await supabase.from('users').select('id, name').eq('role', 'technician');
+
+
+--- \screens\admin\SalaryScreen.tsx ---
+[Line 157]:
+const { error } = await supabase.from('salary').insert({
+          user_id: breakdown.user_id,
+          month: `${month}-01`,
+          base_pay: breakdown.base_pay,
+          incentive_pay: breakdown.incentive_pay,
+          working_days: breakdown.working_days,
+          present_days: breakdown.present_days,
+          halfday_count: breakdown.halfday_count,
+          leave_count: breakdown.leave_count,
+          ot_hours: breakdown.ot_hours,
+          ot_rate_per_hour: breakdown.ot_rate_per_hour,
+          absent_day_deduction: breakdown.absent_day_deduction,
+          allowed_leave_days: 0,
+          absence_deduction: breakdown.absence_deduction,
+          advance_deducted: breakdown.advance_deducted,
+          gross_salary: breakdown.gross_salary,
+          net_salary: breakdown.net_salary,
+        });
+
+
+--- \screens\receptionist\AnalyticsScreen.tsx ---
+[Line 26]:
+supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+      ]);
+
+
+--- \screens\receptionist\BillingScreen.tsx ---
+[Line 105]:
+? supabase.from('billing').update(payload).eq('id', billing.id).select().single()
+        : supabase.from('billing').upsert(payload, { onConflict: 'job_id' }).select().single();
+
+
+--- \screens\receptionist\CustomerIntakeScreen.tsx ---
+[Line 77]:
+const { data: dtData, error: dtError } = await supabase.rpc('get_unique_device_types');
+
+
+--- \screens\receptionist\DashboardScreen.tsx ---
+[Line 77]:
+supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user?.id),
+      ]);
+
+
+--- \screens\receptionist\JobAssignmentScreen.tsx ---
+[Line 51]:
+const { data: jobCode, error: rpcError } = await supabase.rpc('generate_job_code');
+
+[Line 54]:
+const { data: newJob, error: insertError } = await supabase.from('jobs').insert({
+        job_code: jobCode,
+        customer_name:    formState.customer_name.trim(),
+        customer_contact: cleanPhoneNumber(formState.customer_contact),
+        customer_email:   formState.customer_email.trim() || null,
+        customer_gstin:   formState.customer_gstin?.trim() || null,
+        device_type:      formState.device_type,
+        reported_issue:   formState.reported_issue.trim(),
+        remarks:          formState.remarks.trim() || null,
+        job_type:         formState.job_type,
+        job_type_ref_id:  formState.job_type_ref_id || null,
+        snap_technician_incentive:   formState.snap_technician_incentive || 0,
+        priority:         formState.priority,
+        status:           'Received',
+        receptionist_id:  user?.id,
+        technician_id:    technicianIds.length > 0 ? technicianIds[0] : null,
+      }).select().single();
+
+[Line 79]:
+const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+
+
+--- \screens\receptionist\JobDetailScreen.tsx ---
+[Line 103]:
+await supabase.from('job_technicians').delete().eq('job_id', jobId);
+
+[Line 111]:
+const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
+
+
+--- \screens\receptionist\JobListScreen.tsx ---
+[Line 36]:
+supabase.from('jobs').select('id', { count: 'exact', head: true }),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+      ]);
+
+
+--- \screens\receptionist\NewSaleScreen.tsx ---
+[Line 213]:
+const { data, error: rpcError } = await supabase.rpc('generate_sale_code');
+
+[Line 230]:
+const res = await supabase.from('sales').insert(salePayload).select('*').single();
+
+[Line 242]:
+const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+
+
+--- \screens\shared\AllottedMaterialsScreen.tsx ---
+[Line 127]:
+const { error } = await supabase.rpc('return_material_allotment', {
+                p_allotment_id: allotmentId,
+              });
+
+
+--- \screens\shared\AttendanceScreen.tsx ---
+[Line 117]:
+const { data: geofenceData } = await supabase.from('geofence_settings').select('*').limit(1).maybeSingle();
+
+[Line 168]:
+const { error } = await supabase.from('attendance').upsert({
+          user_id: user.id,
+          date: todayStr,
+          check_in_time: new Date().toISOString(),
+          check_in_selfie_url: data.path,
+          gps_lat: data.gpsLat,
+          gps_lng: data.gpsLng,
+          status: 'Present',
+          low_accuracy: data.lowAccuracy || false,
+          at_location: isAtLocation,
+          review_status: reviewStatus
+        }, { onConflict: 'user_id, date' });
+
+[Line 182]:
+const { error } = await supabase.from('attendance')
+
+[Line 488]:
+const { error } = await supabase.from('attendance').upsert({
+                user_id: user.id,
+                date: todayStr,
+                status: confirmAction.status}, { onConflict: 'user_id, date' });
+
+
+--- \screens\shared\InventoryScreen.tsx ---
+[Line 54]:
+supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).eq('products.is_active', true),
+        supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).gt('quantity_cached', 0).lte('quantity_cached', 5).eq('products.is_active', true),
+        supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).lte('quantity_cached', 0).eq('products.is_active', true),
+      ]);
+
+[Line 66]:
+let query = supabase.from('inventory').select('*, products!inner(*)').eq('products.is_active', true).order('last_updated', { ascending: false });
+
+[Line 138]:
+const { error: prodErr } = await supabase.from('products').update({ name: itemName.trim(), unit: unit.trim() }).eq('id', editingItem.product_id);
+
+[Line 140]:
+const { error: invErr } = await supabase.from('inventory').update({ purchase_rate: parsedCost, low_stock_threshold: parsedThreshold, last_updated: new Date().toISOString() }).eq('id', editingItem.id);
+
+[Line 144]:
+await supabase.from('stock_entries').insert({ product_id: editingItem.product_id, quantity: diff, entry_type: parsedQty > editingItem.quantity ? 'restock' : 'adjustment', cost_price: parsedCost, notes: 'Manual inventory edit' });
+
+[Line 148]:
+const { data: prodData, error: prodErr } = await supabase.from('products').insert({ name: itemName.trim(), description: '', category: 'general', unit: unit.trim() }).select('id').single();
+
+[Line 150]:
+const { error: invErr } = await supabase.from('inventory').insert({ product_id: prodData.id, quantity_cached: 0, purchase_rate: parsedCost, selling_rate: 0, low_stock_threshold: parsedThreshold }).select('id').single();
+
+[Line 152]:
+if (parsedQty > 0) await supabase.from('stock_entries').insert({ product_id: prodData.id, quantity: parsedQty, entry_type: 'restock', cost_price: parsedCost, notes: 'Initial stock' });
+
+[Line 170]:
+const { data: inv } = await supabase.from('inventory').select('product_id').eq('id', id).single();
+
+[Line 172]:
+let { error } = await supabase.from('inventory').delete().eq('id', id);
+
+[Line 176]:
+const { error: softErr } = await supabase.from('products').update({ is_active: false }).eq('id', inv.product_id);
+
+[Line 185]:
+const { error: prodErr } = await supabase.from('products').delete().eq('id', inv.product_id);
+
+[Line 187]:
+const { error: softErr } = await supabase.from('products').update({ is_active: false }).eq('id', inv.product_id);
+
+
+--- \screens\shared\NotificationsScreen.tsx ---
+[Line 107]:
+supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id).eq('is_read', false),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id).eq('status', 'failed'),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id).eq('type', 'urgent')
+
+
+--- \screens\shared\ProfileScreen.tsx ---
+[Line 52]:
+const { data, error } = await supabase.storage.from('profile-pictures').createSignedUrl(path, 3600);
+
+[Line 61]:
+const { data, error } = await supabase.from('users').select('phone, email, avatar_url').eq('id', user.id).single();
+
+[Line 83]:
+const { error } = await supabase.from('users').update({ phone: cleaned }).eq('id', user.id);
+
+[Line 100]:
+await supabase.from('users').update({ email: trimmed }).eq('id', user.id);
+
+[Line 146]:
+const { error: uploadErr } = await supabase.storage.from('profile-pictures').upload(storagePath, formData, { upsert: true });
+
+[Line 148]:
+const { error: dbErr } = await supabase.from('users').update({ avatar_url: storagePath }).eq('id', user.id);
+
+
+--- \screens\shared\SalaryScreen.tsx ---
+[Line 282]:
+const { error } = await supabase.from('employee_leave').insert({
+        user_id: user.id, leave_date: leaveDate, status: 'pending',
+        reason: leaveReason.trim() || null,
+      });
+
+
+--- \screens\technician\AllottedMaterialsScreen.tsx ---
+[Line 103]:
+const { error } = await supabase.rpc('use_material_allotment', {
+        p_allotment_id: selectedAllotment.id,
+        p_job_id: jobId,
+        p_qty: qtyToUse
+      });
+
+
+--- \screens\technician\MyJobsScreen.tsx ---
+[Line 43]:
+supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Received'),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'In Progress'),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Waiting for Materials'),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed'),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
+      ]);
+
+
+--- \screens\technician\OnsiteVisitScreen.tsx ---
+[Line 85]:
+const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit.id);
+
+[Line 88]:
+const { error } = await supabase.from('onsite_visits').insert(payload);
+
+[Line 93]:
+await supabase.from('jobs').update({ status: 'In Progress' }).eq('id', jobId);
+
+[Line 102]:
+const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit!.id);
+
+
+--- \screens\technician\TechnicianDashboardScreen.tsx ---
+[Line 94]:
+supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id),
+        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).in('status', ['In Progress', 'Waiting for Materials', 'Received']),
+        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).eq('status', 'Completed').gte('completed_at', startOfToday),
+        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).eq('priority', 'Urgent').neq('status', 'Completed'),
+        supabase.from('notifications').select('id', { count: 'exact' }).eq('recipient_user_id', user.id),
+      ]);
+
+
+--- \screens\technician\UpdateWorkScreen.tsx ---
+[Line 66]:
+const { data: matsData } = await supabase.from('job_materials').select('*').eq('job_id', jobId);
+
+[Line 98]:
+const { error } = await supabase.from('job_materials').delete().eq('id', materialToDelete);
+
+[Line 117]:
+const { error } = await supabase.from('job_materials').update({
+            quantity: usedQty, checkout_status: 'confirmed',
+            usage_confirmed_at: new Date().toISOString()
+          }).eq('id', mat.id);
+
+[Line 130]:
+const { error } = await supabase.from('jobs').update(updates).eq('id', jobId).eq('technician_id', user!.id);
+

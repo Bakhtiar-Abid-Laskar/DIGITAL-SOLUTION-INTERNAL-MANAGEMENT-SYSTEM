@@ -8,7 +8,6 @@ import { Wallet, Check, Printer, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@repairshop/shared';
 import { formatDate } from '@/utils/formatDate';
 import { generateAdvanceReceiptHtml } from '@/utils/receiptHtml';
-import DOMPurify from 'dompurify';
 import styles from '@/styles/salary.module.css';
 
 interface Props {
@@ -60,11 +59,12 @@ export default function AdvanceSalaryForm({ staff, currentAdminId, currentAdminN
     onSuccess();
   };
 
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     if (!lastPayment) return;
     const html = generateAdvanceReceiptHtml(lastPayment.payment, lastPayment.staffName, lastPayment.staffRole, currentAdminName);
     const win = window.open('', '_blank');
     if (!win) return;
+    const DOMPurify = (await import('dompurify')).default;
     const cleanHtml = DOMPurify.sanitize(html);
     win.document.write(cleanHtml);
     win.document.close();

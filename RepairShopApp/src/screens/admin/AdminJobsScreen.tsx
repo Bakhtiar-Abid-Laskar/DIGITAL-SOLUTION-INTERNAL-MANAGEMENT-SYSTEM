@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
@@ -8,13 +8,14 @@ const PAGE_SIZE = 20;
 
 export default function AdminJobsScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [jobs, setJobs] = useState<(Job & { technician_name?: string })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('All');
+  const [activeTab, setActiveTab] = useState(route.params?.filter || 'All');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
@@ -25,6 +26,7 @@ export default function AdminJobsScreen() {
     'In Progress': 0,
     'Waiting for Materials': 0,
     Completed: 0,
+    Urgent: 0,
   });
 
   // Prevent concurrent load-more calls
@@ -33,12 +35,13 @@ export default function AdminJobsScreen() {
   // ── Server-side count queries (same pattern as receptionist JobListScreen) ──
   const fetchTabCounts = async () => {
     try {
-      const [allRes, recRes, progRes, waitRes, compRes] = await Promise.all([
+      const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact', head: true }),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
       ]);
 
       setCounts({
@@ -47,6 +50,7 @@ export default function AdminJobsScreen() {
         'In Progress': progRes.count ?? 0,
         'Waiting for Materials': waitRes.count ?? 0,
         Completed: compRes.count ?? 0,
+        Urgent: urgRes.count ?? 0,
       });
     } catch (err) {
       console.error('Error fetching admin job tab counts:', err);
@@ -65,7 +69,9 @@ export default function AdminJobsScreen() {
         .order('created_at', { ascending: false });
 
       // Server-side status filter
-      if (activeTab !== 'All') {
+      if (activeTab === 'Urgent') {
+        query = query.eq('priority', 'Urgent').neq('status', 'Completed');
+      } else if (activeTab !== 'All') {
         if (activeTab === 'Waiting') {
           query = query.eq('status', 'Waiting for Materials');
         } else {
@@ -114,11 +120,15 @@ export default function AdminJobsScreen() {
   // ── Initial load / focus refresh ──
   useFocusEffect(
     useCallback(() => {
+      if (route.params?.filter) {
+        setActiveTab(route.params.filter);
+        navigation.setParams({ filter: undefined });
+      }
       setPage(0);
       setLoading(true);
       fetchTabCounts();
       fetchJobs(0, true);
-    }, [activeTab, searchQuery])
+    }, [route.params?.filter, activeTab, searchQuery])
   );
 
   // ── Pull-to-refresh ──
@@ -156,6 +166,7 @@ export default function AdminJobsScreen() {
     { label: 'In Progress', value: 'In Progress', count: counts['In Progress'] },
     { label: 'Waiting', value: 'Waiting', count: counts['Waiting for Materials'] },
     { label: 'Completed', value: 'Completed', count: counts['Completed'] },
+    { label: 'Urgent', value: 'Urgent', count: counts['Urgent'] },
   ];
 
   return (
@@ -172,7 +183,7 @@ export default function AdminJobsScreen() {
       searchQuery={searchQuery}
       onSearchQueryChange={handleSearchChange}
       showPriorityFilter={false}
-      isDashboard={true}
+      isDashboard={false}
       onLoadMore={hasMore ? onLoadMore : undefined}
       loadingMore={loadingMore}
     />

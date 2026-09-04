@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StyleProp, ViewStyle, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StyleProp, ViewStyle, Pressable, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { AppPressable } from '../common/AppPressable';
 import { LucideIcon, ChevronRight } from 'lucide-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
@@ -30,7 +31,9 @@ interface RoleDashboardProps {
   userName: string;
   workloadText?: string;
   bannerColor: string; // Kept for API compat, but unused in flat design
+  avatarUrl?: string | null;
   avatarElement?: React.ReactNode;
+  onPressAvatar?: () => void;
   quickActionsTitle?: string;
   statsTitle?: string;
   quickActions?: QuickAction[];
@@ -67,7 +70,7 @@ function QuickActionTile({ action }: { action: QuickAction }) {
   );
 }
 
-function KpiCard({ stat }: { stat: StatCard }) {
+export function KpiCard({ stat }: { stat: StatCard }) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   
@@ -110,7 +113,9 @@ export default function RoleDashboard({
   userName,
   workloadText,
   bannerColor,
+  avatarUrl,
   avatarElement,
+  onPressAvatar,
   quickActionsTitle = "Quick Actions",
   statsTitle = "Overview",
   quickActions = [],
@@ -124,11 +129,20 @@ export default function RoleDashboard({
   children,
   unreadCount = 0,
 }: RoleDashboardProps) {
+  const navigation = useNavigation<any>();
   const bottomPadding = useBottomInsetPadding('nav');
   
   const hour = new Date().getHours();
   const greetingTime = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const handleAvatarPress = () => {
+    if (onPressAvatar) {
+      onPressAvatar();
+    } else {
+      navigation.navigate('ProfileScreen');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -155,11 +169,28 @@ export default function RoleDashboard({
               </View>
             )}
           </View>
-          {avatarElement && (
-            <View style={styles.avatarContainer}>
-              {avatarElement}
-            </View>
-          )}
+          
+          <AppPressable
+            style={styles.avatarContainer}
+            onPress={handleAvatarPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="View profile"
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+            ) : (
+              <View style={[styles.fallbackAvatar, { backgroundColor: bannerColor || colors.primary }]}>
+                {avatarElement ? (
+                  avatarElement
+                ) : (
+                  <Text style={styles.initialsText}>
+                    {(userName || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+            )}
+          </AppPressable>
         </View>
 
         {/* Stats Grid (White cards, 1px border) */}
@@ -246,15 +277,39 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   avatarContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    ...shadow.card,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fallbackAvatar: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsAvatar: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    ...typography.h2,
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 22,
   },
   section: {
     marginBottom: spacing.xxl,

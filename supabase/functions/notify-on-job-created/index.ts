@@ -3,25 +3,43 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 import { sendPushNotification } from '../_shared/notifications.ts'
+import { sendCustomerWhatsApp } from '../_shared/whatsappClient.ts'
 
 declare const Deno: any;
 
 serve(async (req: Request) => {
 
   try {
-    const signature = req.headers.get('webhook-signature')
+    const signature = req.headers.get('webhook-signature') || req.headers.get('x-webhook-secret')
     const authHeader = req.headers.get('Authorization')
     const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET')
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     
-    const isAuthorized =
-      !webhookSecret || // If webhook secret not configured, rely on URL obscurity / server environment
-      (signature && signature === webhookSecret) ||
-      (authHeader && serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) ||
-      (authHeader && authHeader.startsWith('Bearer '));
+    let isAuthorized = false
+
+    if (webhookSecret && signature && signature === webhookSecret) {
+      isAuthorized = true
+    } else if (serviceRoleKey && authHeader && authHeader === `Bearer ${serviceRoleKey}`) {
+      isAuthorized = true
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '').trim()
+      if (token && anonKey && token === anonKey) {
+        isAuthorized = true
+      } else if (token && token.length > 20) {
+        const supabaseAuthCheck = createClient(
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        )
+        const { data: authData, error: authErr } = await supabaseAuthCheck.auth.getUser(token)
+        if (!authErr && authData?.user) {
+          isAuthorized = true
+        }
+      }
+    }
 
     if (!isAuthorized) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing webhook credentials' }), {
         headers: { 'Content-Type': 'application/json' },
         status: 401,
       })
@@ -100,11 +118,58 @@ serve(async (req: Request) => {
         }
       }
 
+      // 3. Notify Admins (for dashboard real-time tracking & urgent alerts)
+      const { data: adminUsers } = await supabase
+        .from('users')
+        .select('id, expo_push_token, name')
+        .eq('role', 'admin')
+        .eq('is_active', true);
+
+      if (adminUsers && adminUsers.length > 0) {
+        for (const admin of adminUsers) {
+          if (!notifiedTechIds.has(admin.id)) {
+            const adminTitle = isUrgent ? 'URGENT: New Job Intake' : 'New Job Created';
+            const adminBody = isUrgent
+              ? `High-priority repair ${job.job_code} (${job.customer_name || 'Customer'}) created.`
+              : `Job ${job.job_code} created for ${job.customer_name || 'Customer'}. Priority: ${job.priority || 'Normal'}.`;
+
+            await sendPushNotification(supabase, {
+              userId: admin.id,
+              pushToken: admin.expo_push_token,
+              title: adminTitle,
+              body: adminBody,
+              data: { screen: 'JobDetail', jobId: job.id },
+              jobId: job.id,
+            });
+          }
+        }
+      }
+
+      // 4. Send Automated WhatsApp Intake Confirmation to Customer
+      if (job.customer_contact) {
+        const intakeMsg = `Hello ${job.customer_name || 'Customer'},\n\n` +
+          `Your device repair has been registered successfully at *Digital Solution*.\n\n` +
+          `📋 *Job Code:* ${job.job_code}\n` +
+          `📱 *Device:* ${job.device_type || 'Device'}\n` +
+          `⚠️ *Reported Issue:* ${job.reported_issue || 'Repair & Diagnostics'}\n` +
+          (job.advance_amount && Number(job.advance_amount) > 0 ? `💰 *Advance Paid:* ₹${Number(job.advance_amount).toFixed(2)}\n` : '') +
+          `\nOur technician is reviewing your device. We will update you via WhatsApp as work progresses.\n\n` +
+          `Thank you for choosing Digital Solution!`;
+
+        await sendCustomerWhatsApp(supabase, {
+          phone: job.customer_contact,
+          customerName: job.customer_name,
+          eventType: 'JOB_CREATED',
+          messageText: intakeMsg,
+          jobId: job.id,
+        });
+      }
 
       return new Response(JSON.stringify({ success: true, message: 'Job created notifications processed' }), {
         headers: { 'Content-Type': 'application/json' },
         status: 200,
       })
+
     }
 
     return new Response(JSON.stringify({ error: 'Payload ignored' }), {

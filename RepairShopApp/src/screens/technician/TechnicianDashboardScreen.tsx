@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, Switch } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
@@ -8,13 +8,14 @@ import { getTodayDateString } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
 import { playNotificationSound } from '../../utils/playNotificationSound';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
+import JobCard from '../../components/jobs/JobCard';
 import { colors, QUICK_ACTION_COLORS, typography, spacing } from '../../tokens';
 import {
   ClipboardList,
   CalendarCheck,
   LogOut,
   Wrench,
-  CheckCircle,
+  CheckCircle2,
   AlertTriangle,
   Activity,
   Bell,
@@ -23,6 +24,7 @@ import {
   Package,
   MessageCircle,
   Mail,
+  BarChart3,
 } from 'lucide-react-native';
 
 import BottomSheet from '../../components/common/BottomSheet';
@@ -36,7 +38,7 @@ const formatTime = (isoString: string) => {
 
 export default function TechnicianDashboardScreen() {
   const navigation = useNavigation<any>();
-  const { signOut, user, displayName } = useAuth();
+  const { signOut, user, displayName, avatarUrl } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [logoutVisible, setLogoutVisible] = useState(false);
@@ -84,18 +86,22 @@ export default function TechnicianDashboardScreen() {
     }
   };
 
+  const [activeJobs, setActiveJobs] = useState<any[]>([]);
+  const [showUrgentOnly, setShowUrgentOnly] = useState(false);
+
   const fetchDashboardData = async () => {
     if (!user) return;
     try {
       const today = getTodayDateString();
       const startOfToday = new Date(today + 'T00:00:00.000Z').toISOString();
 
-      const [totalRes, inProgressRes, completedRes, urgentRes, unreadRes] = await Promise.all([
-        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id),
-        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).in('status', ['In Progress', 'Waiting for Materials', 'Received']),
-        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).eq('status', 'Completed').gte('completed_at', startOfToday),
-        supabase.from('jobs').select('id', { count: 'exact' }).eq('technician_id', user.id).eq('priority', 'Urgent').neq('status', 'Completed'),
-        supabase.from('notifications').select('id', { count: 'exact' }).eq('recipient_user_id', user.id),
+      const [totalRes, inProgressRes, completedRes, urgentRes, unreadRes, activeJobsRes] = await Promise.all([
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).in('status', ['In Progress', 'Waiting for Materials', 'Received']),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed').gte('completed_at', startOfToday),
+        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('priority', 'Urgent').neq('status', 'Completed'),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
+        supabase.from('jobs').select('*, job_technicians!inner(technician_id, removed_at)').eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).neq('status', 'Completed').order('created_at', { ascending: false }).limit(20)
       ]);
 
       setStatsData({
@@ -105,6 +111,9 @@ export default function TechnicianDashboardScreen() {
         urgentPending: urgentRes.count ?? 0,
       });
       setUnreadCount(unreadRes.count ?? 0);
+      if (activeJobsRes.data) {
+        setActiveJobs(activeJobsRes.data);
+      }
     } catch (error) {
       console.error('Error fetching tech dashboard:', error);
     } finally {
@@ -114,23 +123,39 @@ export default function TechnicianDashboardScreen() {
 
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel('tech-dashboard-jobs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `technician_id=eq.${user.id}` }, () => {
+    
+    let timeoutId: NodeJS.Timeout;
+    const handleUpdate = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
         fetchDashboardData();
         playNotificationSound();
-      })
+      }, 1500);
+    };
+
+    const channel = supabase
+      .channel('tech-dashboard-jobs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `technician_id=eq.${user.id}` }, handleUpdate)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      clearTimeout(timeoutId);
+      supabase.removeChannel(channel); 
+    };
   }, [user]);
+
+  const lastFetchTime = useRef<number>(0);
 
   useFocusEffect(
     useCallback(() => {
-      fetchDashboardData().then(() => {
-        isFirstMount.current = false;
-      });
-      fetchNotifications();
+      const now = Date.now();
+      if (isFirstMount.current || now - lastFetchTime.current > 5 * 60 * 1000) {
+        fetchDashboardData().then(() => {
+          isFirstMount.current = false;
+          lastFetchTime.current = Date.now();
+        });
+        fetchNotifications();
+      }
     }, [user])
   );
 
@@ -139,15 +164,14 @@ export default function TechnicianDashboardScreen() {
   };
 
   const quickActions: QuickAction[] = [
-    { id: 'job_list', label: 'My Jobs', icon: ClipboardList, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigateToJobs('All') },
-    { id: 'attendance', label: 'Attendance', icon: CalendarCheck, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('Attendance') },
     { id: 'materials', label: 'My Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'scoped' }) },
+    { id: 'reports', label: 'Reports', icon: BarChart3, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('TechnicianReports') },
   ];
 
   const stats: StatCard[] = [
     { id: 'assigned', label: 'Total Assigned', value: loading ? '-' : statsData.totalAssigned, type: 'total', icon: ClipboardList, onPress: () => navigateToJobs('All') },
     { id: 'in_progress', label: 'In Progress', value: loading ? '-' : statsData.inProgress, type: 'progress', icon: Activity, onPress: () => navigateToJobs('In Progress') },
-    { id: 'completed', label: 'Completed Today', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle, onPress: () => navigateToJobs('Completed Today') },
+    { id: 'completed', label: 'Completed Today', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle2, onPress: () => navigateToJobs('Completed') },
     { id: 'urgent', label: 'Urgent', value: loading ? '-' : statsData.urgentPending, type: 'urgent', icon: AlertTriangle, onPress: () => navigateToJobs('Urgent') },
   ];
 
@@ -158,6 +182,7 @@ export default function TechnicianDashboardScreen() {
         userName={displayName}
         workloadText={statsData.urgentPending > 0 ? `${statsData.urgentPending} urgent jobs pending` : 'All caught up'}
         bannerColor={colors.accentGreen}
+        avatarUrl={avatarUrl}
         avatarElement={<Wrench color={colors.textInverse} size={24} />}
         quickActions={quickActions}
         stats={stats}
@@ -166,7 +191,42 @@ export default function TechnicianDashboardScreen() {
         headerRightIcon={<Menu size={22} color={colors.textSecondary} />}
         onHeaderRightPress={() => setMenuVisible(true)}
         unreadCount={unreadCount}
-      />
+      >
+        <View style={{ marginBottom: spacing.xxl }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+            <Text style={{ ...typography.h3, color: colors.textPrimary }}>Your active tasks for today:</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <Text style={{ ...typography.caption, color: colors.textSecondary }}>Urgent</Text>
+              <Switch
+                value={showUrgentOnly}
+                onValueChange={setShowUrgentOnly}
+                trackColor={{ false: colors.border, true: colors.statusUrgentBg }}
+                thumbColor={showUrgentOnly ? colors.statusUrgentFg : colors.textMuted}
+                ios_backgroundColor={colors.border}
+              />
+            </View>
+          </View>
+          
+          {activeJobs.filter(job => showUrgentOnly ? job.priority === 'Urgent' : true).length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              message={showUrgentOnly ? "No urgent active tasks." : "No active tasks today!"}
+              subMessage="You're all caught up."
+              compact={true}
+            />
+          ) : (
+            activeJobs
+              .filter(job => showUrgentOnly ? job.priority === 'Urgent' : true)
+              .map(job => (
+                <JobCard 
+                  key={job.id} 
+                  job={job} 
+                  onPress={() => navigation.navigate('UpdateWork', { jobId: job.id })}
+                />
+              ))
+          )}
+        </View>
+      </RoleDashboard>
 
       {/* Notifications Bottom Sheet */}
       <BottomSheet visible={notificationsVisible} onClose={() => setNotificationsVisible(false)}>
@@ -189,7 +249,26 @@ export default function TechnicianDashboardScreen() {
             />
           ) : (
             notificationsData.map(notif => (
-              <AppPressable key={notif.id} style={styles.notificationCard}>
+              <AppPressable
+                key={notif.id}
+                style={styles.notificationCard}
+                onPress={() => {
+                  setNotificationsVisible(false);
+                  const msg = (notif.message || '').toLowerCase();
+                  const type = (notif.type || '').toLowerCase();
+                  if (type.includes('material_return') || msg.includes('return material') || msg.includes('material return')) {
+                    navigation.navigate('AllottedMaterialsScreen', { mode: 'scoped', jobId: notif.job_id });
+                  } else if (notif.job_id) {
+                    navigation.navigate('UpdateWork', { jobId: notif.job_id });
+                  } else if (type.includes('salary') || type.includes('leave') || msg.includes('salary') || msg.includes('leave')) {
+                    navigation.navigate('Salary');
+                  } else if (type.includes('attendance') || msg.includes('attendance')) {
+                    navigation.navigate('Attendance');
+                  } else {
+                    navigation.navigate('Notifications');
+                  }
+                }}
+              >
                 <View style={styles.notificationIcon}>
                   {notif.channel === 'whatsapp' ? (
                     <MessageCircle size={20} color={colors.accentGreen} />

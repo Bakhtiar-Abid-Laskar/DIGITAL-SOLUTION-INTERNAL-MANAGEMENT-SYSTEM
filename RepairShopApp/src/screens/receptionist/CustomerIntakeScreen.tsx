@@ -22,6 +22,7 @@ import ScreenScrollView from '../../components/common/ScreenScrollView';
 import { CustomerTypeaheadMobile } from '../../components/customers/CustomerTypeaheadMobile';
 import { useAppConfig } from '../../context/AppConfigContext';
 import { colors, radius, spacing, typography } from '../../tokens';
+import { validateAndNormalizeIndianPhone, formatPhoneInput } from '@repairshop/shared';
 
 type JobTypeCatalogItem = {
   id: string;
@@ -96,7 +97,11 @@ export default function CustomerIntakeScreen() {
   }, [fetchCatalog]);
 
   const updateForm = (key: keyof NewJobFormValues, value: any) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+    let finalVal = value;
+    if (key === 'customer_contact') {
+      finalVal = formatPhoneInput(value);
+    }
+    setForm(prev => ({ ...prev, [key]: finalVal }));
     if (fieldErrors[key]) setFieldErrors(prev => ({ ...prev, [key]: undefined }));
   };
 
@@ -124,7 +129,12 @@ export default function CustomerIntakeScreen() {
   const validate = (): boolean => {
     const errors: typeof fieldErrors = {};
     if (!form.customer_name.trim())    errors.customer_name    = 'Customer name is required';
-    if (!form.customer_contact.trim()) errors.customer_contact = 'Contact number is required';
+    
+    const phoneCheck = validateAndNormalizeIndianPhone(form.customer_contact);
+    if (!phoneCheck.isValid) {
+      errors.customer_contact = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+    }
+
     if (!form.reported_issue.trim())   errors.reported_issue   = 'Reported issue is required';
 
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i;
@@ -134,12 +144,18 @@ export default function CustomerIntakeScreen() {
 
     setFieldErrors(errors);
     // Only required fields block submission
-    return Boolean(form.customer_name.trim() && form.customer_contact.trim() && form.reported_issue.trim());
+    return Boolean(form.customer_name.trim() && phoneCheck.isValid && form.reported_issue.trim());
   };
 
   const handleNext = () => {
     if (!validate()) return;
-    navigation.navigate('JobAssignment', { formState: form });
+    const phoneCheck = validateAndNormalizeIndianPhone(form.customer_contact);
+    navigation.navigate('JobAssignment', { 
+      formState: {
+        ...form,
+        customer_contact: phoneCheck.isValid ? phoneCheck.e164 : form.customer_contact.trim(),
+      } 
+    });
   };
 
   const renderField = (
@@ -211,7 +227,7 @@ export default function CustomerIntakeScreen() {
                   ...prev,
                   customer_id: cust.id,
                   customer_name: cust.name,
-                  customer_contact: cust.phone || prev.customer_contact,
+                  customer_contact: cust.phone ? formatPhoneInput(cust.phone) : prev.customer_contact,
                   customer_email: cust.email || prev.customer_email,
                   customer_gstin: cust.gstin || prev.customer_gstin,
                   customer_address: cust.address || prev.customer_address,
@@ -223,22 +239,22 @@ export default function CustomerIntakeScreen() {
               error={fieldErrors.customer_name}
             />
 
-            {renderField('customer_contact', 'Contact Number *',   <Phone    size={18} color={colors.textMuted} style={styles.inputIcon} />, { keyboardType: 'phone-pad' })}
+            {renderField('customer_contact', 'Contact Number *',   <Phone    size={18} color={colors.textMuted} style={styles.inputIcon} />, { keyboardType: 'phone-pad', placeholder: '+91 98765 43210' })}
             {renderField('customer_email',   'Email (optional)',   <Mail     size={18} color={colors.textMuted} style={styles.inputIcon} />, { keyboardType: 'email-address', autoCapitalize: 'none' })}
             {renderField('customer_gstin',   'GSTIN (optional)',   <FileText size={18} color={colors.textMuted} style={styles.inputIcon} />, { autoCapitalize: 'characters', maxLength: 15, placeholder: 'e.g. 22AAAAA0000A1Z5' })}
             {renderField('customer_address', 'Billing & Delivery Address (optional)', <MapPin size={18} color={colors.textMuted} style={styles.inputIcon} />, { multiline: true, placeholder: 'Enter physical address...' })}
           </View>
 
           <View style={styles.sectionHeaderBg}>
-            <SectionLabel title="SERVICE / JOB CATALOG" />
+            <SectionLabel title="SERVICE / JOB CATALOG (OPTIONAL)" />
           </View>
           <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Job Service Type</Text>
+            <Text style={styles.fieldLabel}>Job Service Type (Optional - Tech can assign upon diagnosis)</Text>
             <Dropdown
               options={dropdownOptions}
               selectedValue={form.job_type_ref_id || ''}
               onSelect={(val) => handleSelectJobTypeCatalog(val)}
-              placeholder={catalogLoading ? "Loading catalog..." : "Select Service/Job Type"}
+              placeholder={catalogLoading ? "Loading catalog..." : "Select Service Type (or leave for technician)"}
               icon={<Tag size={18} color={colors.textMuted} />}
             />
             {form.job_type_title ? (

@@ -11,6 +11,7 @@ interface AuthContextProps {
   isActive: boolean;
   isLoading: boolean;
   displayName: string;
+  avatarUrl: string | null;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextProps>({
   isActive: false,
   isLoading: true,
   displayName: '',
+  avatarUrl: null,
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isActive, setIsActive] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [displayName, setDisplayName] = useState<string>('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
@@ -71,6 +74,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  // Helper to extract avatarUrl
+  const resolveAvatarUrl = (userRow: UserRow | null): string | null => {
+    if (!userRow) return null;
+    if (userRow.avatar_url) return userRow.avatar_url;
+    if (userRow.avatar_drive_file_id) return `https://drive.google.com/uc?id=${userRow.avatar_drive_file_id}`;
+    return null;
+  };
+
   // Re-sync profile when app returns to foreground (e.g. after admin activates/updates user)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
@@ -82,6 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setRole(userRow.role);
             setIsActive(userRow.is_active);
             setDisplayName(userRow.name || session.user.email?.split('@')[0] || '');
+            setAvatarUrl(resolveAvatarUrl(userRow));
           }
         }
       }
@@ -107,15 +119,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setRole(userRow.role);
           setIsActive(userRow.is_active);
           setDisplayName(userRow.name || newSession.user.email?.split('@')[0] || '');
+          setAvatarUrl(resolveAvatarUrl(userRow));
         } else {
           setRole(null);
           setIsActive(false);
           setDisplayName(newSession.user.email?.split('@')[0] || '');
+          setAvatarUrl(null);
         }
       } else {
         setRole(null);
         setIsActive(false);
         setDisplayName('');
+        setAvatarUrl(null);
       }
     } finally {
       setIsLoading(false);
@@ -130,6 +145,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setRole(userRow.role);
         setIsActive(userRow.is_active);
         setDisplayName(userRow.name || session.user.email?.split('@')[0] || '');
+        setAvatarUrl(resolveAvatarUrl(userRow));
       }
     }
   }, [session]);
@@ -145,12 +161,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setRole(null);
       setIsActive(false);
       setDisplayName('');
+      setAvatarUrl(null);
     }
   };
 
   const contextValue = useMemo(() => ({
-    user, session, role, isActive, isLoading, displayName, signOut, refreshProfile
-  }), [user, session, role, isActive, isLoading, displayName, refreshProfile]);
+    user, session, role, isActive, isLoading, displayName, avatarUrl, signOut, refreshProfile
+  }), [user, session, role, isActive, isLoading, displayName, avatarUrl, refreshProfile]);
 
   return (
     <AuthContext.Provider value={contextValue}>

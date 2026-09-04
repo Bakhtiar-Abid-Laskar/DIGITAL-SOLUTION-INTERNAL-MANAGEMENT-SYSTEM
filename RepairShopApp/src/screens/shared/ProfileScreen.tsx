@@ -11,12 +11,13 @@ import { useToast } from '../../context/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { cleanPhoneNumber } from '@repairshop/shared';
 import { compressImage } from '../../utils/compressImage';
+import { uploadFileToSupabaseStorage } from '../../utils/supabaseStorage';
 import { ProfileInfoCard }     from '../../components/profile/ProfileInfoCard';
 import { ProfilePasswordCard } from '../../components/profile/ProfilePasswordCard';
 import { PhotoPickerModal }    from '../../components/profile/PhotoPickerModal';
 
 export default function ProfileScreen() {
-  const { session, user, displayName, role, signOut } = useAuth();
+  const { session, user, displayName, role, signOut, refreshProfile } = useAuth();
   const bottomPadding = useBottomInsetPadding('nav');
   const { showToast } = useToast();
 
@@ -50,12 +51,17 @@ export default function ProfileScreen() {
   const fetchUserProfile = useCallback(async (cancelled = false) => {
     if (!user) return;
     try {
-      const { data, error } = await supabase.from('users').select('phone, email, avatar_drive_file_id').eq('id', user.id).single();
+      const { data, error } = await supabase
+        .from('users')
+        .select('phone, email, avatar_url, avatar_drive_file_id')
+        .eq('id', user.id)
+        .single();
       if (cancelled) return;
       if (!error && data) {
         setState({ phone: data.phone || '' });
         if (data.email) setState({ email: data.email });
-        if (data.avatar_drive_file_id) setState({ avatarSignedUrl: `https://drive.google.com/uc?id=${data.avatar_drive_file_id}` });
+        const resolvedUrl = data.avatar_url || (data.avatar_drive_file_id ? `https://drive.google.com/uc?id=${data.avatar_drive_file_id}` : null);
+        if (resolvedUrl) setState({ avatarSignedUrl: resolvedUrl });
       }
     } catch (err) { console.error('Error fetching user profile:', err); }
   }, [user]);
@@ -75,6 +81,7 @@ export default function ProfileScreen() {
       const { error } = await supabase.from('users').update({ phone: cleaned }).eq('id', user.id);
       if (error) throw error;
       setState({ phone: cleaned, editingPhone: false });
+      await refreshProfile();
       showToast({ title: 'Phone Updated', message: 'Your phone number has been saved.', type: 'success' });
     } catch (err: any) {
       showToast({ title: 'Update Failed', message: err.message || 'Could not update phone number.', type: 'error' });
@@ -91,6 +98,7 @@ export default function ProfileScreen() {
       if (error) throw error;
       await supabase.from('users').update({ email: trimmed }).eq('id', user.id);
       setState({ email: trimmed, editingEmail: false });
+      await refreshProfile();
       showToast({ title: 'Confirmation Sent', message: 'Check your inbox and confirm your email change.', type: 'info' });
     } catch (err: any) {
       showToast({ title: 'Update Failed', message: err.message || 'Could not update email address.', type: 'error' });
@@ -131,36 +139,33 @@ export default function ProfileScreen() {
       }
       if (result.canceled || !result.assets[0]?.uri) return;
       setState({ avatarLoading: true });
+      
       const compressedUri = await compressImage(result.assets[0].uri);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const fileName = `${user.id}_${Date.now()}.jpg`;
 
-      const formData = new FormData();
-      formData.append('staffName', displayName || 'Unknown');
-      formData.append('image', { uri: compressedUri, name: 'avatar.webp', type: 'image/webp' } as any);
-      
-      const supabaseUrl = (supabase as any).supabaseUrl as string;
-      const res = await fetch(`${supabaseUrl}/functions/v1/upload-avatar`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: formData,
-      });
-      
-      if (!res.ok) throw new Error('Drive upload failed');
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Drive upload failed');
+      const avatarUrl = await uploadFileToSupabaseStorage(
+        'avatars',
+        fileName,
+        compressedUri,
+        'image/jpeg'
+      );
 
-      const { error: dbErr } = await supabase.from('users').update({ avatar_drive_file_id: data.fileId }).eq('id', user.id);
+      const { error: dbErr } = await supabase
+        .from('users')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+
       if (dbErr) throw dbErr;
-      
-      setState({ avatarSignedUrl: `https://drive.google.com/uc?id=${data.fileId}` });
-      showToast({ title: 'Success', message: 'Profile picture updated.', type: 'success' });
+
+      setState({ avatarSignedUrl: avatarUrl });
+      await refreshProfile();
+      showToast({ title: 'Success', message: 'Profile picture updated successfully.', type: 'success' });
     } catch (err: any) {
+      console.error('Avatar upload failed:', err);
       showToast({ title: 'Upload Failed', message: err.message || 'Could not update profile picture.', type: 'error' });
     } finally {
       setState({ avatarLoading: false });
-    };
+    }
   };
 
   const confirmLogout = async () => {
@@ -223,7 +228,7 @@ export default function ProfileScreen() {
       <BottomSheet visible={logoutVisible} onClose={() => setState({ logoutVisible: false })}>
         <Text style={{ ...typography.h2, marginBottom: spacing.sm }}>Log Out</Text>
         <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl }}>
-          Are you sure you want to log out of RepairShop?
+          Are you sure you want to log out of Digital Solution?
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           <Button label="Cancel" variant="secondary" onPress={() => setState({ logoutVisible: false })} style={{ flex: 1 }} />

@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/common/Button";
 import { useToast } from "@/components/common/ToastProvider";
-import { User, JobTypeCatalogItem } from '@repairshop/shared';
+import { User, JobTypeCatalogItem, validateAndNormalizeIndianPhone } from '@repairshop/shared';
 import { ArrowLeft } from "lucide-react";
 
 import { createJobReducer, initialState, CreateJobFormState } from './reducer';
@@ -115,7 +115,12 @@ export default function CreateJobPage() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!state.form.customer_name.trim()) newErrors.customer_name = 'Customer name is required';
-    if (!state.form.customer_contact.trim()) newErrors.customer_contact = 'Contact number is required';
+    
+    const phoneCheck = validateAndNormalizeIndianPhone(state.form.customer_contact);
+    if (!phoneCheck.isValid) {
+      newErrors.customer_contact = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+    }
+
     if (!state.form.reported_issue.trim()) newErrors.reported_issue = 'Reported issue description is required';
 
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i;
@@ -124,12 +129,15 @@ export default function CreateJobPage() {
     }
 
     dispatch({ type: 'SET_ERRORS', errors: newErrors });
-    return Boolean(state.form.customer_name.trim() && state.form.customer_contact.trim() && state.form.reported_issue.trim());
+    return Boolean(state.form.customer_name.trim() && phoneCheck.isValid && state.form.reported_issue.trim());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+
+    const phoneCheck = validateAndNormalizeIndianPhone(state.form.customer_contact);
+    const normalizedPhone = phoneCheck.isValid ? phoneCheck.e164 : state.form.customer_contact.trim();
 
     dispatch({ type: 'SET_LOADING', loading: true });
     try {
@@ -161,7 +169,7 @@ export default function CreateJobPage() {
         const { data: custData, error: custErr } = await supabase.rpc('find_or_create_customer', {
           p_customer_id: customerId,
           p_name: state.form.customer_name.trim(),
-          p_phone: state.form.customer_contact.trim() || null,
+          p_phone: normalizedPhone || null,
           p_email: state.form.customer_email.trim() || null,
           p_gstin: state.form.customer_gstin.trim() || null,
           p_address: state.form.customer_address.trim() || null,
@@ -179,7 +187,7 @@ export default function CreateJobPage() {
         job_code: jobCode,
         customer_id: customerId,
         customer_name: state.form.customer_name.trim(),
-        customer_contact: state.form.customer_contact.trim(),
+        customer_contact: normalizedPhone,
         customer_email: state.form.customer_email.trim() || null,
         customer_gstin: state.form.customer_gstin.trim() || null,
         customer_address: state.form.customer_address.trim() || null,

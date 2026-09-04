@@ -6,6 +6,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { AppConfigProvider } from './src/context/AppConfigContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ToastProvider } from './src/context/ToastContext';
+import { PdfProgressProvider } from './src/context/PdfProgressContext';
 import { ErrorBoundary } from './src/components/common/ErrorBoundary';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -35,11 +36,13 @@ export default function App() {
         <QueryClientProvider client={queryClient}>
           <SafeAreaProvider>
             <ToastProvider>
-              <AuthProvider>
-                <AppConfigProvider>
-                  <RootNavigator />
-                </AppConfigProvider>
-              </AuthProvider>
+              <PdfProgressProvider>
+                <AuthProvider>
+                  <AppConfigProvider>
+                    <RootNavigator />
+                  </AppConfigProvider>
+                </AuthProvider>
+              </PdfProgressProvider>
             </ToastProvider>
           </SafeAreaProvider>
         </QueryClientProvider>

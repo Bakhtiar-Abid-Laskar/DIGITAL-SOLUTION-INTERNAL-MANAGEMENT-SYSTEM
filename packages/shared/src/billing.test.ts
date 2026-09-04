@@ -1,4 +1,14 @@
-import { calculateTaxAmount, calculatePartsTotal, calculateGrandTotal } from './billing';
+import { 
+  calculateTaxAmount, 
+  calculatePartsTotal, 
+  calculateGrandTotal,
+  validatePaymentAmount,
+  derivePaymentStatus,
+  calculateItemizedSubtotal,
+  calculateItemizedTaxAmount,
+  calculateItemizedGrandTotal,
+  calculateBillingTotals
+} from './billing';
 
 describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
   describe('calculateGrandTotal', () => {
@@ -68,4 +78,168 @@ describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
       expect(calculatePartsTotal([])).toBe(0);
     });
   });
+
+  describe('validatePaymentAmount', () => {
+    it('accepts exact full payment', () => {
+      const res = validatePaymentAmount(894, 894);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('accepts partial payment less than grand total', () => {
+      const res = validatePaymentAmount(500, 894);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('accepts zero payment', () => {
+      const res = validatePaymentAmount(0, 894);
+      expect(res.isValid).toBe(true);
+    });
+
+    it('rejects payment amount exceeding grand total', () => {
+      const res = validatePaymentAmount(900, 894);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('cannot exceed');
+    });
+
+    it('rejects negative payment amount', () => {
+      const res = validatePaymentAmount(-50, 894);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('cannot be negative');
+    });
+  });
+
+  describe('derivePaymentStatus', () => {
+    it('returns paid when fully paid', () => {
+      expect(derivePaymentStatus(1000, 1000)).toBe('paid');
+    });
+
+    it('returns paid when overpaid', () => {
+      expect(derivePaymentStatus(1200, 1000)).toBe('paid');
+    });
+
+    it('returns partial when partially paid', () => {
+      expect(derivePaymentStatus(500, 1000)).toBe('partial');
+    });
+
+    it('returns draft when unpaid', () => {
+      expect(derivePaymentStatus(0, 1000)).toBe('draft');
+    });
+
+    it('handles zero total edge case', () => {
+      expect(derivePaymentStatus(0, 0)).toBe('paid');
+    });
+  });
+
+  describe('Itemized Bill Calculations (Per-Line Tax)', () => {
+    const sampleItems = [
+      { quantity: 2, unit_price: 500, tax_percent: 18 },  // sub: 1000, tax: 180
+      { quantity: 1, unit_price: 300, tax_percent: 12 },  // sub: 300, tax: 36
+      { quantity: 1, unit_price: 200, tax_percent: 0 },   // sub: 200, tax: 0
+    ];
+
+    it('calculates true pre-tax subtotal from per-line prices', () => {
+      expect(calculateItemizedSubtotal(sampleItems)).toBe(1500);
+    });
+
+    it('calculates true sum of per-line independent tax amounts', () => {
+      // Line 1: 1000 * 18% = 180
+      // Line 2: 300 * 12% = 36
+      // Line 3: 200 * 0% = 0
+      // Total tax = 216
+      expect(calculateItemizedTaxAmount(sampleItems)).toBe(216);
+    });
+
+    it('calculates grand total without adjustments or discount', () => {
+      // 1500 + 216 = 1716
+      expect(calculateItemizedGrandTotal(sampleItems)).toBe(1716);
+    });
+
+    it('handles empty items array gracefully', () => {
+      expect(calculateItemizedSubtotal([])).toBe(0);
+      expect(calculateItemizedTaxAmount([])).toBe(0);
+      expect(calculateItemizedGrandTotal([])).toBe(0);
+    });
+
+    it('calculates grand total with discount applied', () => {
+      // 1500 + 216 = 1716 - 216 discount = 1500
+      expect(calculateItemizedGrandTotal(sampleItems, 216)).toBe(1500);
+    });
+  });
+
+  describe('Unified calculateBillingTotals (Web & Mobile Parity Tests)', () => {
+    // Case 1: Zero discount
+    it('Case 1: correctly calculates totals with zero discount', () => {
+      const res = calculateBillingTotals({
+        partsTotal: 500,
+        labourCharge: 300,
+        taxPercent: 18,
+        discount: 0,
+      });
+      expect(res.subtotal).toBe(800);
+      expect(res.taxAmount).toBe(144);
+      expect(res.discount).toBe(0);
+      expect(res.grandTotal).toBe(944);
+    });
+
+    // Case 2: Standard project verification from GEMINI.md
+    it('Case 2: exactly matches GEMINI.md verification example (500 + 300 @ 18% - 50 = 894)', () => {
+      const res = calculateBillingTotals({
+        partsTotal: 500,
+        labourCharge: 300,
+        taxPercent: 18,
+        discount: 50,
+      });
+      expect(res.subtotal).toBe(800);
+      expect(res.taxAmount).toBe(144);
+      expect(res.discount).toBe(50);
+      expect(res.grandTotal).toBe(894);
+    });
+
+    // Case 3: Max discount clamp (prevents negative totals)
+    it('Case 3: clamps grand total to 0 when discount exceeds gross total', () => {
+      const res = calculateBillingTotals({
+        partsTotal: 200,
+        labourCharge: 100,
+        taxPercent: 18,
+        discount: 1000,
+      });
+      expect(res.subtotal).toBe(300);
+      expect(res.taxAmount).toBe(54);
+      expect(res.discount).toBe(1000);
+      expect(res.grandTotal).toBe(0);
+    });
+
+    // Case 4: Itemized bill with mixed tax rates and discount
+    it('Case 4: computes itemized bill with per-line taxes and discount', () => {
+      const res = calculateBillingTotals({
+        items: [
+          { quantity: 1, unit_price: 1000, tax_percent: 18 }, // sub 1000, tax 180
+          { quantity: 2, unit_price: 250, tax_percent: 12 },  // sub 500, tax 60
+        ],
+        discount: 140,
+      });
+      expect(res.subtotal).toBe(1500);
+      expect(res.taxAmount).toBe(240);
+      expect(res.discount).toBe(140);
+      expect(res.grandTotal).toBe(1600); // 1500 + 240 - 140 = 1600
+    });
+
+    // Case 5: Rounding edge cases (fractional decimals)
+    it('Case 5: rounds money consistently to two decimal places on odd fractions', () => {
+      const res = calculateBillingTotals({
+        partsTotal: 33.33,
+        labourCharge: 66.66,
+        taxPercent: 5,
+        discount: 0.05,
+      });
+      // 99.99 * 1.05 = 104.9895 - 0.05 = 104.9395 -> 104.94
+      expect(res.subtotal).toBe(99.99);
+      expect(res.taxAmount).toBe(5.00);
+      expect(res.grandTotal).toBe(104.94);
+    });
+  });
 });
+
+

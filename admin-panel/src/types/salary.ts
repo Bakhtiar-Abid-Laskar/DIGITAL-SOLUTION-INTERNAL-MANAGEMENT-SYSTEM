@@ -1,6 +1,6 @@
 // Salary & Incentive Management Types
 
-export type PaymentType = 'advance_salary' | 'materials_purchase' | 'daily_expenditure' | 'office_development';
+export type PaymentType = 'advance_salary' | 'materials_purchase' | 'daily_expenditure' | 'office_development' | 'staff_salary';
 
 export interface StaffRate {
   user_id: string;

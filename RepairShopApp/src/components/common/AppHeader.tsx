@@ -64,7 +64,7 @@ export default function AppHeader({
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
         ) : (
           <View style={styles.brandTitleContainer}>
-            <Image source={require('../../../assets/logo.webp')} style={styles.headerLogo} resizeMode="contain" />
+            <Image source={require('../../../assets/logo.png')} style={styles.headerLogo} resizeMode="contain" />
             <Text style={styles.brandTitle}>Digital Solution</Text>
           </View>
         )}

@@ -1,0 +1,205 @@
+<svg width="794" height="1123" viewBox="0 0 794 1123" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+  <defs>
+    <linearGradient id="headerBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1f6b"/>
+      <stop offset="55%" stop-color="#1447b5"/>
+      <stop offset="100%" stop-color="#3fa9f5"/>
+    </linearGradient>
+
+    <linearGradient id="darkGray" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a4a4a"/>
+      <stop offset="100%" stop-color="#161616"/>
+    </linearGradient>
+
+    <linearGradient id="accentStrip" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0b1f6b"/>
+      <stop offset="50%" stop-color="#2f8fe0"/>
+      <stop offset="100%" stop-color="#1a1a1a"/>
+    </linearGradient>
+
+    <linearGradient id="edgeBar" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b1f6b"/>
+      <stop offset="50%" stop-color="#2f8fe0"/>
+      <stop offset="100%" stop-color="#1a1a1a"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#0b1f6b" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- PAGE BACKGROUND -->
+  <rect x="0" y="0" width="794" height="1123" fill="#ffffff"/>
+
+  <!-- spine edge accent -->
+  <rect x="0" y="0" width="5" height="1123" fill="url(#edgeBar)"/>
+
+  <!-- faint geometric watermark hexagon (echoes logo icon), pure texture -->
+  <polygon points="397,340 500,401 500,523 397,584 294,523 294,401"
+           fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.03"/>
+  <polygon points="397,378 470,421 470,504 397,547 324,504 324,421"
+           fill="none" stroke="#0b1f6b" stroke-width="2" opacity="0.03"/>
+
+  <!-- ===================== CORNER MOTIF: TOP-LEFT (bold) ===================== -->
+  <g id="corner-tl">
+    <polygon points="0,0 160,0 0,120" fill="url(#headerBlue)"/>
+    <polygon points="0,0 95,0 0,72" fill="url(#darkGray)" opacity="0.92"/>
+    <polygon points="0,0 160,0 0,120" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.25"/>
+    <polygon points="18,68 52,49 86,68 86,105 52,124 18,105" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.4"/>
+    <polygon points="70,100 102,82 134,100 134,133 102,151 70,133" fill="none" stroke="#3fa9f5" stroke-width="1.1" opacity="0.32"/>
+    <circle cx="160" cy="22" r="3" fill="#3fa9f5" opacity="0.7"/>
+    <circle cx="176" cy="33" r="2.2" fill="#1447b5" opacity="0.6"/>
+    <circle cx="191" cy="18" r="2" fill="#0b1f6b" opacity="0.5"/>
+    <line x1="160" y1="22" x2="176" y2="33" stroke="#3fa9f5" stroke-width="1" opacity="0.4"/>
+    <line x1="176" y1="33" x2="191" y2="18" stroke="#1447b5" stroke-width="1" opacity="0.4"/>
+  </g>
+
+  <!-- ===================== CORNER MOTIF: TOP-RIGHT (thin ribbon) ===================== -->
+  <g id="corner-tr">
+    <polygon points="794,0 644,0 794,34" fill="url(#accentStrip)" opacity="0.88"/>
+    <polygon points="794,0 706,0 794,20" fill="url(#darkGray)" opacity="0.8"/>
+    <polygon points="794,0 644,0 794,34" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.22"/>
+    <polygon points="758,52 778,41 798,52 798,74 778,85 758,74" fill="none" stroke="#1447b5" stroke-width="1" opacity="0.28"/>
+    <polygon points="758,98 778,87 798,98 798,120 778,131 758,120" fill="none" stroke="#3fa9f5" stroke-width="1" opacity="0.24"/>
+    <circle cx="770" cy="140" r="2.4" fill="#3fa9f5" opacity="0.5"/>
+    <circle cx="782" cy="152" r="1.8" fill="#1447b5" opacity="0.45"/>
+    <line x1="770" y1="140" x2="782" y2="152" stroke="#3fa9f5" stroke-width="1" opacity="0.35"/>
+  </g>
+
+  <!-- ===================== CORNER MOTIF: BOTTOM-LEFT (thin ribbon) ===================== -->
+  <g id="corner-bl">
+    <polygon points="0,1123 150,1123 0,1089" fill="url(#accentStrip)" opacity="0.88"/>
+    <polygon points="0,1123 88,1123 0,1103" fill="url(#darkGray)" opacity="0.8"/>
+    <polygon points="0,1123 150,1123 0,1089" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.22"/>
+    <polygon points="36,1071 16,1082 -4,1071 -4,1049 16,1038 36,1049" fill="none" stroke="#1447b5" stroke-width="1" opacity="0.28"/>
+    <polygon points="36,1025 16,1036 -4,1025 -4,1003 16,992 36,1003" fill="none" stroke="#3fa9f5" stroke-width="1" opacity="0.24"/>
+  </g>
+
+  <!-- ===================== CORNER MOTIF: BOTTOM-RIGHT (bold) ===================== -->
+  <g id="corner-br">
+    <polygon points="794,1123 634,1123 794,1003" fill="url(#headerBlue)"/>
+    <polygon points="794,1123 699,1123 794,1051" fill="url(#darkGray)" opacity="0.92"/>
+    <polygon points="794,1123 634,1123 794,1003" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.25"/>
+    <polygon points="776,1055 742,1074 708,1055 708,1018 742,999 776,1018" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.4"/>
+    <polygon points="724,1023 692,1041 660,1023 660,990 692,972 724,990" fill="none" stroke="#3fa9f5" stroke-width="1.1" opacity="0.32"/>
+  </g>
+
+  <!-- ===================== HEADER ===================== -->
+  <rect x="40" y="26" width="102" height="102" rx="14" fill="#ffffff" filter="url(#softShadow)"/>
+  <image id="company-logo" href="logo.png" x="52" y="38" width="78" height="78" preserveAspectRatio="xMidYMid meet"/>
+
+  <text id="company-name" x="160" y="62" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800" fill="#0b1f6b">{{COMPANY_NAME}}</text>
+  <text id="company-tagline" x="160" y="80" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing="1.5" fill="#5b7bb8">{{COMPANY_TAGLINE}}</text>
+  <text id="company-address" x="160" y="99" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">{{COMPANY_ADDRESS}}</text>
+  <text id="company-contact" x="160" y="114" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">Ph: {{COMPANY_PHONE}}  |  {{COMPANY_EMAIL}}</text>
+
+  <line x1="565" y1="36" x2="565" y2="122" stroke="#e4e9f4" stroke-width="1"/>
+
+  <text x="738" y="62" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#0b1f6b" text-anchor="end">INVOICE</text>
+  <rect x="626" y="72" width="112" height="3" fill="url(#accentStrip)"/>
+  <text id="invoice-no" x="738" y="94" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">INV NO:  {{INVOICE_NO}}</text>
+  <text id="invoice-date" x="738" y="110" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">DATE:  {{INVOICE_DATE}}</text>
+
+  <!-- ===================== BILL TO ===================== -->
+  <rect x="38" y="156" width="706" height="104" rx="10" fill="#f7f9fd" filter="url(#softShadow)"/>
+  <polygon points="726,156 744,156 744,174" fill="url(#accentStrip)" opacity="0.55"/>
+  <polygon points="38,244 38,260 56,260" fill="url(#accentStrip)" opacity="0.35"/>
+
+  <polygon points="63,180 69,183.5 69,190.5 63,194 57,190.5 57,183.5" fill="#1447b5"/>
+  <text x="76" y="191" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">BILLED TO</text>
+
+  <text id="client-name" x="63" y="214" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#1a1a1a">{{CLIENT_NAME}}</text>
+  <text id="client-address" x="63" y="232" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">{{CLIENT_ADDRESS}}</text>
+  <text id="client-contact" x="63" y="248" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Ph: {{CLIENT_PHONE}}  |  {{CLIENT_EMAIL}}</text>
+  <text id="client-gstin" x="420" y="214" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700" fill="#0b1f6b">GSTIN</text>
+  <text id="client-gstin-value" x="420" y="230" font-family="Arial, Helvetica, sans-serif" font-size="11.5" fill="#1a1a1a">{{CLIENT_GSTIN}}</text>
+
+  <!-- ===================== ITEMS TABLE ===================== -->
+  <text x="50"  y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">SL</text>
+  <text x="90"  y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">DESCRIPTION</text>
+  <text x="480" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">QTY</text>
+  <text x="590" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">RATE</text>
+  <text x="744" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="end">AMOUNT</text>
+  <rect x="50" y="306" width="694" height="2" fill="url(#accentStrip)"/>
+
+  <g id="items-area"></g>
+  <line x1="50" y1="812" x2="744" y2="812" stroke="#e4e9f4" stroke-width="1"/>
+
+  <!-- ===================== PAYMENT DETAILS + QR   |   TOTALS ===================== -->
+  <polygon points="56,838 62,841.5 62,848.5 56,852 50,848.5 50,841.5" fill="#1447b5"/>
+  <text x="68" y="849" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">PAYMENT DETAILS</text>
+
+  <text id="bank-name"   x="50" y="870" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">Bank:  {{BANK_NAME}}</text>
+  <text id="account-no"  x="50" y="886" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">A/C No:  {{ACCOUNT_NO}}</text>
+  <text id="ifsc"        x="50" y="902" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">IFSC:  {{IFSC_CODE}}</text>
+  <text id="upi"         x="50" y="918" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">UPI:  {{UPI_ID}}</text>
+  <text id="terms"       x="50" y="936" font-family="Arial, Helvetica, sans-serif" font-size="8.5" fill="#9aa0ac">Terms: {{TERMS_AND_CONDITIONS}}</text>
+
+  <rect x="296" y="836" width="98" height="98" rx="8" fill="#fbfcfe" stroke="#1447b5" stroke-width="1.2" stroke-dasharray="4 3" filter="url(#softShadow)"/>
+  <polygon points="296,852 296,836 312,836" fill="url(#headerBlue)" opacity="0.6"/>
+  <image id="payment-qr" href="qr.png" x="304" y="844" width="82" height="82" preserveAspectRatio="xMidYMid meet"/>
+  <text x="345" y="950" font-family="Arial, Helvetica, sans-serif" font-size="9" fill="#8a8f9c" text-anchor="middle">Scan to Pay</text>
+
+  <line x1="474" y1="838" x2="744" y2="838" stroke="#e4e9f4" stroke-width="1"/>
+
+  <text x="474" y="858" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Subtotal</text>
+  <text id="subtotal" x="744" y="858" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" text-anchor="end">{{SUBTOTAL}}</text>
+
+  <text x="474" y="876" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Discount</text>
+  <text id="discount" x="744" y="876" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" text-anchor="end">{{DISCOUNT}}</text>
+
+  <text x="474" y="894" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Tax / GST</text>
+  <text id="tax" x="744" y="894" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" text-anchor="end">{{TAX}}</text>
+
+  <line x1="474" y1="904" x2="744" y2="904" stroke="#e4e9f4" stroke-width="1"/>
+
+  <rect x="474" y="912" width="270" height="34" rx="6" fill="url(#headerBlue)" filter="url(#softShadow)"/>
+  <polygon points="474,912 490,912 474,922" fill="#ffffff" opacity="0.18"/>
+  <text x="490" y="934" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" fill="#ffffff">TOTAL DUE</text>
+  <text id="total" x="730" y="934" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="end">{{TOTAL}}</text>
+
+  <!-- ===================== CLOSING NOTES ===================== -->
+  <text x="397" y="978" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#0b1f6b" text-anchor="middle">Thank you for your business!</text>
+  <text x="397" y="996" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-style="italic" fill="#8a8f9c" text-anchor="middle">This is a computer generated document and does not require a signature.</text>
+
+  <line x1="200" y1="1015" x2="594" y2="1015" stroke="#e4e9f4" stroke-width="1"/>
+
+  <!-- ===================== CONTACT ICON ROW (fixed brand details) ===================== -->
+  <!-- Phone -->
+  <circle cx="74" cy="1042" r="14" fill="url(#headerBlue)"/>
+  <g transform="translate(66.6,1034.6) scale(0.6)">
+    <path fill="#ffffff" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+  </g>
+  <text x="96" y="1038" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#3a3f4c">7002204047</text>
+  <text x="96" y="1051" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#3a3f4c">7002611748</text>
+
+  <!-- Email -->
+  <circle cx="305" cy="1042" r="14" fill="url(#headerBlue)"/>
+  <g transform="translate(297.6,1034.6) scale(0.6)">
+    <path fill="#ffffff" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+  </g>
+  <text x="327" y="1046" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">digitalsolutionsilchar@gmail.com</text>
+
+  <!-- Location -->
+  <circle cx="536" cy="1042" r="14" fill="url(#headerBlue)"/>
+  <g transform="translate(528.6,1034.6) scale(0.6)">
+    <path fill="#ffffff" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+  </g>
+  <text x="558" y="1038" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">Rangirkhari, Tarani Road,</text>
+  <text x="558" y="1051" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">Silchar-788005, Cachar, Assam</text>
+
+  <!-- ===================== CLEAN MINIMAL FOOTER SEAL ===================== -->
+  <line x1="170" y1="1088" x2="624" y2="1088" stroke="#e4e9f4" stroke-width="1"/>
+
+  <g transform="translate(397,1088) rotate(45)">
+    <rect x="-7" y="-7" width="14" height="14" rx="3" fill="url(#headerBlue)"/>
+  </g>
+  <circle cx="358" cy="1088" r="2.5" fill="#3fa9f5" opacity="0.7"/>
+  <circle cx="436" cy="1088" r="2.5" fill="#3fa9f5" opacity="0.7"/>
+  <circle cx="330" cy="1088" r="1.8" fill="#1447b5" opacity="0.5"/>
+  <circle cx="464" cy="1088" r="1.8" fill="#1447b5" opacity="0.5"/>
+
+  <rect x="0" y="1121" width="794" height="2" fill="url(#accentStrip)"/>
+
+</svg>

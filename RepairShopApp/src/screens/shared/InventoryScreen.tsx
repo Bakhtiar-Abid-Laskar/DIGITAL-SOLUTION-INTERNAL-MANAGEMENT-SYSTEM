@@ -12,7 +12,7 @@ import {
   Image,
   Platform,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Search, Plus, PackageOpen, Layers, History, ExternalLink, Calendar, Building2, Package, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -25,7 +25,6 @@ import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { useToast } from '../../context/ToastContext';
 import { InventoryRow, InventoryItem } from '../../components/inventory/InventoryRow';
 import { InventoryFormSheet } from '../../components/inventory/InventoryFormSheet';
-import { PurchaseIntakeModalMobile } from '../../components/inventory/PurchaseIntakeModalMobile';
 import { PurchaseDetailModalMobile } from '../../components/inventory/PurchaseDetailModalMobile';
 
 type TabValue = 'All' | 'Low Stock' | 'Out of Stock';
@@ -34,6 +33,7 @@ type MainSection = 'stock' | 'purchases';
 const PAGE_SIZE = 20;
 
 export default function InventoryScreen() {
+  const navigation = useNavigation<any>();
   const bottomPadding = useBottomInsetPadding('nav');
   const channelName = useRef(`inventory-admin-${Date.now()}`).current;
   const { role } = useAuth();
@@ -57,7 +57,6 @@ export default function InventoryScreen() {
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseWithDetails | null>(null);
 
   // Modals
-  const [purchaseModalVisible, setPurchaseModalVisible] = useState(false);
   const [modalVisible, setModalVisible]   = useState(false);
   const [editingItem, setEditingItem]     = useState<InventoryItem | null>(null);
   const [counts, setCounts]               = useState<Record<string, number>>({ All: 0, 'Low Stock': 0, 'Out of Stock': 0 });
@@ -83,12 +82,15 @@ export default function InventoryScreen() {
 
   const fetchTabCounts = async () => {
     try {
-      const [allRes, lowRes, outRes] = await Promise.all([
+      const [allRes, stockItemsRes, outRes] = await Promise.all([
         supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).eq('products.is_active', true),
-        supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).gt('quantity_cached', 0).lte('quantity_cached', 5).eq('products.is_active', true),
+        supabase.from('inventory').select('quantity_cached, low_stock_threshold, products!inner(id)').eq('products.is_active', true).gt('quantity_cached', 0),
         supabase.from('inventory').select('id, products!inner(id)', { count: 'exact', head: true }).lte('quantity_cached', 0).eq('products.is_active', true),
       ]);
-      setCounts({ All: allRes.count ?? 0, 'Low Stock': lowRes.count ?? 0, 'Out of Stock': outRes.count ?? 0 });
+      const lowStockCount = (stockItemsRes.data || []).filter(
+        (i: any) => Number(i.quantity_cached || 0) <= Number(i.low_stock_threshold || 0)
+      ).length;
+      setCounts({ All: allRes.count ?? 0, 'Low Stock': lowStockCount, 'Out of Stock': outRes.count ?? 0 });
     } catch (err) { console.error('Error fetching inventory counts:', err); }
   };
 
@@ -407,11 +409,15 @@ export default function InventoryScreen() {
             onEndReached={onLoadMore}
             onEndReachedThreshold={0.5}
             ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.primary} style={{ margin: spacing.md }} /> : null}
+            initialNumToRender={10}
+            maxToRenderPerBatch={5}
+            windowSize={11}
+            removeClippedSubviews={true}
             ListEmptyComponent={
               <EmptyState
-                icon={<PackageOpen size={48} color={colors.textMuted} />}
-                heading={searchQuery ? 'No items found' : 'No inventory items'}
-                subtext={searchQuery ? 'Try adjusting your search terms.' : 'Add items via Purchase Intake.'}
+                icon={PackageOpen}
+                message={searchQuery ? 'No items found' : 'No inventory items'}
+                subMessage={searchQuery ? 'Try adjusting your search terms.' : 'Add items via Purchase Intake.'}
               />
             }
             renderItem={renderInventoryItem}
@@ -424,11 +430,15 @@ export default function InventoryScreen() {
             keyExtractor={item => item.purchase_id}
             contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding + spacing.xl }]}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            initialNumToRender={10}
+            maxToRenderPerBatch={5}
+            windowSize={11}
+            removeClippedSubviews={true}
             ListEmptyComponent={
               <EmptyState
-                icon={<History size={48} color={colors.textMuted} />}
-                heading={searchQuery ? 'No purchase records found' : 'No purchase history'}
-                subtext={searchQuery ? 'Try adjusting your search terms.' : 'Log a purchase intake to see history.'}
+                icon={History}
+                message={searchQuery ? 'No purchase records found' : 'No purchase history'}
+                subMessage={searchQuery ? 'Try adjusting your search terms.' : 'Log a purchase intake to see history.'}
               />
             }
             renderItem={renderPurchaseCard}
@@ -440,24 +450,11 @@ export default function InventoryScreen() {
       {isAdmin && (
         <AppPressable
           style={[styles.fab, { bottom: bottomPadding + spacing.md }]}
-          onPress={() => setPurchaseModalVisible(true)}
+          onPress={() => navigation.navigate('PurchaseIntake')}
         >
           <Plus size={24} color="#ffffff" />
         </AppPressable>
       )}
-
-      {/* Two-Step Purchase Intake Modal */}
-      <PurchaseIntakeModalMobile
-        visible={purchaseModalVisible}
-        onClose={() => setPurchaseModalVisible(false)}
-        onSuccess={() => {
-          setPurchaseModalVisible(false);
-          fetchTabCounts();
-          fetchInventory(0, true);
-          fetchPurchaseHistory();
-          showToast({ title: 'Success', message: 'Purchase logged & stock updated!', type: 'success' });
-        }}
-      />
 
       {/* Purchase Detail Modal */}
       <PurchaseDetailModalMobile

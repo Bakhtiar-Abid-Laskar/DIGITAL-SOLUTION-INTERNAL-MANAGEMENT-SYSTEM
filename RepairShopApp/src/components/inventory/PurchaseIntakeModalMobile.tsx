@@ -13,9 +13,12 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Supplier, getImageThumbnailUrl, isGoogleDriveUrl } from '@repairshop/shared';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { AppPressable } from '../common/AppPressable';
 import { compressImage } from '../../utils/compressImage';
+import { uploadFileToSupabaseStorage } from '../../utils/supabaseStorage';
 import { SupplierTypeaheadMobile } from '../suppliers/SupplierTypeaheadMobile';
 import { ProductTypeaheadMobile, MobileProductCatalogItem } from './ProductTypeaheadMobile';
 import {
@@ -23,7 +26,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Building2,
-  Package,
   Calendar,
   Phone,
   Upload,
@@ -31,6 +33,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Camera,
+  Package,
 } from 'lucide-react-native';
 
 interface PurchaseIntakeModalMobileProps {
@@ -47,6 +50,8 @@ export function PurchaseIntakeModalMobile({
   const [currentStep, setCurrentStep] = useState<'supplier_info' | 'product_details'>('supplier_info');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageInputMode, setImageInputMode] = useState<'gdrive' | 'upload'>('gdrive');
+  const { user } = useAuth();
+  const { showToast } = useToast();
 
   const [state, setState] = useReducer(
     (prev: any, next: any) => ({ ...prev, ...next }),
@@ -152,7 +157,7 @@ export function PurchaseIntakeModalMobile({
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Camera roll permission is required to upload invoice photos.');
+      showToast({ title: 'Error', message: 'Camera roll permission is required to upload invoice photos.', type: 'error' });
       return;
     }
 
@@ -170,7 +175,7 @@ export function PurchaseIntakeModalMobile({
   const handleTakeImage = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Camera permission is required to capture invoice photos.');
+      showToast({ title: 'Error', message: 'Camera permission is required to capture invoice photos.', type: 'error' });
       return;
     }
 
@@ -189,23 +194,17 @@ export function PurchaseIntakeModalMobile({
     setState({ error: '' });
     try {
       const compressedUri = await compressImage(rawUri);
-      const response = await fetch(compressedUri);
-      const blob = await response.blob();
-
       const fileName = `inv-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
       const filePath = `invoices/${fileName}`;
 
-      const { data, error: uploadErr } = await supabase.storage
-        .from('purchase-invoices')
-        .upload(filePath, blob, { contentType: 'image/jpeg' });
+      const publicUrl = await uploadFileToSupabaseStorage(
+        'purchase-invoices',
+        filePath,
+        compressedUri,
+        'image/jpeg'
+      );
 
-      if (uploadErr) throw uploadErr;
-
-      const { data: publicData } = supabase.storage
-        .from('purchase-invoices')
-        .getPublicUrl(filePath);
-
-      setState({ invoice_image_url: publicData.publicUrl });
+      setState({ invoice_image_url: publicUrl });
     } catch (err: any) {
       console.error('Invoice image upload failed:', err);
       setState({ error: err.message || 'Failed to upload invoice image' });

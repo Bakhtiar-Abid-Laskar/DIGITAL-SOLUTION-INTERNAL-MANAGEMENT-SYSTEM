@@ -17,13 +17,13 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/common/Button';
 import { useToast } from '@/components/common/ToastProvider';
 import { Lock, Download } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 const EXPENDITURE_TYPES: Array<{ value: PaymentType | 'all'; label: string }> = [
   { value: 'all', label: 'All Types' },
   { value: 'materials_purchase', label: 'Materials Purchase' },
   { value: 'daily_expenditure', label: 'Daily Expenditure' },
   { value: 'office_development', label: 'Office Development' },
+  { value: 'staff_salary', label: 'Staff Salary' },
 ];
 
 export default function ExpenditurePage() {
@@ -48,7 +48,7 @@ export default function ExpenditurePage() {
     let query = supabase
       .from('payments')
       .select('*')
-      .in('type', ['materials_purchase', 'daily_expenditure', 'office_development'])
+      .in('type', ['materials_purchase', 'daily_expenditure', 'office_development', 'staff_salary'])
       .gte('created_at', start + 'T00:00:00.000Z')
       .lt('created_at', nextMonth + 'T00:00:00.000Z')
       .order('created_at', { ascending: false });
@@ -91,7 +91,7 @@ export default function ExpenditurePage() {
     ? payments.filter(p => p.description?.toLowerCase().includes(search.toLowerCase()))
     : payments;
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = async () => {
     setExporting(true);
     if (filtered.length === 0) {
       showToast('No records to export', 'info');
@@ -99,19 +99,25 @@ export default function ExpenditurePage() {
       return;
     }
 
-    const data = filtered.map(p => ({
-      Date: new Date(p.created_at).toLocaleDateString(),
-      Type: p.type,
-      Description: p.description || '',
-      Amount: p.amount
-    }));
+    try {
+      const XLSX = await import('xlsx');
+      const data = filtered.map(p => ({
+        Date: new Date(p.created_at).toLocaleDateString(),
+        Type: p.type,
+        Description: p.description || '',
+        Amount: p.amount
+      }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Expenditures");
-    XLSX.writeFile(wb, `expenditure-${month}.xlsx`);
-    
-    setExporting(false);
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Expenditures");
+      XLSX.writeFile(wb, `expenditure-${month}.xlsx`);
+    } catch (e) {
+      console.error(e);
+      showToast('Export failed', 'error');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (

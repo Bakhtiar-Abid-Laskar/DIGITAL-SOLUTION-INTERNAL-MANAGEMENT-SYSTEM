@@ -2,13 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 
 // Sub-components
 import { SalaryRatesCard } from '../../components/salary/SalaryRatesCard';
@@ -112,7 +114,7 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
   </style></head><body>
   <div class="slip-container">
     <div class="header">
-      <div class="brand"><h1>RepairShop</h1><p>Service Management System</p></div>
+      <div class="brand"><h1>Digital Solution</h1><p>Internal Management System</p></div>
       <div class="title-box"><h2>Payslip</h2><p>${monthLabel}</p></div>
     </div>
     <div class="emp-details">
@@ -137,7 +139,9 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
 // Screen
 // ---------------------------------------------------------------------------
 export default function SalaryScreen() {
+  const navigation = useNavigation<any>();
   const { user, displayName, role } = useAuth();
+  const { showToast } = useToast();
   const bottomPadding = useBottomInsetPadding('nav');
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -253,7 +257,7 @@ export default function SalaryScreen() {
     try {
       const html = generateSlipHtml(r, displayName || 'Employee', role || '');
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-      const fileName = `RepairShop_Payslip_${r.month.substring(0, 7)}.pdf`;
+      const fileName = `DigitalSolution_Payslip_${r.month.substring(0, 7)}.pdf`;
       // @ts-ignore
       const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (permissions.granted) {
@@ -261,12 +265,12 @@ export default function SalaryScreen() {
         const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/pdf');
         const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
         await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: 'base64' });
-        Alert.alert('Download Complete', 'Your salary slip has been saved.');
+        showToast({ title: 'Success', message: 'Your salary slip has been saved.', type: 'success' });
       } else {
-        Alert.alert('Permission Denied', 'Unable to save the file without folder permission.');
+        showToast({ title: 'Error', message: 'Unable to save the file without folder permission.', type: 'error' });
       }
     } catch (err) {
-      Alert.alert('Error', 'Could not download salary slip.');
+      showToast({ title: 'Error', message: 'Could not download salary slip.', type: 'error' });
     } finally {
       setDownloadingId(null);
     }
@@ -274,7 +278,7 @@ export default function SalaryScreen() {
 
   const handleApplyLeave = async () => {
     if (!user || !leaveDate) {
-      Alert.alert('Date required', 'Please select a leave date.');
+      showToast({ title: 'Error', message: 'Please select a leave date.', type: 'error' });
       return;
     }
     setLeaveSaving(true);
@@ -284,7 +288,7 @@ export default function SalaryScreen() {
       const end = leaveEndDate ? new Date(leaveEndDate) : new Date(leaveDate);
       
       if (end < start) {
-        Alert.alert('Invalid Date Range', 'End date cannot be before start date.');
+        showToast({ title: 'Error', message: 'End date cannot be before start date.', type: 'error' });
         setLeaveSaving(false);
         return;
       }
@@ -308,9 +312,9 @@ export default function SalaryScreen() {
       setLeaveSaving(false);
     }
     if (errorObj) {
-      Alert.alert('Error', errorObj.message || 'Failed to submit leave request.');
+      showToast({ title: 'Error', message: errorObj.message || 'Failed to submit leave request.', type: 'error' });
     } else {
-      Alert.alert('Success', 'Leave request submitted successfully.');
+      showToast({ title: 'Success', message: 'Leave request submitted successfully.', type: 'success' });
       setLeaveDate('');
       setLeaveEndDate('');
       setLeaveReason('');
@@ -373,6 +377,7 @@ export default function SalaryScreen() {
               presentDays={record.present_days}
               halfdayCount={record.halfday_count}
               leaveCount={record.leave_count}
+              onPress={() => navigation.navigate('Attendance')}
             />
 
             <Text style={styles.sectionTitle}>Apply for Leave</Text>

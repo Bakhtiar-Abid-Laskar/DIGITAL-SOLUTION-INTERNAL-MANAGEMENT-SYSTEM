@@ -1,32 +1,85 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Calendar, ChevronDown } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import AppHeader from '../../components/common/AppHeader';
+import BottomSheet from '../../components/common/BottomSheet';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 
+function getDefaultMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthLabel(ym: string): string {
+  const [year, month] = ym.split('-');
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+function generateMonthOptions(): string[] {
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
 export default function AnalyticsScreen() {
+  const navigation = useNavigation<any>();
   const bottomPadding = useBottomInsetPadding('nav');
   const [loading, setLoading] = useState(true);
+
+  const [month, setMonth] = useState(() => getDefaultMonth());
+  const [monthPicker, setMonthPicker] = useState(false);
+  const monthOptions = useMemo(() => generateMonthOptions(), []);
 
   // Bar Chart Stats
   const [received, setReceived] = useState(0);
   const [inProgress, setInProgress] = useState(0);
   const [completed, setCompleted] = useState(0);
 
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     try {
       setLoading(true);
 
+      const [y, m] = month.split('-').map(Number);
+      const start = `${month}-01T00:00:00.000Z`;
+      const nextMonth = m === 12
+        ? `${y + 1}-01-01T00:00:00.000Z`
+        : `${y}-${String(m + 1).padStart(2, '0')}-01T00:00:00.000Z`;
+
       const [recRes, progRes, waitRes, compRes] = await Promise.all([
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+        supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'Received')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
+        supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'In Progress')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
+        supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'Waiting for Materials')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
+        supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'Completed')
+          .gte('created_at', start)
+          .lt('created_at', nextMonth),
       ]);
 
       setReceived(recRes.count ?? 0);
@@ -38,12 +91,12 @@ export default function AnalyticsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [month]);
 
   useFocusEffect(
     useCallback(() => {
       fetchAnalyticsData();
-    }, [])
+    }, [fetchAnalyticsData])
   );
 
   // Calculate max for bar chart scaling
@@ -58,11 +111,11 @@ export default function AnalyticsScreen() {
         
         {/* DATE CONTROLS */}
         <View style={styles.dateRow}>
-          <AppPressable style={styles.datePill}>
-            <Text style={styles.datePillText}>01 May – 14 May 2025</Text>
+          <AppPressable style={styles.datePill} onPress={() => setMonthPicker(true)}>
+            <Text style={styles.datePillText}>{getMonthLabel(month)}</Text>
             <ChevronDown size={16} color={colors.textSecondary} style={{ marginLeft: spacing.sm }} />
           </AppPressable>
-          <AppPressable style={styles.calendarBtn}>
+          <AppPressable style={styles.calendarBtn} onPress={() => setMonthPicker(true)}>
             <Calendar size={20} color={colors.textSecondary} />
           </AppPressable>
         </View>
@@ -79,29 +132,29 @@ export default function AnalyticsScreen() {
                 {/* Chart Area */}
                 <View style={styles.chartArea}>
                   
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'Received' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{received}</Text>
                     </View>
-                    <View style={[styles.bar, { height: getBarHeight(received), backgroundColor: colors.accentBlue }]} />
+                    <View style={[styles.bar, { height: Math.max(getBarHeight(received), 4), backgroundColor: colors.accentBlue }]} />
                     <Text style={styles.barLabel}>Recv</Text>
-                  </View>
+                  </AppPressable>
 
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'In Progress' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{inProgress}</Text>
                     </View>
-                    <View style={[styles.bar, { height: getBarHeight(inProgress), backgroundColor: colors.accentOrange }]} />
+                    <View style={[styles.bar, { height: Math.max(getBarHeight(inProgress), 4), backgroundColor: colors.accentOrange }]} />
                     <Text style={styles.barLabel}>Prog</Text>
-                  </View>
+                  </AppPressable>
 
-                  <View style={styles.barGroup}>
+                  <AppPressable style={styles.barGroup} onPress={() => navigation.navigate('Jobs', { filter: 'Completed' })}>
                     <View style={styles.barValueWrapper}>
                       <Text style={styles.barValue}>{completed}</Text>
                     </View>
-                    <View style={[styles.bar, { height: getBarHeight(completed), backgroundColor: colors.accentGreen }]} />
+                    <View style={[styles.bar, { height: Math.max(getBarHeight(completed), 4), backgroundColor: colors.accentGreen }]} />
                     <Text style={styles.barLabel}>Done</Text>
-                  </View>
+                  </AppPressable>
 
                 </View>
 
@@ -129,6 +182,25 @@ export default function AnalyticsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Month Picker Sheet */}
+      <BottomSheet visible={monthPicker} onClose={() => setMonthPicker(false)}>
+        <Text style={{ ...typography.h2, marginBottom: spacing.lg }}>Select Month</Text>
+        {monthOptions.map(m => (
+          <AppPressable
+            key={m}
+            style={[styles.monthOption, month === m && styles.monthOptionSelected]}
+            onPress={() => {
+              setMonth(m);
+              setMonthPicker(false);
+            }}
+          >
+            <Text style={[styles.monthOptionText, month === m && { color: colors.primary, fontWeight: '700' }]}>
+              {getMonthLabel(m)}
+            </Text>
+          </AppPressable>
+        ))}
+      </BottomSheet>
     </View>
   );
 }
@@ -143,33 +215,34 @@ const styles = StyleSheet.create({
   },
   dateRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   datePill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
     ...shadow.card,
   },
   datePillText: {
-    ...typography.bodyBold,
+    ...typography.body,
+    fontWeight: '600',
     color: colors.textPrimary,
   },
   calendarBtn: {
-    width: 44,
-    height: 44,
     backgroundColor: colors.surface,
+    padding: spacing.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
     ...shadow.card,
@@ -262,6 +335,20 @@ const styles = StyleSheet.create({
   },
   legendText: {
     ...typography.caption,
+    color: colors.textPrimary,
+  },
+  monthOption: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  monthOptionSelected: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  monthOptionText: {
+    ...typography.body,
     color: colors.textPrimary,
   },
 });

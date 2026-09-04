@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, Modal } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { AppPressable } from './AppPressable';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
+  runOnJS,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react-native';
 import { colors, radius, shadow, spacing, typography, SPRING } from '../../tokens';
@@ -15,6 +15,7 @@ import { colors, radius, shadow, spacing, typography, SPRING } from '../../token
 type ToastType = 'success' | 'error' | 'info';
 
 interface ToastProps {
+  id?: number;
   visible: boolean;
   title: string;
   message?: string;
@@ -23,7 +24,7 @@ interface ToastProps {
   duration?: number;
 }
 
-export function Toast({ visible, title, message, type, onHide, duration = 4000 }: ToastProps) {
+export function Toast({ id, visible, title, message, type, onHide, duration = 4000 }: ToastProps) {
   const insets = useSafeAreaInsets();
 
   // Animate the banner vertically
@@ -44,12 +45,12 @@ export function Toast({ visible, title, message, type, onHide, duration = 4000 }
       translateY.value = withTiming(-120, { duration: 250 });
       opacity.value = withTiming(0, { duration: 200 });
     }
-  }, [visible, insets.top]);
+  }, [visible, insets.top, id, duration]);
 
   const handleDismiss = () => {
     translateY.value = withTiming(-120, { duration: 250 }, (finished) => {
       if (finished) {
-        scheduleOnRN(onHide);
+        runOnJS(onHide)();
       }
     });
     opacity.value = withTiming(0, { duration: 200 });
@@ -74,52 +75,42 @@ export function Toast({ visible, title, message, type, onHide, duration = 4000 }
 
   if (!visible) return null;
 
-  // Render inside a transparent Modal so it truly overlays everything
-  // and is never clipped by parent overflow:hidden containers or sibling z-index
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={handleDismiss}
-    >
-      {/* Pointer-events pass through the overlay area to non-toast content */}
-      <View style={styles.overlay} pointerEvents="box-none">
-        <Animated.View style={[styles.container, animatedStyle]}>
-          <View style={styles.content}>
-            <View style={styles.iconContainer}>{getIcon()}</View>
-            <View style={styles.textContainer}>
-              <Text style={styles.title}>{title}</Text>
-              {message && <Text style={styles.message}>{message}</Text>}
-            </View>
-            <AppPressable style={styles.closeButton} onPress={handleDismiss}>
-              <X color={colors.textSecondary} size={18} />
-            </AppPressable>
+    <View style={styles.overlay} pointerEvents="box-none">
+      <Animated.View style={[styles.container, animatedStyle]} pointerEvents="box-none">
+        <View style={styles.content} pointerEvents="auto">
+          <View style={styles.iconContainer}>{getIcon()}</View>
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>{title}</Text>
+            {message && <Text style={styles.message}>{message}</Text>}
           </View>
-        </Animated.View>
-      </View>
-    </Modal>
+          <AppPressable style={styles.closeButton} onPress={handleDismiss}>
+            <X color={colors.textSecondary} size={18} />
+          </AppPressable>
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   // Full-screen overlay that passes touch events through, except to the banner itself
   overlay: {
-    flex: 1,
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 9999,
+    zIndex: 999999,
+    elevation: 999999,
   },
   container: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 9999,
+    zIndex: 999999,
+    elevation: 999999,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
   },

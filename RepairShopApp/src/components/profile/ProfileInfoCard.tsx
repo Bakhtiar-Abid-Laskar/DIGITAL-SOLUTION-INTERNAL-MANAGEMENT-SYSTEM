@@ -46,9 +46,13 @@ export function ProfileInfoCard({
             {avatarLoading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : avatarSignedUrl ? (
-              <Image source={{ uri: avatarSignedUrl }} style={styles.avatarImage} />
+              <Image source={{ uri: avatarSignedUrl }} style={styles.avatarImage} resizeMode="cover" />
             ) : (
-              <Image source={require('../../../assets/logo.webp')} style={[styles.avatarImage, { padding: 8 }]} resizeMode="contain" />
+              <View style={styles.initialsAvatar}>
+                <Text style={styles.initialsText}>
+                  {(displayName || 'S').charAt(0).toUpperCase()}
+                </Text>
+              </View>
             )}
           </View>
           <AppPressable style={styles.avatarPencilBadge} onPress={onPressAvatarEdit} activeOpacity={0.8}>
@@ -145,13 +149,26 @@ const styles = StyleSheet.create({
   },
   avatarWrapper: { position: 'relative', marginBottom: spacing.md },
   avatarCircle: {
-    width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primary + '20',
+    width: 96, height: 96, borderRadius: 48, backgroundColor: colors.backgroundAlt,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 2, borderColor: colors.border,
+    borderWidth: 2.5, borderColor: colors.primary,
   },
   avatarImage: { width: '100%', height: '100%' },
+  initialsAvatar: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    ...typography.h1,
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 34,
+  },
   avatarPencilBadge: {
-    position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14,
+    position: 'absolute', bottom: 0, right: 0, width: 30, height: 30, borderRadius: 15,
     backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: colors.surface,
   },

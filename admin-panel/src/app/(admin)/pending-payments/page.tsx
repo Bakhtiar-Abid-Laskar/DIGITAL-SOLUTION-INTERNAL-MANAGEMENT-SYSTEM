@@ -19,9 +19,9 @@ import { DataTable, TableHead, TableBody, TableRow, TableHeaderCell, TableCell }
 import { Button } from "@/components/common/Button";
 import { ErrorState } from "@/components/common/ErrorState";
 import { EmptyState } from "@/components/common/EmptyState";
-import { formatCurrency } from '@repairshop/shared';
+import { formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { formatDate } from "@/utils/formatDate";
-import * as XLSX from "xlsx";
+import { useToast } from "@/components/common/ToastProvider";
 
 interface PendingPayment {
   id: string;
@@ -33,14 +33,17 @@ interface PendingPayment {
   amount_paid: number;
   balance: number;
   created_at: string;
+  job_id?: string | null;
 }
 
 export default function PendingPaymentsPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payments, setPayments] = useState<PendingPayment[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
 
   const fetchData = async () => {
     try {
@@ -86,7 +89,8 @@ export default function PendingPaymentsPage() {
             grand_total: total,
             amount_paid: paid,
             balance: balance,
-            created_at: inv.created_at
+            created_at: inv.created_at,
+            job_id: inv.job_id || null,
           });
         }
       });
@@ -108,27 +112,24 @@ export default function PendingPaymentsPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return payments;
-    const lowerQ = searchQuery.toLowerCase();
+    if (!debouncedSearchQuery.trim()) return payments;
+    const lowerQ = debouncedSearchQuery.toLowerCase();
     return payments.filter(p => 
       p.customer_name.toLowerCase().includes(lowerQ) ||
       p.reference.toLowerCase().includes(lowerQ) ||
       p.customer_contact.includes(lowerQ)
     );
-  }, [payments, searchQuery]);
+  }, [payments, debouncedSearchQuery]);
 
   const handleMarkAsPaid = async (item: PendingPayment) => {
     if (!window.confirm(`Are you sure you want to mark ${item.reference} as fully paid?`)) return;
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('invoices')
-        .update({ 
-          amount_paid: item.grand_total,
-          status: 'paid',
-          paid_at: new Date().toISOString()
-        })
-        .eq('id', item.id);
+      const { error } = await supabase.rpc('record_payment', {
+        p_invoice_id: item.id,
+        p_amount: item.grand_total,
+        p_payment_method: 'Cash',
+      });
         
       if (error) throw error;
       fetchData();
@@ -139,6 +140,37 @@ export default function PendingPaymentsPage() {
     }
   };
 
+  const handleSendWhatsAppReminder = async (row: PendingPayment) => {
+    if (!row.customer_contact) return;
+    try {
+      showToast(`Sending WhatsApp reminder to ${row.customer_name}...`, 'info');
+      const { data, error } = await supabase.functions.invoke('notify-on-finance-event', {
+        body: {
+          action: 'SEND_PENDING_REMINDER',
+          phone: row.customer_contact,
+          customerName: row.customer_name,
+          reference: row.reference,
+          balanceDue: row.balance,
+          totalAmount: row.grand_total,
+          jobId: row.type === 'Job' ? row.id : undefined,
+          saleId: row.type === 'Sale' ? row.id : undefined,
+        }
+      });
+      if (!error && data?.success) {
+        showToast(`WhatsApp reminder sent to ${row.customer_name}`, 'success');
+      } else {
+        // Fallback to wa.me deep link
+        const text = `Hello ${row.customer_name}, a payment of ₹${row.balance.toFixed(2)} is pending for ${row.reference}. Please arrange the payment at your earliest convenience. Thank you.`;
+        window.open(`https://wa.me/${row.customer_contact.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+        showToast('Opened WhatsApp chat draft', 'info');
+      }
+    } catch {
+      const text = `Hello ${row.customer_name}, a payment of ₹${row.balance.toFixed(2)} is pending for ${row.reference}. Please arrange the payment at your earliest convenience. Thank you.`;
+      window.open(`https://wa.me/${row.customer_contact.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+    }
+  };
+
+
   const summary = useMemo(() => {
     return {
       count: filtered.length,
@@ -146,27 +178,33 @@ export default function PendingPaymentsPage() {
     };
   }, [filtered]);
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = async () => {
     if (filtered.length === 0) {
       alert("No data to export");
       return;
     }
 
-    const data = filtered.map(p => ({
-      Date: new Date(p.created_at).toLocaleDateString(),
-      Type: p.type,
-      Reference: p.reference,
-      Customer: p.customer_name,
-      Contact: p.customer_contact,
-      'Grand Total': p.grand_total,
-      'Amount Paid': p.amount_paid,
-      'Balance Due': p.balance
-    }));
+    try {
+      const XLSX = await import('xlsx');
+      const data = filtered.map(p => ({
+        Date: new Date(p.created_at).toLocaleDateString(),
+        Type: p.type,
+        Reference: p.reference,
+        Customer: p.customer_name,
+        Contact: p.customer_contact,
+        Total: p.grand_total,
+        Paid: p.amount_paid,
+        Balance: p.balance,
+      }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Pending_Payments");
-    XLSX.writeFile(wb, `pending-payments-${new Date().toISOString().split('T')[0]}.xlsx`);
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Pending_Payments");
+      XLSX.writeFile(wb, `pending-payments-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) {
+      console.error(e);
+      alert('Export failed');
+    }
   };
 
   return (
@@ -258,8 +296,13 @@ export default function PendingPaymentsPage() {
                 key={`${row.type}-${row.id}`}
                 isClickable
                 onClick={() => {
-                  if (row.type === 'Sale') router.push('/sales');
-                  else router.push('/jobs');
+                  if (row.type === 'Job' && row.job_id) {
+                    router.push(`/jobs/${row.job_id}`);
+                  } else if (row.type === 'Job') {
+                    router.push('/jobs');
+                  } else {
+                    router.push(`/sales/${row.id}`);
+                  }
                 }}
               >
                 <TableCell>
@@ -287,15 +330,14 @@ export default function PendingPaymentsPage() {
                 <TableCell align="right">
                   <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                     {row.customer_contact && (
-                      <a 
-                        href={`https://wa.me/${row.customer_contact.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${row.customer_name}, a payment of ₹${row.balance.toFixed(2)} is pending for ${row.reference}. Please arrange the payment at your earliest convenience. Thank you.`)}`} 
-                        target="_blank" 
-                        rel="noreferrer"
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        leftIcon={<MessageCircle size={14} />}
+                        onClick={() => handleSendWhatsAppReminder(row)}
                       >
-                        <Button variant="outline" size="sm" leftIcon={<MessageCircle size={14} />}>
-                          Notify
-                        </Button>
-                      </a>
+                        Notify
+                      </Button>
                     )}
                     <Button 
                       variant="outline" 

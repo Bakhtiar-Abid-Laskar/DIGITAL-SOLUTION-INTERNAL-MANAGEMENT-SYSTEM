@@ -12,12 +12,19 @@ export interface Job {
   customer_email: string | null;
   customer_gstin?: string | null;
   customer_address?: string | null;
+  serial_number?: string | null;
   device_type_id: DeviceType; // references ui_device_types.id (text)
   reported_issue: string;
   remarks: string | null;
   work_notes: string | null;
   job_type: JobType; // Inhouse | Onsite
   job_type_ref_id?: string | null;
+  job_type_ref?: {
+    id: string;
+    title: string;
+    customer_charge_amount?: number;
+    technician_incentive?: number;
+  } | null;
   snap_technician_incentive?: number;
   priority: JobPriority;
   status: JobStatus;
@@ -36,9 +43,11 @@ export interface JobMaterial {
   unit_cost: number;
   total_cost: number;
   photo_drive_file_id?: string | null;
+  product_id?: string | null;
   checkout_status?: 'checked_out' | 'confirmed';
   usage_confirmed_at?: string | null;
 }
+
 
 export interface NewJobFormValues {
   customer_id?: string | null;
@@ -47,7 +56,9 @@ export interface NewJobFormValues {
   customer_email: string;
   customer_gstin?: string;
   customer_address?: string;
+  serial_number?: string;
   device_type_id: DeviceType; // references ui_device_types.id (text)
+
   reported_issue: string;
   remarks: string;
   job_type: JobType; // Inhouse | Onsite

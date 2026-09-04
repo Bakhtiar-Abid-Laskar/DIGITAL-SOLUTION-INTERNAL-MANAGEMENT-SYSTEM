@@ -12,6 +12,7 @@ import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useToast } from "@/components/common/ToastProvider";
+import { useDebounceValue } from '@repairshop/shared';
 
 const currency = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -23,6 +24,7 @@ export default function JobTypesPage() {
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<JobTypeItem | null>(null);
 
@@ -90,7 +92,7 @@ export default function JobTypesPage() {
   };
 
   const filtered = jobTypes.filter(item =>
-    item.title.toLowerCase().includes(searchQuery.toLowerCase())
+    item.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
   );
 
   return (

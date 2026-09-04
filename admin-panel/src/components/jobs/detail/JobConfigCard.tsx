@@ -5,7 +5,7 @@ import { Button } from "@/components/common/Button";
 import { Select } from "@/components/common/Select";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "@/components/common/PriorityBadge";
-import { Edit, Save } from "lucide-react";
+import { Edit, Save, CheckCircle2, AlertCircle } from "lucide-react";
 import { useAppConfig } from "@/context/AppConfigContext";
 
 interface JobConfigCardProps {
@@ -17,23 +17,48 @@ interface JobConfigCardProps {
   technicians: User[];
   onSaveJob: () => void;
   onManageTechnicians: () => void;
+  saving?: boolean;
 }
 
 export function JobConfigCard({
-  job, isEditing, setIsEditing, editForm, setEditForm, technicians, onSaveJob, onManageTechnicians
+  job, isEditing, setIsEditing, editForm, setEditForm, technicians, onSaveJob, onManageTechnicians, saving = false
 }: JobConfigCardProps) {
   const { config } = useAppConfig();
+
+  const isDirty = React.useMemo(() => {
+    if (!editForm) return false;
+    return (
+      (editForm.status !== undefined && editForm.status !== job.status) ||
+      (editForm.priority !== undefined && editForm.priority !== job.priority) ||
+      (editForm.job_type !== undefined && editForm.job_type !== job.job_type)
+    );
+  }, [editForm, job]);
 
   if (isEditing) {
     return (
       <Card>
-        <div className="p-6 border-b border-admin-border">
-          <h3 className="text-lg font-semibold leading-none tracking-tight">Edit Config</h3>
+        <div className="p-6 border-b border-admin-border flex justify-between items-center">
+          <h3 className="text-lg font-semibold leading-none tracking-tight">Edit Job Config</h3>
+          {isDirty ? (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Unsaved changes
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-admin-text-muted font-medium">
+              <CheckCircle2 size={12} className="text-admin-success-fg" />
+              In sync
+            </span>
+          )}
         </div>
         <div className="p-6 pt-0 space-y-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-admin-text-secondary mb-1">Status</label>
-            <Select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value as any})}>
+            <Select 
+              value={editForm.status} 
+              onChange={e => setEditForm({...editForm, status: e.target.value as any})}
+              disabled={saving}
+            >
               {config.jobStatuses.map(s => (
                 <option key={s.id} value={s.id}>{s.id}</option>
               ))}
@@ -41,7 +66,11 @@ export function JobConfigCard({
           </div>
           <div>
             <label className="block text-sm font-medium text-admin-text-secondary mb-1">Priority</label>
-            <Select value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value as any})}>
+            <Select 
+              value={editForm.priority} 
+              onChange={e => setEditForm({...editForm, priority: e.target.value as any})}
+              disabled={saving}
+            >
               {config.priorities.map(p => (
                 <option key={p.id} value={p.id}>{p.id}</option>
               ))}
@@ -49,16 +78,37 @@ export function JobConfigCard({
           </div>
           <div>
             <label className="block text-sm font-medium text-admin-text-secondary mb-1">Job Type</label>
-            <Select value={editForm.job_type} onChange={e => setEditForm({...editForm, job_type: e.target.value as any})}>
+            <Select 
+              value={editForm.job_type} 
+              onChange={e => setEditForm({...editForm, job_type: e.target.value as any})}
+              disabled={saving}
+            >
               {config.serviceLocations.map(l => (
                 <option key={l.id} value={l.id}>{l.id}</option>
               ))}
             </Select>
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-admin-border p-4 bg-admin-bg-subtle rounded-b-xl">
-          <Button variant="ghost" onClick={() => { setIsEditing(false); setEditForm(job); }} size="sm">Cancel</Button>
-          <Button onClick={onSaveJob} leftIcon={<Save size={16} />} size="sm">Save</Button>
+        <div className="flex justify-between items-center border-t border-admin-border p-4 bg-admin-bg-subtle rounded-b-xl">
+          <Button 
+            variant="ghost" 
+            onClick={() => { setIsEditing(false); setEditForm(job); }} 
+            size="sm"
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={onSaveJob} 
+              leftIcon={<Save size={15} />} 
+              size="sm"
+              disabled={!isDirty || saving}
+              isLoading={saving}
+            >
+              {isDirty ? 'Save Changes' : 'Saved'}
+            </Button>
+          </div>
         </div>
       </Card>
     );

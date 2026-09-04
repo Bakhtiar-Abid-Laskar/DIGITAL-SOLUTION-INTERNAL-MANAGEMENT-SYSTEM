@@ -21,12 +21,21 @@ export interface Job {
   customer_name: string;
   customer_contact: string;
   customer_email?: string | null;
-  customer_gstin?: string | null;
+  customer_address?: string | null;
+  serial_number?: string | null;
   device_type: 'Laptop' | 'PC' | 'Other';
   reported_issue: string;
   remarks?: string | null;
   work_notes?: string | null;
   job_type: JobType;
+  job_type_ref_id?: string | null;
+  snap_technician_incentive?: number;
+  job_type_ref?: {
+    id: string;
+    title: string;
+    customer_charge_amount?: number;
+    technician_incentive?: number;
+  } | null;
   priority: JobPriority;
   status: JobStatus;
   receptionist_id?: string | null;

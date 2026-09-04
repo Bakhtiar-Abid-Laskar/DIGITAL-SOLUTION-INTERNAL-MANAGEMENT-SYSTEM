@@ -7,7 +7,6 @@ import { Plus, PlusCircle, CheckCircle2 } from 'lucide-react';
 import styles from '@/styles/expenditure.module.css';
 
 const EXPENDITURE_TYPES: { value: PaymentType; label: string }[] = [
-  { value: 'materials_purchase', label: 'Materials Purchase' },
   { value: 'daily_expenditure', label: 'Daily Expenditure' },
   { value: 'office_development', label: 'Office Development' },
 ];

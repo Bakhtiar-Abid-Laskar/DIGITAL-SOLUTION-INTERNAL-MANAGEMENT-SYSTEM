@@ -72,7 +72,7 @@ export function TableBody({ children, className, ...props }: React.HTMLAttribute
   );
 }
 
-export function TableRow({ 
+export const TableRow = React.memo(function TableRow({ 
   children, 
   className, 
   isClickable = false,
@@ -90,22 +90,22 @@ export function TableRow({
       {children}
     </tr>
   );
-}
+});
 
-export function TableHeaderCell({ children, className, align = 'left', ...props }: React.ThHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'center' | 'right' }) {
+export const TableHeaderCell = React.memo(function TableHeaderCell({ children, className, align = 'left', ...props }: React.ThHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'center' | 'right' }) {
   const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
   return (
     <th scope="col" className={cn("px-6 py-3.5 font-semibold", alignClass, className)} {...props}>
       {children}
     </th>
   );
-}
+});
 
-export function TableCell({ children, className, align = 'left', ...props }: React.TdHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'center' | 'right' }) {
+export const TableCell = React.memo(function TableCell({ children, className, align = 'left', ...props }: React.TdHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'center' | 'right' }) {
   const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
   return (
     <td className={cn("px-6 py-4", alignClass, className)} {...props}>
       {children}
     </td>
   );
-}
+});

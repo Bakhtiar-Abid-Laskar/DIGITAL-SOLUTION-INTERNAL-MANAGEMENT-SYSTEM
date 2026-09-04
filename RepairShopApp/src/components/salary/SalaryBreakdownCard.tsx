@@ -42,8 +42,13 @@ export function SalaryBreakdownCard({ record }: Props) {
             icon={<Clock size={14} color={colors.accentBlue} />} />
         )}
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Gross Salary</Text>
-          <Text style={styles.totalValue}>{fmt.format(record.gross_salary)}</Text>
+          <Text style={styles.totalLabel}>Total Earnings</Text>
+          <Text style={styles.totalValue}>{fmt.format(
+            (record.monthly_salary_base || 0) + 
+            (record.bonus_amount || 0) + 
+            (record.overtime_pay || 0) + 
+            (record.incentive_amount || 0)
+          )}</Text>
         </View>
       </View>
 
@@ -76,6 +81,19 @@ export function SalaryBreakdownCard({ record }: Props) {
           <Text style={[styles.lineLabel, { color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.sm }]}>
             No deductions this month
           </Text>
+        )}
+        {!noDeductions && (
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total Deductions</Text>
+            <Text style={[styles.totalValue, { color: colors.textPrimary }]}>{fmt.format(
+              (record.late_deduction || 0) + 
+              (record.early_deduction || 0) + 
+              (record.leave_deduction || 0) + 
+              (record.halfday_deduction_total || 0) + 
+              (record.absence_deduction_total || 0) + 
+              (record.advance_deducted || 0)
+            )}</Text>
+          </View>
         )}
       </View>
     </>

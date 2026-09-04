@@ -304,6 +304,12 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
                         </div>
                       )}
 
+                      {record.low_accuracy && (
+                        <Badge variant="warning" className="text-xs font-semibold">
+                          Weak GPS
+                        </Badge>
+                      )}
+
                       {record.review_status && (
                         <Badge 
                           variant={record.review_status === 'approved' ? 'success' : record.review_status === 'rejected' ? 'danger' : 'warning'} 

@@ -7,10 +7,64 @@ import { usePathname, useRouter } from 'next/navigation';
 import { NotificationsDropdown, NotificationType } from './NotificationsDropdown';
 import { useToast } from '../common/ToastProvider';
 import { playNotificationChime, requestWebNotificationPermission, showWebNotification } from '@/lib/webNotifications';
+import { formatRelativeTime, formatFullDateTime } from '@repairshop/shared';
 
 interface TopbarProps {
   onMenuClick?: () => void;
 }
+
+const mapNotificationRecord = (n: any): NotificationType => {
+  const createdAt = n.created_at || n.sent_at || new Date().toISOString();
+  const rawType = (n.type || '').toLowerCase();
+  
+  const title = n.title || (
+    rawType.includes('job') ? 'Job Update' :
+    rawType.includes('stock') || rawType.includes('inventory') ? 'Inventory Alert' :
+    rawType.includes('late') || rawType.includes('attendance') ? 'Attendance Alert' :
+    rawType.includes('leave') ? 'Leave Request' :
+    rawType.includes('material') ? 'Materials Update' :
+    rawType.includes('salary') || rawType.includes('payment') || rawType.includes('finance') ? 'Finance Update' :
+    rawType.includes('onsite') ? 'Onsite Visit' :
+    'Notification'
+  );
+
+  let linkUrl: string | undefined = undefined;
+  if (n.job_id) {
+    linkUrl = `/jobs/${n.job_id}`;
+  } else if (rawType.includes('inventory') || rawType.includes('stock') || rawType === 'low_stock') {
+    linkUrl = '/inventory';
+  } else if (rawType.includes('late') || rawType.includes('attendance')) {
+    linkUrl = '/attendance';
+  } else if (rawType.includes('leave')) {
+    linkUrl = '/staff/leaves';
+  } else if (rawType.includes('material')) {
+    linkUrl = '/materials';
+  } else if (rawType.includes('salary') || rawType.includes('payment') || rawType.includes('finance')) {
+    linkUrl = '/expenditure';
+  }
+
+  const isImportant = Boolean(
+    n.type === 'urgent' ||
+    n.type === 'job_assigned' ||
+    (n.title && n.title.toLowerCase().includes('urgent')) ||
+    (n.message && n.message.toLowerCase().includes('urgent'))
+  );
+
+  return {
+    id: n.id,
+    title,
+    message: n.message || n.title || 'No message content',
+    type: n.type || 'system',
+    channel: n.channel,
+    isRead: Boolean(n.is_read),
+    isImportant,
+    createdAt,
+    formattedTime: formatRelativeTime(createdAt),
+    fullDateTime: formatFullDateTime(createdAt),
+    jobId: n.job_id || undefined,
+    linkUrl,
+  };
+};
 
 export default function Topbar({ onMenuClick }: TopbarProps) {
   const { profile, signOut } = useAuth();
@@ -35,27 +89,20 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const fetchNotifications = useCallback(async (cancelled = false) => {
     if (!profile?.id) return;
     try {
+      // Order strictly by created_at DESC so newest are at the top
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('recipient_user_id', profile.id)
-        .order('sent_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: false })
+        .limit(30);
 
       if (cancelled) return;
       if (error) throw error;
       if (data) {
-        setNotifications(
-          data.map((n: any) => ({
-            id: n.id,
-            jobId: n.job_id,
-            type: n.type || 'system',
-            text: n.message || n.title || 'Notification',
-            isRead: Boolean(n.is_read),
-            isImportant: n.type === 'urgent' || n.type === 'job_assigned',
-            time: new Date(n.created_at || n.sent_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }))
-        );
+        const parsed = data.map(mapNotificationRecord);
+        parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setNotifications(parsed);
       }
     } catch (err) {
       if (cancelled) return;
@@ -73,7 +120,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       .eq('is_read', false);
   };
 
-  const handleNotificationClick = async (id: string, jobId?: string) => {
+  const handleNotificationClick = async (id: string, linkUrl?: string, jobId?: string) => {
     const target = notifications.find(n => n.id === id);
     if (target && !target.isRead) {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
@@ -82,8 +129,10 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         .update({ is_read: true })
         .eq('id', id);
     }
-    if (jobId) {
-      router.push(`/jobs/${jobId}`);
+
+    const targetDestination = linkUrl || (jobId ? `/jobs/${jobId}` : undefined);
+    if (targetDestination) {
+      router.push(targetDestination);
     }
   };
 
@@ -100,24 +149,46 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         (payload) => {
           const newNotif = payload.new as any;
           if (newNotif) {
-            // 1. Play Web Audio Chime
+            const formatted = mapNotificationRecord(newNotif);
+
+            // 1. Instant optimistic state update (newest at index 0)
+            setNotifications((prev) => {
+              const filtered = prev.filter((item) => item.id !== formatted.id);
+              const updated = [formatted, ...filtered];
+              return updated.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            });
+
+            // 2. Play Web Audio Chime
             playNotificationChime();
 
-            // 2. Trigger native desktop browser notification
+            // 3. Trigger native desktop browser notification
             showWebNotification({
-              title: newNotif.title || 'Digital Solution',
-              body: newNotif.message || '',
+              title: formatted.title,
+              body: formatted.message,
               icon: '/logo.webp',
-              tag: `notif-${newNotif.id}`,
+              tag: `notif-${formatted.id}`,
               onClick: () => {
-                if (newNotif.job_id) {
-                  router.push(`/jobs/${newNotif.job_id}`);
+                if (formatted.linkUrl) {
+                  router.push(formatted.linkUrl);
+                } else if (formatted.jobId) {
+                  router.push(`/jobs/${formatted.jobId}`);
                 }
               }
             });
 
-            // 3. Trigger In-App Toast
-            showToast(newNotif.message || newNotif.title || 'New notification', 'info');
+            // 4. Trigger In-App Rich Toast Popup with Action Button
+            const targetDest = formatted.linkUrl || (formatted.jobId ? `/jobs/${formatted.jobId}` : undefined);
+            showToast(
+              formatted.message,
+              formatted.isImportant ? 'error' : 'info',
+              {
+                title: formatted.title,
+                action: targetDest ? {
+                  label: 'View',
+                  onClick: () => router.push(targetDest)
+                } : undefined
+              }
+            );
           }
           fetchNotifications();
         }
@@ -125,8 +196,11 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${profile.id}` },
-        () => {
-          fetchNotifications();
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated) {
+            setNotifications(prev => prev.map(n => n.id === updated.id ? { ...n, isRead: Boolean(updated.is_read) } : n));
+          }
         }
       )
       .subscribe();
@@ -136,6 +210,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       supabase.removeChannel(channel);
     };
   }, [profile?.id, fetchNotifications, router, showToast]);
+
 
   // Close popovers on outside click
   useEffect(() => {
@@ -155,14 +230,26 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const generateBreadcrumbs = () => {
     if (pathname === '/') return 'Overview';
     const parts = pathname.split('/').filter(Boolean);
-    return parts.map((part: string, i: number) => (
-      <React.Fragment key={part}>
-        <span className={i === parts.length - 1 ? 'text-admin-text-primary font-semibold' : 'text-admin-text-muted capitalize'}>
-          {part.replace(/-/g, ' ')}
-        </span>
-        {i < parts.length - 1 && <ChevronRight size={14} className="text-admin-text-muted mx-1" />}
-      </React.Fragment>
-    ));
+    return parts.map((part: string, i: number) => {
+      const isLast = i === parts.length - 1;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(part);
+      const isLongId = part.length > 20 && part.includes('-');
+
+      const formatted = (isUuid || isLongId)
+        ? 'Details'
+        : part
+            .replace(/-/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+
+      return (
+        <React.Fragment key={part}>
+          <span className={isLast ? 'text-admin-text-primary font-semibold' : 'text-admin-text-muted hover:text-admin-text-secondary transition-colors'}>
+            {formatted}
+          </span>
+          {!isLast && <ChevronRight size={14} className="text-admin-text-muted mx-1 shrink-0" />}
+        </React.Fragment>
+      );
+    });
   };
 
   // Dynamic unread count

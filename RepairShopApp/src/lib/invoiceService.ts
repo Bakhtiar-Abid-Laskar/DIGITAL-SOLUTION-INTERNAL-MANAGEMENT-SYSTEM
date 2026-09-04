@@ -38,15 +38,28 @@ export type InlineInvoiceData = {
   totals: { subtotal: number; discount: number; tax: number; total: number };
 };
 
+export type PdfProgressStage = 'init' | 'generating' | 'rendering' | 'complete';
+
+export type PdfProgressCallback = (
+  stage: PdfProgressStage,
+  percent: number,
+  message: string
+) => void;
+
 // ─── Core edge function call ──────────────────────────────────────────────────
 
 async function callEdgeFunction(
-  req: MobileInvoiceRequest
+  req: MobileInvoiceRequest,
+  onProgress?: PdfProgressCallback
 ): Promise<{ html: string; driveLink: string | null }> {
+  onProgress?.('init', 20, 'Authenticating and preparing request...');
+
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
   const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-invoice`;
+
+  onProgress?.('generating', 45, 'Compiling template on server...');
 
   const response = await fetch(url, {
     method: 'POST',
@@ -63,6 +76,8 @@ async function callEdgeFunction(
     throw new Error(err.error || `Invoice generation failed (${response.status})`);
   }
 
+  onProgress?.('generating', 70, 'Processing document payload...');
+
   const { html, driveLink } = await response.json() as { html: string; driveLink: string | null };
   return { html, driveLink };
 }
@@ -75,10 +90,13 @@ async function callEdgeFunction(
  * Returns driveLink if the invoice was backed up to Google Drive.
  */
 export async function printInvoice(
-  req: MobileInvoiceRequest
+  req: MobileInvoiceRequest,
+  onProgress?: PdfProgressCallback
 ): Promise<{ driveLink: string | null }> {
-  const { html, driveLink } = await callEdgeFunction(req);
+  const { html, driveLink } = await callEdgeFunction(req, onProgress);
+  onProgress?.('rendering', 85, 'Rendering high-resolution PDF...');
   await Print.printAsync({ html, useMarkupFormatter: false });
+  onProgress?.('complete', 100, 'Print preview ready');
   return { driveLink };
 }
 
@@ -88,10 +106,12 @@ export async function printInvoice(
  */
 export async function shareInvoice(
   req: MobileInvoiceRequest,
-  filename?: string
+  filename?: string,
+  onProgress?: PdfProgressCallback
 ): Promise<{ driveLink: string | null }> {
-  const { html, driveLink } = await callEdgeFunction(req);
+  const { html, driveLink } = await callEdgeFunction(req, onProgress);
 
+  onProgress?.('rendering', 85, 'Rendering PDF file...');
   const { uri } = await Print.printToFileAsync({ html });
 
   const docLabel = 'docType' in req
@@ -100,6 +120,7 @@ export async function shareInvoice(
 
   const destUri = uri.replace(/[^/]+$/, `${filename || docLabel}.pdf`);
 
+  onProgress?.('complete', 95, 'Opening share sheet...');
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(destUri, {
@@ -110,5 +131,6 @@ export async function shareInvoice(
     await Print.printAsync({ html });
   }
 
+  onProgress?.('complete', 100, 'Document shared');
   return { driveLink };
 }

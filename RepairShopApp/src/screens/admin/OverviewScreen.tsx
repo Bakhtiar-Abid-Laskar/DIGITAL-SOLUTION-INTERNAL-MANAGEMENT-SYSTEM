@@ -10,7 +10,7 @@ import {
   ClipboardList,
   Users,
   Package,
-  CheckCircle,
+  CheckCircle2,
   Activity,
   Menu,
   Bell,
@@ -21,13 +21,16 @@ import {
   MessageCircle,
   Mail,
   CreditCard,
+  PlusSquare,
+  Receipt,
+  UserCheck,
 } from 'lucide-react-native';
 
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '@repairshop/shared';
 import { colors, radius, spacing, typography, shadow, QUICK_ACTION_COLORS } from '../../tokens';
-import RoleDashboard, { StatCard, QuickAction } from '../../components/shared/RoleDashboard';
+import RoleDashboard, { StatCard, QuickAction, KpiCard } from '../../components/shared/RoleDashboard';
 import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
 import EmptyState from '../../components/common/EmptyState';
@@ -38,7 +41,7 @@ const formatTime = (isoString: string) => {
 };
 
 export default function OverviewScreen() {
-  const { user, signOut, displayName } = useAuth();
+  const { user, signOut, displayName, avatarUrl } = useAuth();
   const navigation = useNavigation<any>();
 
   const [activeJobs, setActiveJobs] = useState<number>(0);
@@ -72,14 +75,20 @@ export default function OverviewScreen() {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      const [jobsRes, billsRes, staffRes, stockRes, urgentRes, unreadRes] = await Promise.all([
+      const [jobsRes, billsRes, salesRes, staffRes, stockRes, urgentRes, unreadRes] = await Promise.all([
         supabase
           .from('jobs')
           .select('*', { count: 'exact', head: true })
           .not('status', 'in', '("Completed","Delivered","Cancelled")'),
         supabase
-          .from('billing')
+          .from('invoices')
           .select('grand_total')
+          .neq('status', 'cancelled')
+          .gte('created_at', `${today}T00:00:00Z`),
+        supabase
+          .from('sales')
+          .select('grand_total')
+          .neq('payment_status', 'cancelled')
           .gte('created_at', `${today}T00:00:00Z`),
         supabase
           .from('attendance')
@@ -87,7 +96,8 @@ export default function OverviewScreen() {
           .eq('date', today)
           .not('check_in_time', 'is', null),
         supabase
-          .rpc('count_low_stock_items'),
+          .from('inventory')
+          .select('id, quantity_cached, low_stock_threshold'),
         supabase
           .from('jobs')
           .select('*', { count: 'exact', head: true })
@@ -99,12 +109,17 @@ export default function OverviewScreen() {
           .eq('recipient_user_id', user?.id),
       ]);
 
-      const rev = (billsRes.data || []).reduce((sum, b) => sum + (b.grand_total || 0), 0);
+      const invoiceRev = (billsRes.data || []).reduce((sum, b: any) => sum + (Number(b.grand_total) || 0), 0);
+      const salesRev = (salesRes.data || []).reduce((sum, s: any) => sum + (Number(s.grand_total) || 0), 0);
+      const rev = invoiceRev + salesRev;
+      const lowStock = (stockRes.data || []).filter(
+        (item: any) => Number(item.quantity_cached || 0) <= Number(item.low_stock_threshold || 0)
+      ).length;
 
       setActiveJobs(jobsRes.count || 0);
       setRevenue(rev);
       setStaffPresent(staffRes.count || 0);
-      setLowStockCount(Number(stockRes.data) || 0);
+      setLowStockCount(lowStock);
       setUrgentJobsCount(urgentRes.count || 0);
       setUnreadCount(unreadRes.count || 0);
     } catch (err) {
@@ -130,20 +145,21 @@ export default function OverviewScreen() {
 
   const stats: StatCard[] = [
     { id: 'jobs', label: 'Active Jobs', value: activeJobs, type: 'total', icon: ClipboardList, onPress: () => navigation.navigate('Jobs') },
-    { id: 'staff', label: 'Staff Present', value: staffPresent, type: 'progress', icon: Users, onPress: () => navigation.navigate('Users') },
+    { id: 'staff', label: 'Staff Present', value: staffPresent, type: 'progress', icon: Users, onPress: () => navigation.navigate('StaffAttendanceOverview') },
     { id: 'stock', label: 'Low Stock', value: lowStockCount, type: 'urgent', icon: AlertTriangle, onPress: () => navigation.navigate('Inventory') },
-    { id: 'rev', label: "Today's Revenue", value: formatCurrency(revenue), type: 'completed', icon: CheckCircle },
+    { id: 'rev', label: "Today's Revenue", value: formatCurrency(revenue), type: 'completed', icon: CheckCircle2, onPress: () => navigation.navigate('SalesList') },
   ];
 
   const quickActions: QuickAction[] = [
-    { id: 'new_job', label: 'New Job', icon: ClipboardList, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
-    { id: 'sales', label: 'Sales', icon: Banknote, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('SalesList') },
+    { id: 'new_job', label: 'New Job', icon: PlusSquare, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
+    { id: 'new_sale', label: 'New Sale', icon: Receipt, bgColor: QUICK_ACTION_COLORS.greenTile.bg, iconColor: QUICK_ACTION_COLORS.greenTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
     { id: 'pending_payments', label: 'Pending Payments', icon: CreditCard, bgColor: '#FFF4E5', iconColor: '#E65100', onPress: () => navigation.navigate('PendingPayments') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
+    { id: 'attendance', label: 'Attendance', icon: UserCheck, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('StaffAttendanceOverview') },
+    { id: 'salary', label: 'Payroll', icon: Banknote, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('Salary') },
     { id: 'users', label: 'Staff', icon: Users, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('Users') },
     { id: 'inventory', label: 'Inventory', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('Inventory') },
     { id: 'reports', label: 'Reports', icon: BarChart3, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('Reports') },
-    { id: 'salary', label: 'Salary', icon: Banknote, bgColor: QUICK_ACTION_COLORS.greenTile.bg, iconColor: QUICK_ACTION_COLORS.greenTile.fg, onPress: () => navigation.navigate('Salary') },
     { id: 'expenditure', label: 'Expenditure', icon: TrendingDown, bgColor: QUICK_ACTION_COLORS.redTile.bg, iconColor: QUICK_ACTION_COLORS.redTile.fg, onPress: () => navigation.navigate('Expenditure') },
   ];
 
@@ -154,8 +170,8 @@ export default function OverviewScreen() {
         userName={displayName || 'Admin'}
         workloadText={urgentJobsCount > 0 ? `${urgentJobsCount} urgent jobs need attention` : 'All systems normal'}
         bannerColor={colors.accentBlue}
+        avatarUrl={avatarUrl}
         avatarElement={<BarChart3 size={24} color={colors.textInverse} />}
-        stats={stats}
         quickActions={quickActions}
         headerLeftIcon={<Bell size={22} color={colors.textSecondary} />}
         onHeaderLeftPress={() => setNotificationsVisible(true)}
@@ -163,6 +179,28 @@ export default function OverviewScreen() {
         onHeaderRightPress={() => setMenuVisible(true)}
         unreadCount={unreadCount}
       >
+        {/* BIG TOP STATS */}
+        <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md }}>
+          <AppPressable style={{ flex: 1, backgroundColor: colors.success + '10', padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.success + '30' }} onPress={() => navigation.navigate('SalesList')}>
+            <Text style={{ ...typography.bodyBold, color: colors.success }}>Today's Revenue</Text>
+            <Text style={{ ...typography.h1, color: colors.success, marginTop: spacing.xs }}>{formatCurrency(revenue)}</Text>
+          </AppPressable>
+          <AppPressable style={{ flex: 1, backgroundColor: colors.accentBlue + '10', padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.accentBlue + '30' }} onPress={() => navigation.navigate('Jobs')}>
+            <Text style={{ ...typography.bodyBold, color: colors.accentBlue }}>Active Jobs</Text>
+            <Text style={{ ...typography.h1, color: colors.accentBlue, marginTop: spacing.xs }}>{activeJobs}</Text>
+          </AppPressable>
+        </View>
+        {/* SMALL BOTTOM STATS */}
+        <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl }}>
+          <AppPressable style={{ flex: 1, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }} onPress={() => navigation.navigate('Inventory')}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Low Stock</Text>
+            <Text style={{ ...typography.h2, color: colors.accentOrange, marginTop: spacing.xs }}>{lowStockCount}</Text>
+          </AppPressable>
+          <AppPressable style={{ flex: 1, backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }} onPress={() => navigation.navigate('StaffAttendanceOverview')}>
+            <Text style={{ ...typography.caption, color: colors.textSecondary }}>Staff Present</Text>
+            <Text style={{ ...typography.h2, color: colors.accentLightPurple, marginTop: spacing.xs }}>{staffPresent}</Text>
+          </AppPressable>
+        </View>
         {/* ALERTS SECTION */}
         <View style={styles.alertsSection}>
           <Text style={styles.sectionTitle}>Alerts</Text>
@@ -199,6 +237,14 @@ export default function OverviewScreen() {
       <BottomSheet visible={notificationsVisible} onClose={() => setNotificationsVisible(false)}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, paddingHorizontal: spacing.md }}>
           <Text style={typography.h2}>Notifications</Text>
+          <AppPressable
+            onPress={() => {
+              setNotificationsVisible(false);
+              navigation.navigate('Notifications');
+            }}
+          >
+            <Text style={{ ...typography.bodyBold, color: colors.primary }}>See All</Text>
+          </AppPressable>
         </View>
         <ScrollView style={{ maxHeight: 400, paddingBottom: spacing.xl, paddingHorizontal: spacing.md }}>
           {notificationsData.length === 0 ? (
@@ -210,7 +256,30 @@ export default function OverviewScreen() {
             />
           ) : (
             notificationsData.map(notif => (
-              <AppPressable key={notif.id} style={styles.notificationCard}>
+              <AppPressable
+                key={notif.id}
+                style={styles.notificationCard}
+                onPress={() => {
+                  setNotificationsVisible(false);
+                  const msg = (notif.message || '').toLowerCase();
+                  const type = (notif.type || '').toLowerCase();
+                  if (type.includes('material_return') || msg.includes('return material') || msg.includes('material return')) {
+                    navigation.navigate('AllottedMaterialsScreen', { mode: 'all', jobId: notif.job_id });
+                  } else if (notif.job_id) {
+                    navigation.navigate('AdminJobDetail', { jobId: notif.job_id });
+                  } else if (type.includes('salary') || type.includes('payroll') || type.includes('leave') || msg.includes('salary') || msg.includes('leave')) {
+                    navigation.navigate('Salary');
+                  } else if (type.includes('attendance') || type.includes('late') || msg.includes('attendance') || msg.includes('late') || msg.includes('check-in')) {
+                    navigation.navigate('StaffAttendanceOverview');
+                  } else if (type.includes('sale') || msg.includes('sale')) {
+                    navigation.navigate('SalesList');
+                  } else if (type.includes('inventory') || type.includes('stock') || msg.includes('stock')) {
+                    navigation.navigate('Inventory');
+                  } else {
+                    navigation.navigate('Notifications');
+                  }
+                }}
+              >
                 <View style={styles.notificationIcon}>
                   {notif.channel === 'whatsapp' ? (
                     <MessageCircle size={20} color={colors.accentGreen} />
@@ -237,7 +306,7 @@ export default function OverviewScreen() {
           style={styles.menuItem}
           onPress={() => {
             setMenuVisible(false);
-            // Profile navigation placeholder — will be wired in Phase 2
+            navigation.navigate('ProfileScreen');
           }}
         >
           <User size={20} color={colors.textPrimary} style={{ marginRight: spacing.md }} />

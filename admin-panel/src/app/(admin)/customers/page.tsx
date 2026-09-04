@@ -23,7 +23,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Customer, CustomerAuditLog, Job, formatCurrency } from '@repairshop/shared';
+import { Customer, CustomerAuditLog, Job, formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatCard } from '@/components/common/StatCard';
 import { SearchFilterBar } from '@/components/common/SearchFilterBar';
@@ -54,6 +54,12 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const pageSize = 20;
   
   // Selected Customer Modal / Drawer
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDetailState | null>(null);
@@ -62,28 +68,35 @@ export default function CustomersPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'sales' | 'audit'>('overview');
 
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (pageIndex = 1) => {
     try {
       setLoading(true);
       setError(null);
 
-      const { data, error: rpcError } = await supabase.rpc('search_customers', {
-        p_query: searchQuery.trim(),
-        p_limit: 100,
+      const offset = (pageIndex - 1) * pageSize;
+
+      const { data, error: rpcError } = await supabase.rpc('search_customers_v2', {
+        p_query: debouncedSearchQuery.trim(),
+        p_limit: pageSize,
+        p_offset: offset,
       });
 
       if (rpcError) throw rpcError;
-      setCustomers((data || []) as Customer[]);
+      
+      const results = (data || []) as Customer[];
+      setCustomers(results);
+      setHasMore(results.length === pageSize);
+      setCurrentPage(pageIndex);
     } catch (err: any) {
       console.error('Error fetching customers:', err);
       setError(err.message || 'Failed to load customers directory.');
     } finally {
       setLoading(false);
     }
-  }, [searchQuery]);
+  }, [debouncedSearchQuery]);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(1);
   }, [fetchCustomers]);
 
   const loadCustomerDetails = async (cust: Customer) => {
@@ -179,7 +192,7 @@ export default function CustomersPage() {
               variant="outline"
               size="sm"
               leftIcon={<RefreshCw size={14} />}
-              onClick={fetchCustomers}
+              onClick={() => fetchCustomers(currentPage)}
             >
               Refresh
             </Button>
@@ -238,7 +251,8 @@ export default function CustomersPage() {
           }
         />
       ) : (
-        <DataTable>
+        <div className="flex flex-col h-full">
+          <DataTable>
           <TableHead>
             <tr>
               <TableHeaderCell>Customer Name</TableHeaderCell>
@@ -317,6 +331,33 @@ export default function CustomersPage() {
             ))}
           </TableBody>
         </DataTable>
+        
+        <div className="mt-auto">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-admin-border bg-admin-bg-base">
+            <div className="text-sm text-admin-text-secondary">
+              Page <span className="font-medium text-admin-text-primary">{currentPage}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchCustomers(currentPage - 1)}
+                disabled={currentPage <= 1 || loading}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchCustomers(currentPage + 1)}
+                disabled={!hasMore || loading}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </div>
+        </div>
       )}
 
       {/* Customer Details & History Modal */}
@@ -590,7 +631,7 @@ export default function CustomersPage() {
                             <span className="font-bold text-sm text-admin-text-primary">
                               {sale.invoice_number || sale.sale_code}
                             </span>
-                            <Badge variant={sale.status === 'Paid' ? 'success' : 'warning'} className="text-xs">
+                            <Badge variant={sale.status === 'paid' ? 'success' : 'warning'} className="text-xs">
                               {sale.status}
                             </Badge>
                           </div>

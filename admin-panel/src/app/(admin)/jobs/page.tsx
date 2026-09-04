@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Job, User, useDebounceValue } from '@repairshop/shared';
+import { ActiveFiltersBar, ActiveFilterItem } from "@/components/common/ActiveFiltersBar";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
@@ -16,10 +17,11 @@ import { DataTableSkeleton } from "@/components/common/Skeleton";
 import { ErrorState } from "@/components/common/ErrorState";
 import { EmptyState } from "@/components/common/EmptyState";
 import ReassignTechnicianModal from "@/components/jobs/ReassignTechnicianModal";
-import { PlusCircle, Search, Download, Briefcase, X } from "lucide-react";
+import { PlusCircle, Search, Download, Briefcase, X, SlidersHorizontal, ChevronDown, ChevronUp, Flame, Clock } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { exportJobsToCSV } from "@/utils/csv";
 import { formatDate } from "@/utils/formatDate";
+import { cn } from "@/lib/utils";
 
 export default function JobsPage() {
   const router = useRouter();
@@ -47,11 +49,42 @@ export default function JobsPage() {
   const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
   // Modals/Drawers
   const [reassignJob, setReassignJob] = useState<Job | null>(null);
 
+  const secondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (techFilter !== 'All') count++;
+    if (priorityFilter !== 'All') count++;
+    if (dateFrom) count++;
+    if (dateTo) count++;
+    return count;
+  }, [techFilter, priorityFilter, dateFrom, dateTo]);
+
   const fetchTabCounts = useCallback(async () => {
+    // Primary: Single round-trip RPC aggregation
+    try {
+      const { data, error } = await supabase.rpc('get_job_status_counts');
+      if (!error && data) {
+        const counts = data.counts || {};
+        setStatusCounts({
+          'Received': counts['Received'] || 0,
+          'In Progress': counts['In Progress'] || 0,
+          'Completed': counts['Completed'] || 0,
+          'Waiting for Materials': counts['Waiting for Materials'] || 0,
+          'Delivered': counts['Delivered'] || 0,
+          'Cancelled': counts['Cancelled'] || 0,
+        });
+        setTotalCount(data.total || 0);
+        return;
+      }
+    } catch (rpcErr) {
+      console.warn('RPC get_job_status_counts unavailable, using fallback:', rpcErr);
+    }
+
+    // Graceful Fallback: Parallel count queries if RPC not yet deployed
     try {
       const [allRes, recRes, progRes, compRes, waitRes, delivRes, cancelRes] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact', head: true }),
@@ -73,7 +106,7 @@ export default function JobsPage() {
       });
       setTotalCount(allRes.count || 0);
     } catch (err) {
-      console.error('Error fetching tab counts:', err);
+      console.error('Error fetching tab counts fallback:', err);
     }
   }, []);
 
@@ -192,6 +225,60 @@ export default function JobsPage() {
     setStatusFilter('All');
   };
 
+  const activeFilters = useMemo(() => {
+    const list: ActiveFilterItem[] = [];
+    if (searchQuery.trim()) {
+      list.push({
+        id: 'search',
+        label: 'Search',
+        value: `"${searchQuery.trim()}"`,
+        onRemove: () => setSearchQuery(''),
+      });
+    }
+    if (techFilter !== 'All') {
+      const techName = technicians.find(t => t.id === techFilter)?.name || 'Technician';
+      list.push({
+        id: 'technician',
+        label: 'Technician',
+        value: techName,
+        onRemove: () => setTechFilter('All'),
+      });
+    }
+    if (priorityFilter !== 'All') {
+      list.push({
+        id: 'priority',
+        label: 'Priority',
+        value: priorityFilter,
+        onRemove: () => setPriorityFilter('All'),
+      });
+    }
+    if (dateFrom) {
+      list.push({
+        id: 'dateFrom',
+        label: 'From',
+        value: dateFrom,
+        onRemove: () => setDateFrom(''),
+      });
+    }
+    if (dateTo) {
+      list.push({
+        id: 'dateTo',
+        label: 'To',
+        value: dateTo,
+        onRemove: () => setDateTo(''),
+      });
+    }
+    if (statusFilter !== 'All') {
+      list.push({
+        id: 'status',
+        label: 'Status',
+        value: statusFilter,
+        onRemove: () => setStatusFilter('All'),
+      });
+    }
+    return list;
+  }, [searchQuery, techFilter, priorityFilter, dateFrom, dateTo, statusFilter, technicians]);
+
   const tabItems = [
     { id: "All", label: `All (${totalCount})` },
     { id: "active", label: `Open (${(statusCounts['Received'] || 0) + (statusCounts['In Progress'] || 0) + (statusCounts['Waiting for Materials'] || 0)})` },
@@ -228,74 +315,162 @@ export default function JobsPage() {
       />
 
       {/* Filter Bar */}
-      <Card noAccentLine className="p-4 flex flex-wrap gap-4 items-center justify-between bg-admin-bg-surface border border-admin-border rounded-lg shadow-xs">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
-          <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted" size={16} />
+      <Card noAccentLine className="p-4 flex flex-col gap-3 bg-admin-bg-surface border border-admin-border rounded-lg shadow-xs">
+        {/* Top Control Bar: Search + Presets + Filter Drawer Toggle */}
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted pointer-events-none" size={16} />
             <Input 
               placeholder="Search code, customer, contact..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 text-sm"
+              className="pl-9 pr-8 h-10 text-sm"
               aria-label="Search jobs"
             />
+            {searchQuery.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-admin-text-muted hover:text-admin-text-primary p-0.5 rounded transition-colors"
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
-          <div className="w-44">
-            <Select
-              aria-label="Filter by Technician"
-              value={techFilter}
-              onChange={(e) => setTechFilter(e.target.value)}
-              className="h-10 text-sm"
+          {/* Quick Filter Presets */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-admin-text-muted mr-1 font-medium hidden sm:inline">Presets:</span>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter(priorityFilter === 'Urgent' ? 'All' : 'Urgent')}
+              className={cn(
+                "px-2.5 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1 border",
+                priorityFilter === 'Urgent'
+                  ? "bg-admin-urgent-bg text-admin-urgent-fg border-admin-urgent-fg/30"
+                  : "bg-admin-bg-subtle text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
+              )}
             >
-              <option value="All">All Technicians</option>
-              {technicians.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="w-36">
-            <Select
-              aria-label="Filter by Priority"
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="h-10 text-sm"
+              <Flame size={12} className={priorityFilter === 'Urgent' ? 'text-admin-urgent-fg' : 'text-amber-500'} />
+              <span>Urgent</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter(statusFilter === 'Waiting for Materials' ? 'All' : 'Waiting for Materials')}
+              className={cn(
+                "px-2.5 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1 border",
+                statusFilter === 'Waiting for Materials'
+                  ? "bg-admin-pending-bg text-admin-pending-fg border-admin-pending-fg/30"
+                  : "bg-admin-bg-subtle text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
+              )}
             >
-              <option value="All">All Priorities</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Urgent">Urgent</option>
-            </Select>
+              <Clock size={12} className={statusFilter === 'Waiting for Materials' ? 'text-admin-pending-fg' : 'text-amber-500'} />
+              <span>Waiting Parts</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Input 
-              type="date" 
-              aria-label="From Date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 text-sm w-36"
-              title="From Date"
-            />
-            <span className="text-xs text-admin-text-muted">to</span>
-            <Input 
-              type="date" 
-              aria-label="To Date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 text-sm w-36"
-              title="To Date"
-            />
-          </div>
-
-          {(searchQuery || techFilter !== 'All' || priorityFilter !== 'All' || dateFrom || dateTo || statusFilter !== 'All') && (
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} leftIcon={<X size={14} />} className="h-10">
-              Clear
-            </Button>
-          )}
+          {/* Toggle More Filters Drawer Button */}
+          <Button 
+            variant={isFilterExpanded || secondaryFilterCount > 0 ? "secondary" : "outline"} 
+            size="sm" 
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
+            leftIcon={<SlidersHorizontal size={14} />} 
+            className="h-10 ml-auto"
+            aria-expanded={isFilterExpanded}
+          >
+            <span>Filters</span>
+            {secondaryFilterCount > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-admin-accent-dim text-admin-accent-text text-xs font-bold border border-admin-accent/20">
+                {secondaryFilterCount}
+              </span>
+            )}
+            {isFilterExpanded ? <ChevronUp size={14} className="ml-1" /> : <ChevronDown size={14} className="ml-1" />}
+          </Button>
         </div>
+
+        {/* Collapsible Secondary Filter Drawer */}
+        {isFilterExpanded && (
+          <div className="pt-3 border-t border-admin-border animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-admin-text-muted">
+                Secondary Filters
+              </span>
+              {secondaryFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTechFilter('All');
+                    setPriorityFilter('All');
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  className="text-xs text-admin-accent-text hover:underline font-semibold"
+                >
+                  Reset secondary
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-admin-text-muted mb-1">Technician</label>
+                <Select
+                  aria-label="Filter by Technician"
+                  value={techFilter}
+                  onChange={(e) => setTechFilter(e.target.value)}
+                  className="h-9 text-sm w-full"
+                >
+                  <option value="All">All Technicians</option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-admin-text-muted mb-1">Priority</label>
+                <Select
+                  aria-label="Filter by Priority"
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="h-9 text-sm w-full"
+                >
+                  <option value="All">All Priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-admin-text-muted mb-1">From Date</label>
+                <Input 
+                  type="date" 
+                  aria-label="From Date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-9 text-sm w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-admin-text-muted mb-1">To Date</label>
+                <Input 
+                  type="date" 
+                  aria-label="To Date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="h-9 text-sm w-full"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Filters Summary Bar */}
+        <ActiveFiltersBar filters={activeFilters} onClearAll={handleClearFilters} />
       </Card>
 
       {/* Main Table Content */}

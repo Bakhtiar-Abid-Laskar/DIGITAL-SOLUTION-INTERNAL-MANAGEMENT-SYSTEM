@@ -30,34 +30,36 @@ export default function JobDetailShell({
   const insets = useSafeAreaInsets();
   const bottomPadding = useBottomInsetPadding('nav');
   
-  const { fill, ink } = getStatusCard(job.status);
+  const { fill, ink } = getStatusCard(job?.status || 'Received');
 
   return (
     <View style={styles.container}>
-      <AppHeader title={job.job_code} showBack={true} />
+      <AppHeader title={job?.job_code || 'Job Details'} showBack={true} />
+
+      {/* Sticky Pastel status header */}
+      <View style={[styles.statusHeader, { backgroundColor: fill }]}>
+        <Text style={[styles.statusJobCode, { color: colors.textPrimary }]}>{job?.job_code || ''}</Text>
+        <View style={styles.badgeRow}>
+          <StatusBadge status={job?.status || 'Received'} isUrgent={job?.priority === 'Urgent' && job?.status !== 'Completed'} />
+          {job.priority !== 'Urgent' && job.priority !== 'Normal' && (
+            <PriorityBadge priority={job.priority} />
+          )}
+          {job.job_type === 'Onsite' && (
+            <View style={[styles.typeBadge, { backgroundColor: ink + '1C' }]}>
+              <Navigation size={11} color={colors.textPrimary} />
+              <Text style={[styles.typeBadgeText, { color: colors.textPrimary }]}>Onsite</Text>
+            </View>
+          )}
+        </View>
+        {job.completed_at && (
+          <Text style={[styles.completedAt, { color: ink + 'B3' }]}>
+            Completed {formatDate(job.completed_at)} at {formatTime(job.completed_at)}
+          </Text>
+        )}
+      </View>
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPadding }, contentContainerStyle]}>
         
-        {/* Pastel status header */}
-        <View style={[styles.statusHeader, { backgroundColor: fill }]}>
-          <Text style={[styles.statusJobCode, { color: colors.textPrimary }]}>{job.job_code}</Text>
-          <View style={styles.badgeRow}>
-            <StatusBadge status={job.status} />
-            <PriorityBadge priority={job.priority} />
-            {job.job_type === 'Onsite' && (
-              <View style={[styles.typeBadge, { backgroundColor: ink + '1C' }]}>
-                <Navigation size={11} color={colors.textPrimary} />
-                <Text style={[styles.typeBadgeText, { color: colors.textPrimary }]}>Onsite</Text>
-              </View>
-            )}
-          </View>
-          {job.completed_at && (
-            <Text style={[styles.completedAt, { color: ink + 'B3' }]}>
-              Completed {formatDate(job.completed_at)} at {formatTime(job.completed_at)}
-            </Text>
-          )}
-        </View>
-
         {/* Feedback strip */}
         {feedbackMessage && (
           <Animated.View entering={FadeInUp.duration(300)} style={styles.feedbackStrip}>

@@ -20,7 +20,7 @@ export interface StatCardProps {
 }
 
 const toneStyles = {
-  primary: "bg-admin-accent-dim text-admin-accent border-admin-accent/20",
+  primary: "bg-admin-accent-dim text-admin-accent-text border-admin-accent/20",
   info: "bg-admin-progress-bg text-admin-progress-fg border-admin-progress-fg/20",
   success: "bg-admin-completed-bg text-admin-completed-fg border-admin-completed-fg/20",
   warning: "bg-admin-pending-bg text-admin-pending-fg border-admin-pending-fg/20",

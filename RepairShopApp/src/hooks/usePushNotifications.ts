@@ -23,7 +23,7 @@ try {
       shouldShowList: true,
     }),
   });
-  console.log('✅ Notification handler set successfully');
+  console.log('[Push] Notification handler set successfully');
 } catch (e) {
   console.log('Could not set notification handler', e);
 }
@@ -100,7 +100,7 @@ export const usePushNotifications = (): PushNotificationState => {
       if (!mounted) return;
       setExpoPushToken(token);
       if (token && token.data) {
-        console.log('📱 EXPO PUSH TOKEN:', token.data);
+        console.log('[Push] EXPO PUSH TOKEN:', token.data);
         
         const syncToken = async (attempts = 3) => {
           try {
@@ -165,11 +165,20 @@ export const usePushNotifications = (): PushNotificationState => {
                 });
                 notifInstance.onclick = () => {
                   window.focus();
-                  if (newNotif.job_id && navigationRef.isReady()) {
-                    if (role === 'technician') {
-                      navigationRef.current?.navigate('UpdateWork', { jobId: newNotif.job_id });
-                    } else if (role === 'receptionist') {
-                      navigationRef.current?.navigate('JobDetail', { jobId: newNotif.job_id });
+                  if (navigationRef.isReady()) {
+                    if (newNotif.screen === 'AllottedMaterialsScreen' || newNotif.type === 'material_return') {
+                      navigationRef.current?.navigate('AllottedMaterialsScreen', {
+                        mode: role === 'technician' ? 'scoped' : 'all',
+                        jobId: newNotif.job_id,
+                      });
+                    } else if (newNotif.job_id) {
+                      if (role === 'admin') {
+                        navigationRef.current?.navigate('AdminJobDetail', { jobId: newNotif.job_id });
+                      } else if (role === 'technician') {
+                        navigationRef.current?.navigate('UpdateWork', { jobId: newNotif.job_id });
+                      } else if (role === 'receptionist') {
+                        navigationRef.current?.navigate('JobDetail', { jobId: newNotif.job_id });
+                      }
                     }
                   }
                   notifInstance.close();
@@ -200,22 +209,99 @@ export const usePushNotifications = (): PushNotificationState => {
       });
 
       responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data;
+        const data = response.notification.request.content.data as Record<string, any> | undefined;
         
         if (!navigationRef.isReady()) return;
 
-        if (data?.screen === 'JobDetail' && data?.jobId) {
-          if (role === 'receptionist') {
-            navigationRef.current?.navigate('JobDetail', { jobId: data.jobId });
-          } else if (role === 'technician') {
-            navigationRef.current?.navigate('UpdateWork', { jobId: data.jobId });
-          }
-        } else if (data?.jobId) {
-          if (role === 'technician') {
-            navigationRef.current?.navigate('UpdateWork', { jobId: data.jobId });
+        const screen = typeof data?.screen === 'string' ? data.screen : '';
+        const type = typeof data?.type === 'string' ? data.type.toLowerCase() : '';
+        const msg = typeof data?.message === 'string' ? data.message.toLowerCase() : '';
+        const targetJobId = data?.jobId || data?.job_id;
+
+        // 1. Material return or Allotted Materials (prioritized before generic jobId)
+        if (screen === 'AllottedMaterialsScreen' || type === 'material_return' || msg.includes('return material') || msg.includes('material return')) {
+          navigationRef.current?.navigate('AllottedMaterialsScreen', {
+            mode: role === 'technician' ? 'scoped' : 'all',
+            jobId: targetJobId,
+          });
+        }
+        // 2. Explicit Job Screen or Job with screen === 'JobDetail'
+        else if ((screen === 'JobDetail' || screen === 'AdminJobDetail' || screen === 'UpdateWork') && targetJobId) {
+          if (role === 'admin') {
+            navigationRef.current?.navigate('AdminJobDetail', { jobId: targetJobId });
           } else if (role === 'receptionist') {
-            navigationRef.current?.navigate('JobDetail', { jobId: data.jobId });
+            navigationRef.current?.navigate('JobDetail', { jobId: targetJobId });
+          } else if (role === 'technician') {
+            navigationRef.current?.navigate('UpdateWork', { jobId: targetJobId });
           }
+        }
+        // 3. Salary, Advance Salary, Payroll, Leave
+        else if (
+          screen === 'Salary' ||
+          type.includes('salary') ||
+          type.includes('finance') ||
+          type.includes('leave') ||
+          msg.includes('salary') ||
+          msg.includes('payslip') ||
+          msg.includes('leave')
+        ) {
+          navigationRef.current?.navigate('Salary');
+        }
+        // 4. Attendance, Late Check-in
+        else if (
+          screen === 'Attendance' ||
+          screen === 'StaffAttendanceOverview' ||
+          type.includes('attendance') ||
+          type.includes('late') ||
+          type.includes('checkin') ||
+          msg.includes('late') ||
+          msg.includes('check-in') ||
+          msg.includes('check in') ||
+          msg.includes('attendance')
+        ) {
+          if (role === 'admin') {
+            navigationRef.current?.navigate('StaffAttendanceOverview');
+          } else {
+            navigationRef.current?.navigate('Attendance');
+          }
+        }
+        // 5. Counter Sale or Sales
+        else if (
+          screen === 'SalesList' ||
+          type.includes('sale') ||
+          msg.includes('sale') ||
+          msg.includes('counter sale')
+        ) {
+          navigationRef.current?.navigate('SalesList');
+        }
+        // 6. Inventory & Low Stock
+        else if (
+          screen === 'Inventory' ||
+          screen === 'InventoryScreen' ||
+          type.includes('inventory') ||
+          type.includes('stock') ||
+          msg.includes('low stock') ||
+          msg.includes('inventory')
+        ) {
+          if (role === 'receptionist') {
+            navigationRef.current?.navigate('InventoryScreen');
+          } else {
+            navigationRef.current?.navigate('Inventory');
+          }
+        }
+        // 7. Generic Fallback with targetJobId
+        else if (targetJobId) {
+          if (role === 'admin') {
+            navigationRef.current?.navigate('AdminJobDetail', { jobId: targetJobId });
+          } else if (role === 'technician') {
+            navigationRef.current?.navigate('UpdateWork', { jobId: targetJobId });
+          } else if (role === 'receptionist') {
+            navigationRef.current?.navigate('JobDetail', { jobId: targetJobId });
+          }
+        }
+        // 8. Default fallback to notifications list
+        else {
+          navigationRef.current?.navigate('Notifications');
         }
       });
     } catch (e) {

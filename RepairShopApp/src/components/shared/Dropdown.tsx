@@ -18,6 +18,7 @@ interface DropdownProps {
   placeholder?: string;
   icon?: React.ReactNode;
   error?: string;
+  disabled?: boolean;
 }
 
 const DropdownRow = React.memo(function DropdownRow({ 
@@ -43,7 +44,16 @@ const DropdownRow = React.memo(function DropdownRow({
   );
 });
 
-export default function Dropdown({ label, options, selectedValue, onSelect, placeholder = 'Select...', icon, error }: DropdownProps) {
+export default function Dropdown({
+  label,
+  options,
+  selectedValue,
+  onSelect,
+  placeholder = 'Select...',
+  icon,
+  error,
+  disabled = false,
+}: DropdownProps) {
   const [modalVisible, setModalVisible] = useState(false);
 
   const selectedOption = options.find(o => o.value === selectedValue);
@@ -65,29 +75,36 @@ export default function Dropdown({ label, options, selectedValue, onSelect, plac
   }, [selectedValue, handleSelectOption]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, disabled && styles.disabledContainer]}>
       {label && (
-        <Text style={styles.label}>
+        <Text style={[styles.label, disabled && styles.disabledText]}>
           {label}
           {label.includes('*') && <Text style={styles.asterisk}> *</Text>}
         </Text>
       )}
       <AppPressable 
-        style={[styles.inputBox, error ? styles.inputError : null]} 
-        onPress={() => setModalVisible(true)}
-        activeOpacity={0.7}
+        style={[
+          styles.inputBox,
+          error ? styles.inputError : null,
+          disabled ? styles.inputDisabled : null,
+        ]} 
+        onPress={() => {
+          if (!disabled) setModalVisible(true);
+        }}
+        activeOpacity={disabled ? 1 : 0.7}
+        disabled={disabled}
       >
         <View style={styles.inputLeft}>
           {icon && <View style={styles.iconContainer}>{icon}</View>}
-          <Text style={[styles.valueText, !selectedOption && styles.placeholderText]}>
+          <Text style={[styles.valueText, !selectedOption && styles.placeholderText, disabled && styles.disabledText]}>
             {selectedOption ? selectedOption.label : placeholder}
           </Text>
         </View>
-        <ChevronDown size={20} color={colors.textSecondary} />
+        <ChevronDown size={20} color={disabled ? colors.textMuted : colors.textSecondary} />
       </AppPressable>
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      <Modal visible={modalVisible} transparent={true} animationType="fade">
+      <Modal visible={modalVisible && !disabled} transparent={true} animationType="fade">
         <AppPressable style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -109,6 +126,9 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.md,
   },
+  disabledContainer: {
+    opacity: 0.6,
+  },
   label: {
     ...typography.bodyBold,
     color: colors.textSecondary,
@@ -128,6 +148,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     height: 52,
   },
+  inputDisabled: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+  },
   inputLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,6 +168,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   placeholderText: {
+    color: colors.textMuted,
+  },
+  disabledText: {
     color: colors.textMuted,
   },
   errorText: {

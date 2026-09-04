@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { supabase } from '@/lib/supabase';
 import { GeofenceSettings } from '@repairshop/shared';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/components/common/ToastProvider';
 
@@ -139,18 +140,19 @@ export default function GeofenceSettingsPage() {
           </div>
           <div className="flex items-center">
             <a
-              href={`https://www.google.com/maps?q=${savedLat},${savedLng}`}
+              href={`https://www.google.com/maps/search/?api=1&query=${savedLat},${savedLng}`}
               target="_blank"
-              rel="noopener noreferrer"
-              className="text-admin-accent text-xs underline underline-offset-2 hover:opacity-80 transition-opacity"
+              rel="noreferrer"
+              className="text-admin-accent text-xs underline underline-offset-2 hover:opacity-80 transition-opacity inline-flex items-center gap-1"
             >
-              Verify on Google Maps ↗
+              Verify on Google Maps <ExternalLink size={12} />
             </a>
           </div>
         </div>
       ) : !loading ? (
-        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-400">
-          ⚠️ No geofence has been saved yet. Set a location below and click Save.
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-400 flex items-center gap-2">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>No geofence has been saved yet. Set a location below and click Save.</span>
         </div>
       ) : null}
 
@@ -182,7 +184,7 @@ export default function GeofenceSettingsPage() {
             disabled={savingRadius || radius === setting.radius}
             className="px-4 py-2 bg-admin-accent text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-opacity whitespace-nowrap"
           >
-            {savingRadius ? 'Saving…' : radius === setting?.radius ? 'Radius Saved ✓' : 'Save Radius Only'}
+            {savingRadius ? 'Saving…' : radius === setting?.radius ? 'Radius Saved' : 'Save Radius Only'}
           </button>
         )}
       </div>

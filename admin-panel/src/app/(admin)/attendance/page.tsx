@@ -38,6 +38,7 @@ type AttendanceRecord = Attendance & {
   checkin_photo_drive_link?: string | null;
   checkout_photo_drive_link?: string | null;
   at_location?: boolean;
+  low_accuracy?: boolean;
   review_status?: string;
 };
 
@@ -345,12 +346,15 @@ export default function AttendancePage() {
                           <Badge variant={record.at_location ? 'success' : 'danger'}>
                             {record.at_location ? 'At Location' : 'Out of Bounds'}
                           </Badge>
+                          {record.low_accuracy && (
+                            <Badge variant="warning">Weak GPS</Badge>
+                          )}
                           {record.gps_lat && record.gps_lng && (
                             <a
                               href={`https://www.google.com/maps?q=${record.gps_lat},${record.gps_lng}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-admin-accent hover:underline flex items-center gap-1 mt-0.5"
+                              className="text-xs text-admin-accent-text hover:underline flex items-center gap-1 mt-0.5"
                             >
                               <MapPin size={11} /> View Map
                             </a>

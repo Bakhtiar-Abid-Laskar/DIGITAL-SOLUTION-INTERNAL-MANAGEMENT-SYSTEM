@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TextInput, KeyboardAvoidingView, Platform,  } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingDown, Plus, ChevronDown } from 'lucide-react-native';
+import { TrendingDown, Plus, ChevronDown, ChevronRight, Check } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '@repairshop/shared';
 import AppHeader from '../../components/common/AppHeader';
@@ -15,7 +15,8 @@ import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 
-type PaymentType = 'materials_purchase' | 'daily_expenditure' | 'office_development';
+type PaymentType = 'materials_purchase' | 'daily_expenditure' | 'office_development' | 'staff_salary';
+type CategoryFilter = 'all' | PaymentType;
 
 type Payment = {
   id: string;
@@ -29,16 +30,17 @@ const TYPE_LABELS: Record<PaymentType, string> = {
   materials_purchase: 'Materials Purchase',
   daily_expenditure: 'Daily Expenditure',
   office_development: 'Office Development',
+  staff_salary: 'Staff Salary',
 };
 
 const TYPE_COLORS: Record<PaymentType, { bg: string; fg: string }> = {
   materials_purchase: { bg: colors.statusReceivedBg, fg: colors.accentBlue },
   daily_expenditure: { bg: colors.statusWaitingBg, fg: colors.accentOrange },
   office_development: { bg: colors.accentLightPurpleDim, fg: colors.accentLightPurple },
+  staff_salary: { bg: colors.statusCompletedBg, fg: colors.accentGreen },
 };
 
 const EXPENDITURE_TYPES: Array<{ value: PaymentType; label: string }> = [
-  { value: 'materials_purchase', label: 'Materials Purchase' },
   { value: 'daily_expenditure', label: 'Daily Expenditure' },
   { value: 'office_development', label: 'Office Development' },
 ];
@@ -105,6 +107,9 @@ export default function ExpenditureScreen() {
   const [monthPicker, setMonthPicker] = useState(false);
   const monthOptions = useMemo(() => generateMonthOptions(), []);
 
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
+  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,7 +133,7 @@ export default function ExpenditureScreen() {
       const { data, error } = await supabase
         .from('payments')
         .select('id, type, amount, description, created_at')
-        .in('type', ['materials_purchase', 'daily_expenditure', 'office_development'])
+        .in('type', ['materials_purchase', 'daily_expenditure', 'office_development', 'staff_salary'])
         .gte('created_at', start)
         .lt('created_at', nextMonth)
         .order('created_at', { ascending: false });
@@ -155,7 +160,32 @@ export default function ExpenditureScreen() {
     fetchPayments();
   };
 
-  const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const categoryBreakdown = useMemo(() => {
+    const breakdown: Record<CategoryFilter, { label: string; count: number; sum: number }> = {
+      all: { label: 'All', count: payments.length, sum: 0 },
+      daily_expenditure: { label: 'Daily', count: 0, sum: 0 },
+      office_development: { label: 'Office Dev', count: 0, sum: 0 },
+      materials_purchase: { label: 'Materials', count: 0, sum: 0 },
+      staff_salary: { label: 'Salary', count: 0, sum: 0 },
+    };
+
+    for (const p of payments) {
+      const amt = Number(p.amount) || 0;
+      breakdown.all.sum += amt;
+      if (breakdown[p.type]) {
+        breakdown[p.type].count += 1;
+        breakdown[p.type].sum += amt;
+      }
+    }
+    return breakdown;
+  }, [payments]);
+
+  const filteredPayments = useMemo(() => {
+    if (selectedCategory === 'all') return payments;
+    return payments.filter(p => p.type === selectedCategory);
+  }, [payments, selectedCategory]);
+
+  const activeSum = categoryBreakdown[selectedCategory]?.sum ?? 0;
 
   const handleAddExpenditure = async () => {
     const amount = parseFloat(formAmount);
@@ -199,7 +229,7 @@ export default function ExpenditureScreen() {
       />
 
       <FlatList
-        data={payments}
+        data={filteredPayments}
         keyExtractor={item => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: bottomPadding }]}
         refreshControl={
@@ -216,15 +246,58 @@ export default function ExpenditureScreen() {
               </AppPressable>
             </View>
 
-            {/* Summary card */}
-            <View style={styles.summaryCard}>
-              <TrendingDown size={20} color={colors.accentRed} />
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.summaryLabel}>Total Expenditure</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
+            {/* Interactive Summary card */}
+            <AppPressable
+              style={styles.summaryCard}
+              onPress={() => setCategorySheetVisible(true)}
+            >
+              <View style={styles.summaryIconBox}>
+                <TrendingDown size={22} color={colors.accentRed} />
               </View>
-              <Text style={styles.summaryCount}>{payments.length} entries</Text>
-            </View>
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={styles.summaryLabel}>
+                  {selectedCategory === 'all' ? 'Total Expenditure' : `${TYPE_LABELS[selectedCategory]} Total`}
+                </Text>
+                <Text style={styles.summaryValue}>{formatCurrency(activeSum)}</Text>
+                <Text style={styles.summarySubtext}>
+                  {selectedCategory === 'all'
+                    ? `${payments.length} total entries • Tap for category breakdown`
+                    : `${filteredPayments.length} of ${payments.length} entries • Tap to change category`}
+                </Text>
+              </View>
+              <ChevronRight size={18} color={colors.accentRed} />
+            </AppPressable>
+
+            {/* Category Filter Chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryScroll}
+            >
+              {(['all', 'daily_expenditure', 'office_development', 'materials_purchase', 'staff_salary'] as CategoryFilter[]).map(cat => {
+                const isSelected = selectedCategory === cat;
+                const info = categoryBreakdown[cat];
+                return (
+                  <AppPressable
+                    key={cat}
+                    style={[
+                      styles.categoryChip,
+                      isSelected && styles.categoryChipActive,
+                    ]}
+                    onPress={() => setSelectedCategory(cat)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        isSelected && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {info.label} ({info.count})
+                    </Text>
+                  </AppPressable>
+                );
+              })}
+            </ScrollView>
 
             {loading && !refreshing && (
               <View>
@@ -238,7 +311,7 @@ export default function ExpenditureScreen() {
             <EmptyState
               icon={<TrendingDown size={44} color={colors.textMuted} strokeWidth={1.5} />}
               heading="No expenditures"
-              subtext={`No entries recorded for ${getMonthLabel(month)}.`}
+              subtext={selectedCategory === 'all' ? `No entries recorded for ${getMonthLabel(month)}.` : `No ${TYPE_LABELS[selectedCategory]} entries recorded for ${getMonthLabel(month)}.`}
             />
           ) : null
         }
@@ -259,6 +332,63 @@ export default function ExpenditureScreen() {
             </Text>
           </AppPressable>
         ))}
+      </BottomSheet>
+
+      {/* Category Breakdown BottomSheet */}
+      <BottomSheet visible={categorySheetVisible} onClose={() => setCategorySheetVisible(false)}>
+        <Text style={{ ...typography.h2, marginBottom: spacing.xs }}>Expenditure by Category</Text>
+        <Text style={{ ...typography.caption, color: colors.textSecondary, marginBottom: spacing.lg }}>
+          Select a category to filter entries for {getMonthLabel(month)}.
+        </Text>
+
+        {(['all', 'daily_expenditure', 'office_development', 'materials_purchase', 'staff_salary'] as CategoryFilter[]).map(cat => {
+          const isSelected = selectedCategory === cat;
+          const info = categoryBreakdown[cat];
+          const badgeColor = cat === 'all'
+            ? { bg: colors.backgroundAlt, fg: colors.textPrimary }
+            : TYPE_COLORS[cat];
+
+          return (
+            <AppPressable
+              key={cat}
+              style={[
+                styles.breakdownRow,
+                isSelected && styles.breakdownRowActive,
+              ]}
+              onPress={() => {
+                setSelectedCategory(cat);
+                setCategorySheetVisible(false);
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View style={[styles.breakdownBadge, { backgroundColor: badgeColor.bg }]}>
+                    <Text style={[styles.breakdownBadgeText, { color: badgeColor.fg }]}>
+                      {cat === 'all' ? 'All Expenditures' : TYPE_LABELS[cat]}
+                    </Text>
+                  </View>
+                  <Text style={styles.breakdownCountText}>{info.count} entries</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <Text style={styles.breakdownSumText}>{formatCurrency(info.sum)}</Text>
+                {isSelected && <Check size={16} color={colors.primary} />}
+              </View>
+            </AppPressable>
+          );
+        })}
+
+        {selectedCategory !== 'all' && (
+          <Button
+            label="Reset to All Categories"
+            variant="secondary"
+            onPress={() => {
+              setSelectedCategory('all');
+              setCategorySheetVisible(false);
+            }}
+            style={{ marginTop: spacing.md }}
+          />
+        )}
       </BottomSheet>
 
       {/* Add Expenditure Sheet */}
@@ -353,7 +483,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.statusUrgentBg,
     borderRadius: radius.md,
     padding: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  summaryIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentRed + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   summaryLabel: {
     ...typography.caption,
@@ -363,9 +501,73 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.accentRed,
   },
+  summarySubtext: {
+    ...typography.micro,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   summaryCount: {
     ...typography.caption,
     color: colors.textSecondary,
+  },
+  categoryScroll: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.lg,
+  },
+  categoryChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  categoryChipTextActive: {
+    color: colors.textInverse,
+    fontWeight: '700',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  breakdownRowActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.statusInProgressBg,
+  },
+  breakdownBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.sm,
+  },
+  breakdownBadgeText: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  breakdownCountText: {
+    ...typography.micro,
+    color: colors.textMuted,
+  },
+  breakdownSumText: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
   },
   card: {
     backgroundColor: colors.surface,

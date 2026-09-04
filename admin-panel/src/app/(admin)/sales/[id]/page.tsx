@@ -9,15 +9,21 @@ import { Button } from "@/components/common/Button";
 import { ErrorState } from "@/components/common/ErrorState";
 import { formatCurrency } from '@repairshop/shared';
 import { formatDate } from "@/utils/formatDate";
-import { ArrowLeft, Receipt, CreditCard } from "lucide-react";
+import { ArrowLeft, Receipt, CreditCard, Printer } from "lucide-react";
 import { Badge } from "@/components/common/Badge";
+import { PaymentRecordingBox } from "@/components/billing/PaymentRecordingBox";
+import { openInvoicePrint } from "@/lib/invoiceClient";
+import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
+import { useToast } from "@/components/common/ToastProvider";
 
 export default function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const { id } = use(params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<any>(null);
+  const [printState, setPrintState] = useState<PrintProgressState | null>(null);
 
   useEffect(() => {
     async function fetchDetail() {
@@ -57,16 +63,40 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
   const isJob = !!invoice.job_id;
   const balanceDue = Number(invoice.grand_total) - Number(invoice.amount_paid);
 
+  const handlePrint = async () => {
+    setPrintState({ isOpen: true, percent: 15, message: 'Preparing invoice document...' });
+    try {
+      await openInvoicePrint(
+        { docType: 'final', invoiceId: invoice.id },
+        (percent, message) => setPrintState({ isOpen: true, percent, message })
+      );
+      setPrintState({ isOpen: true, percent: 100, message: 'Print dialog opened', isComplete: true });
+      setTimeout(() => setPrintState(null), 1200);
+    } catch (e: any) {
+      setPrintState(null);
+      showToast(e.message || 'Failed to print invoice', 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-admin-text-muted">
-          <ArrowLeft size={16} />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-admin-text-muted">
+            <ArrowLeft size={16} />
+          </Button>
+          <PageHeader 
+            title={isJob ? "Job Invoice Detail" : "Sale Detail"} 
+            description={invoice.invoice_code}
+          />
+        </div>
+        <Button
+          variant="outline"
+          leftIcon={<Printer size={16} />}
+          onClick={handlePrint}
+        >
+          Print Invoice
         </Button>
-        <PageHeader 
-          title={isJob ? "Job Invoice Detail" : "Sale Detail"} 
-          description={invoice.invoice_code}
-        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -111,34 +141,26 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
 
         {/* Right Col */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex items-center gap-2">
-              <CreditCard size={18} className="text-admin-accent" />
-              <CardTitle>Payment Status</CardTitle>
-            </CardHeader>
-            <div className="p-4 space-y-4 text-sm">
-              <div className="flex justify-between pb-4 border-b border-admin-border">
-                <span className="text-admin-text-muted">Payment Method</span>
-                <span className="font-medium text-admin-text-primary">{invoice.payment_method || "—"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-admin-text-muted">Grand Total</span>
-                <span className="font-medium text-admin-text-primary">{formatCurrency(invoice.grand_total)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-admin-text-muted">Amount Paid</span>
-                <span className="font-bold text-admin-success-fg">{formatCurrency(invoice.amount_paid)}</span>
-              </div>
-              <div className="flex justify-between pt-4 border-t border-admin-border">
-                <span className="font-bold text-admin-text-primary">Balance Due</span>
-                <span className={`font-bold ${balanceDue > 0 ? "text-admin-urgent-fg" : "text-admin-text-primary"}`}>
-                  {formatCurrency(balanceDue)}
-                </span>
-              </div>
-            </div>
-          </Card>
+          <PaymentRecordingBox
+            invoiceId={invoice.id}
+            grandTotal={Number(invoice.grand_total) || 0}
+            amountPaid={Number(invoice.amount_paid) || 0}
+            paymentMethod={invoice.payment_method || "Cash"}
+            status={invoice.status}
+            onPaymentRecorded={(data) => {
+              setInvoice((prev: any) => ({
+                ...prev,
+                amount_paid: data.amount_paid,
+                status: data.status,
+                paid_at: data.paid_at,
+                payment_method: data.payment_method,
+                grand_total: data.grand_total,
+              }));
+            }}
+          />
         </div>
       </div>
+
 
       <Card className="mt-6">
         <CardHeader>
@@ -149,54 +171,61 @@ export default function SaleDetailPage({ params }: { params: Promise<{ id: strin
             <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border text-xs uppercase tracking-wider font-semibold">
               <tr>
                 <th scope="col" className="px-6 py-3.5">Item</th>
-                <th scope="col" className="px-6 py-3.5 text-right">Qty</th>
-                <th scope="col" className="px-6 py-3.5 text-right">Rate</th>
-                <th scope="col" className="px-6 py-3.5 text-right">Tax</th>
+                <th scope="col" className="px-4 py-3.5">HSN/SAC</th>
+                <th scope="col" className="px-4 py-3.5 text-center">Qty</th>
+                <th scope="col" className="px-4 py-3.5 text-right">Price</th>
+                <th scope="col" className="px-4 py-3.5 text-right">Tax (%)</th>
+                <th scope="col" className="px-4 py-3.5 text-right">Tax Amt</th>
                 <th scope="col" className="px-6 py-3.5 text-right">Line Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-admin-border bg-admin-bg-surface">
-              {(invoice.invoice_items || []).map((item: any, idx: number) => (
-                <tr key={item.id || idx}>
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-admin-text-primary">{item.item_name}</div>
-                    {item.serial_number && <div className="text-xs text-admin-text-muted">SN: {item.serial_number}</div>}
-                  </td>
-                  <td className="px-6 py-4 text-right">{item.quantity}</td>
-                  <td className="px-6 py-4 text-right">{formatCurrency(item.selling_rate)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="text-admin-text-primary">
-                      {formatCurrency(Number(item.cgst_amount) + Number(item.sgst_amount) + Number(item.igst_amount))}
-                    </div>
-                    <div className="text-xs text-admin-text-muted">
-                      {invoice.tax_regime === 'inter_state' ? `IGST ${item.igst_rate}%` : `C${item.cgst_rate}% S${item.sgst_rate}%`}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-admin-text-primary">{formatCurrency(item.line_total)}</td>
-                </tr>
-              ))}
+              {(invoice.invoice_items || []).map((item: any, idx: number) => {
+                const taxPct = item.tax_percent !== undefined && item.tax_percent !== null
+                  ? Number(item.tax_percent)
+                  : (Number(item.cgst_rate || 0) + Number(item.sgst_rate || 0) || Number(item.igst_rate || 0) || 18);
+                const taxAmt = Number(item.cgst_amount || 0) + Number(item.sgst_amount || 0) + Number(item.igst_amount || 0);
+
+                return (
+                  <tr key={item.id || idx}>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-admin-text-primary">{item.item_name}</div>
+                      {item.serial_number && <div className="text-xs text-admin-text-muted">SN: {item.serial_number}</div>}
+                    </td>
+                    <td className="px-4 py-4 text-admin-text-muted font-mono text-xs">
+                      {item.hsn_code || "—"}
+                    </td>
+                    <td className="px-4 py-4 text-center">{item.quantity}</td>
+                    <td className="px-4 py-4 text-right">{formatCurrency(item.selling_rate)}</td>
+                    <td className="px-4 py-4 text-right font-medium text-admin-text-secondary">{taxPct}%</td>
+                    <td className="px-4 py-4 text-right text-admin-text-primary">
+                      {formatCurrency(taxAmt)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-admin-text-primary">{formatCurrency(item.line_total)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot className="bg-admin-bg-subtle border-t border-admin-border">
               <tr>
-                <td colSpan={4} className="px-6 py-3 text-right text-admin-text-muted">Subtotal</td>
+                <td colSpan={6} className="px-6 py-3 text-right text-admin-text-muted">Subtotal (Pre-Tax)</td>
                 <td className="px-6 py-3 text-right font-medium text-admin-text-primary">{formatCurrency(invoice.subtotal)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-6 py-3 text-right text-admin-text-muted">Total Tax</td>
+                <td colSpan={6} className="px-6 py-3 text-right text-admin-text-muted">Total Tax</td>
                 <td className="px-6 py-3 text-right font-medium text-admin-text-primary">{formatCurrency(invoice.total_tax)}</td>
               </tr>
               <tr>
-                <td colSpan={4} className="px-6 py-3 text-right text-admin-text-muted">Discount</td>
-                <td className="px-6 py-3 text-right font-medium text-admin-text-primary">-{formatCurrency(invoice.discount)}</td>
-              </tr>
-              <tr>
-                <td colSpan={4} className="px-6 py-3 text-right font-bold text-admin-text-primary">Grand Total</td>
-                <td className="px-6 py-3 text-right font-bold text-admin-text-primary">{formatCurrency(invoice.grand_total)}</td>
+                <td colSpan={6} className="px-6 py-3 text-right font-bold text-admin-text-primary">TOTAL</td>
+                <td className="px-6 py-3 text-right font-extrabold text-admin-accent-text text-base">{formatCurrency(invoice.grand_total)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+
       </Card>
+
+      <PrintProgressModal state={printState} onClose={() => setPrintState(null)} />
     </div>
   );
 }

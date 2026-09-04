@@ -1,4 +1,15 @@
-import { formatDate, formatDateShort, formatMonthLabel, getCurrentMonth, getTodayDateString, formatTime, getAttendanceDateIST, getDateIST } from './date';
+import { 
+  formatDate, 
+  formatDateShort, 
+  formatMonthLabel, 
+  getCurrentMonth, 
+  getTodayDateString, 
+  formatTime, 
+  getAttendanceDateIST, 
+  getDateIST,
+  formatRelativeTime,
+  formatFullDateTime
+} from './date';
 
 describe('Date & Time Formatting Utilities (@repairshop/shared/date.ts)', () => {
   describe('formatDate', () => {
@@ -76,4 +87,42 @@ describe('Date & Time Formatting Utilities (@repairshop/shared/date.ts)', () => 
       expect(formatTime('')).toBe('--:--');
     });
   });
+
+  describe('formatRelativeTime', () => {
+    it('returns "Just now" for timestamps within the last 15 seconds', () => {
+      const now = new Date();
+      expect(formatRelativeTime(now.toISOString())).toBe('Just now');
+    });
+
+    it('returns relative minutes for events within an hour (e.g. 5m ago)', () => {
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+      expect(formatRelativeTime(fiveMinsAgo.toISOString())).toBe('5m ago');
+    });
+
+    it('returns relative hours for events earlier today (e.g. 2h ago)', () => {
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const res = formatRelativeTime(twoHoursAgo.toISOString());
+      expect(res).toMatch(/2h ago|Yesterday/);
+    });
+
+    it('returns em dash (—) for null or invalid dates', () => {
+      expect(formatRelativeTime(null)).toBe('—');
+      expect(formatRelativeTime(undefined)).toBe('—');
+      expect(formatRelativeTime('invalid-date')).toBe('—');
+    });
+  });
+
+  describe('formatFullDateTime', () => {
+    it('formats full timestamp with date, month, year, and time', () => {
+      const formatted = formatFullDateTime('2026-08-22T10:30:00Z');
+      expect(formatted).toMatch(/2026/);
+      expect(formatted).toMatch(/Aug/);
+    });
+
+    it('returns em dash (—) for invalid dates', () => {
+      expect(formatFullDateTime(null)).toBe('—');
+      expect(formatFullDateTime('invalid-date')).toBe('—');
+    });
+  });
 });
+

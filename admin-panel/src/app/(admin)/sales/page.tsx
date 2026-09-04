@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Invoice } from "@/types/sales";
 import { exportSalesToCSV } from "@/utils/salesCsv";
+import { ActiveFiltersBar, ActiveFilterItem } from "@/components/common/ActiveFiltersBar";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
@@ -165,6 +166,51 @@ export default function SalesPage() {
     setStatusFilter("all");
   };
 
+  const activeFilters = useMemo(() => {
+    const list: ActiveFilterItem[] = [];
+    if (searchQuery.trim()) {
+      list.push({
+        id: 'search',
+        label: 'Search',
+        value: `"${searchQuery.trim()}"`,
+        onRemove: () => setSearchQuery(''),
+      });
+    }
+    if (dateFrom) {
+      list.push({
+        id: 'dateFrom',
+        label: 'From',
+        value: dateFrom,
+        onRemove: () => setDateFrom(''),
+      });
+    }
+    if (dateTo) {
+      list.push({
+        id: 'dateTo',
+        label: 'To',
+        value: dateTo,
+        onRemove: () => setDateTo(''),
+      });
+    }
+    if (paymentFilter !== 'All') {
+      list.push({
+        id: 'payment',
+        label: 'Method',
+        value: paymentFilter,
+        onRemove: () => setPaymentFilter('All'),
+      });
+    }
+    if (statusFilter !== 'all') {
+      list.push({
+        id: 'status',
+        label: 'Status',
+        value: statusFilter.toUpperCase(),
+        onRemove: () => setStatusFilter('all'),
+      });
+    }
+    return list;
+  }, [searchQuery, dateFrom, dateTo, paymentFilter, statusFilter]);
+
   const tabItems = [
     { id: "all", label: `All (${totalCount})` },
     { id: "draft", label: `Draft (${statusCounts.draft || 0})` },
@@ -191,7 +237,7 @@ export default function SalesPage() {
 
       <Tabs items={tabItems} activeId={statusFilter} onChange={setStatusFilter} />
 
-      <Card noAccentLine className="p-4 flex flex-wrap gap-4 items-center justify-between bg-admin-bg-surface border border-admin-border rounded-lg shadow-xs">
+      <Card noAccentLine className="p-4 flex flex-col gap-3 bg-admin-bg-surface border border-admin-border rounded-lg shadow-xs">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted" size={16} />
@@ -232,13 +278,10 @@ export default function SalesPage() {
               <option value="Other">Other</option>
             </Select>
           </div>
-
-          {(searchQuery || dateFrom || dateTo || paymentFilter !== 'All' || statusFilter !== 'all') && (
-            <Button variant="ghost" size="sm" onClick={handleClearFilters} leftIcon={<X size={14} />} className="h-10">
-              Clear
-            </Button>
-          )}
         </div>
+
+        {/* Active Filters Summary Bar */}
+        <ActiveFiltersBar filters={activeFilters} onClearAll={handleClearFilters} />
       </Card>
 
       {/* Main Content */}

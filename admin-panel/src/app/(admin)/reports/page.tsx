@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Search, History, DollarSign, Cloud, ExternalLink, Users, Download, Wrench, Package, TrendingUp } from "lucide-react";
+import { Search, History, DollarSign, Cloud, ExternalLink, Users, Download, Wrench, Package, TrendingUp, X } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const TechPerformanceChart = dynamic(() => import('@/components/dashboard/TechPerformanceChart'), { ssr: false });
 const RevenueChart = dynamic(() => import('@/components/dashboard/RevenueChart'), { ssr: false });
-import { formatCurrency } from '@repairshop/shared';
+import { formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { formatDate } from '@/utils/formatDate';
 import { useToast } from "@/components/common/ToastProvider";
 import { Pagination } from "@/components/common/Pagination";
@@ -39,6 +39,7 @@ export default function ReportsPage() {
 
   // Customer History State
   const [customerSearch, setCustomerSearch] = useState("");
+  const debouncedCustomerSearch = useDebounceValue(customerSearch, 300);
   const [customerJobs, setCustomerJobs] = useState<any[]>([]);
   const [customerLoading, setCustomerLoading] = useState(false);
   const [customerPage, setCustomerPage] = useState(1);
@@ -99,7 +100,7 @@ export default function ReportsPage() {
     if (!cancelled) setRevenueLoading(true);
     try {
       const date = new Date();
-      date.setDate(1);
+      date.setDate(date.getDate() - 30);
       date.setHours(0,0,0,0);
 
       const { data: bills } = await supabase
@@ -111,14 +112,24 @@ export default function ReportsPage() {
       if (cancelled) return;
       if (bills) {
         const totalRevenue = bills.reduce((acc, b) => acc + (b.grand_total || 0), 0);
+        
+        const isLabourItem = (item: any) => {
+          const name = (item.item_name || '').toLowerCase();
+          return !item.product_id || name.includes('labour') || name.includes('labor') || name.includes('service');
+        };
+
         const totalLabour = bills.reduce((acc, b) => {
-          const labourItem = b.invoice_items?.find((i: any) => i.item_name === 'Labour Charge');
-          return acc + (labourItem ? Number(labourItem.line_total || (labourItem.quantity * labourItem.selling_rate)) : 0);
+          const labourItems = b.invoice_items?.filter(isLabourItem) || [];
+          return acc + labourItems.reduce((sum: number, item: any) => 
+            sum + Number(item.line_total || (item.quantity * item.selling_rate) || 0), 0);
         }, 0);
+
         const totalParts = bills.reduce((acc, b) => {
-          const partsItems = b.invoice_items?.filter((i: any) => i.item_name !== 'Labour Charge') || [];
-          return acc + partsItems.reduce((sum: number, item: any) => sum + Number(item.line_total || (item.quantity * item.selling_rate)), 0);
+          const partsItems = b.invoice_items?.filter((i: any) => !isLabourItem(i)) || [];
+          return acc + partsItems.reduce((sum: number, item: any) => 
+            sum + Number(item.line_total || (item.quantity * item.selling_rate) || 0), 0);
         }, 0);
+
         setRevenueData({
           totalRevenue,
           totalLabour,
@@ -130,6 +141,71 @@ export default function ReportsPage() {
       if (!cancelled) setRevenueLoading(false);
     }
   }, []);
+
+  const exportPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopExportPolling = useCallback(() => {
+    if (exportPollIntervalRef.current) {
+      clearInterval(exportPollIntervalRef.current);
+      exportPollIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopExportPolling();
+    };
+  }, [stopExportPolling]);
+
+  const pollExportStatus = useCallback((type: 'monthly-data' | 'attendance-report', monthStr: string) => {
+    stopExportPolling();
+    let attempts = 0;
+    const maxAttempts = 30; // 30 * 3s = 90s max polling timeout
+
+    exportPollIntervalRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const { data } = await supabase.from('export_jobs_latest').select('*');
+        if (data) {
+          setExportJobs(data);
+          const currentJob = data.find((j: any) => j.type === type);
+          if (currentJob) {
+            if (currentJob.status === 'success') {
+              stopExportPolling();
+              showToast(
+                `${type === 'monthly-data' ? 'Monthly Data' : 'Attendance'} export for ${monthStr} completed!`,
+                'success',
+                currentJob.drive_link
+                  ? {
+                      action: {
+                        label: 'View in Drive',
+                        onClick: () => window.open(currentJob.drive_link, '_blank'),
+                      },
+                    }
+                  : undefined
+              );
+              return;
+            }
+            if (currentJob.status === 'failed') {
+              stopExportPolling();
+              showToast(
+                `Export failed: ${currentJob.error_message || 'An error occurred during export'}`,
+                'error'
+              );
+              return;
+            }
+          }
+        }
+      } catch (pollErr) {
+        console.warn('Error polling export status:', pollErr);
+      }
+
+      if (attempts >= maxAttempts) {
+        stopExportPolling();
+        showToast('Export is still processing in the background. Check back shortly.', 'info');
+      }
+    }, 3000);
+  }, [showToast, stopExportPolling]);
 
   const fetchExportJobs = useCallback(async (cancelled = false) => {
     if (!cancelled) setExportLoading(true);
@@ -150,8 +226,9 @@ export default function ReportsPage() {
         body: { month: exportMonth }
       });
       if (error) throw error;
-      showToast(`Export for ${exportMonth} started!`, 'success');
-      fetchExportJobs();
+      showToast(`Export for ${exportMonth} started. Tracking progress...`, 'info');
+      await fetchExportJobs();
+      pollExportStatus(type, exportMonth);
     } catch (err: any) {
       console.error("FULL EXPORT ERROR:", err);
       let errMsg = err.message;
@@ -167,10 +244,12 @@ export default function ReportsPage() {
     }
   };
 
-  const fetchCustomerJobs = useCallback(async (page = 1, cancelled = false) => {
-    if (!customerSearch.trim()) {
+  const fetchCustomerJobs = useCallback(async (query: string, page = 1, cancelled = false) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
       setCustomerJobs([]);
       setCustomerTotalPages(1);
+      setCustomerLoading(false);
       return;
     }
     if (!cancelled) setCustomerLoading(true);
@@ -181,7 +260,7 @@ export default function ReportsPage() {
       const { data, error, count } = await supabase
         .from('jobs')
         .select('*', { count: 'exact' })
-        .or(`customer_name.ilike.%${customerSearch}%,customer_contact.ilike.%${customerSearch}%`)
+        .or(`customer_name.ilike.%${trimmed}%,customer_contact.ilike.%${trimmed}%`)
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -195,7 +274,7 @@ export default function ReportsPage() {
     } finally {
       if (!cancelled) setCustomerLoading(false);
     }
-  }, [customerSearch, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,17 +284,29 @@ export default function ReportsPage() {
     return () => { cancelled = true; };
   }, [activeTab, fetchTechPerformance, fetchRevenueData, fetchExportJobs]);
 
+  // Reset page to 1 when debounced query changes
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [debouncedCustomerSearch]);
+
   useEffect(() => {
     let cancelled = false;
     if (activeTab === "customer") {
-      fetchCustomerJobs(customerPage, cancelled);
+      fetchCustomerJobs(debouncedCustomerSearch, customerPage, cancelled);
     }
     return () => { cancelled = true; };
-  }, [activeTab, customerPage, fetchCustomerJobs]);
+  }, [activeTab, debouncedCustomerSearch, customerPage, fetchCustomerJobs]);
+
+  const handleClearCustomerSearch = () => {
+    setCustomerSearch("");
+    setCustomerJobs([]);
+    setCustomerTotalPages(1);
+    setCustomerPage(1);
+  };
 
   const onSearchSubmit = () => {
     setCustomerPage(1);
-    fetchCustomerJobs(1);
+    fetchCustomerJobs(customerSearch, 1);
   };
 
   const handleExportCSV = async () => {
@@ -239,12 +330,16 @@ export default function ReportsPage() {
         setExporting(false);
         return;
       }
+      const isLabour = (item: any) => {
+        const name = (item.item_name || '').toLowerCase();
+        return !item.product_id || name.includes('labour') || name.includes('labor') || name.includes('service');
+      };
       csvData = "Job Code,Customer,Grand Total,Labour,Parts,Paid,Created At\n" + 
-        revenueData.recentBills.map(b => `"${b.jobs?.job_code || b.invoice_code}","${b.jobs?.customer_name || b.customer_name}",${b.grand_total},${
-          b.invoice_items?.find((i:any)=>i.item_name==='Labour Charge')?.line_total || 0
-        },${
-          b.invoice_items?.filter((i:any)=>i.item_name!=='Labour Charge').reduce((sum:number,i:any)=>sum+Number(i.line_total||0),0)
-        },${b.status === 'paid'},"${b.created_at}"`).join("\n");
+        revenueData.recentBills.map(b => {
+          const labourTotal = b.invoice_items?.filter(isLabour).reduce((sum: number, i: any) => sum + Number(i.line_total || (i.quantity * i.selling_rate) || 0), 0) || 0;
+          const partsTotal = b.invoice_items?.filter((i: any) => !isLabour(i)).reduce((sum: number, i: any) => sum + Number(i.line_total || (i.quantity * i.selling_rate) || 0), 0) || 0;
+          return `"${b.jobs?.job_code || b.invoice_code}","${b.jobs?.customer_name || b.customer_name}",${b.grand_total},${labourTotal},${partsTotal},${b.status === 'paid'},"${b.created_at}"`;
+        }).join("\n");
     }
 
     const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
@@ -260,6 +355,42 @@ export default function ReportsPage() {
     setExporting(false);
   };
 
+  // Group recent bills by date for clean daily revenue trend
+  const dailyRevenueTrend = useMemo(() => {
+    if (!revenueData?.recentBills || revenueData.recentBills.length === 0) return [];
+
+    const dayMap = new Map<string, { date: string; revenue: number; invoiceCount: number }>();
+
+    const sorted = [...revenueData.recentBills].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    for (const bill of sorted) {
+      if (!bill.created_at) continue;
+      const d = new Date(bill.created_at);
+      const dayKey = d.toISOString().split('T')[0];
+      const label = formatDate(bill.created_at).substring(0, 6);
+
+      const existing = dayMap.get(dayKey);
+      if (existing) {
+        existing.revenue += Number(bill.grand_total) || 0;
+        existing.invoiceCount += 1;
+      } else {
+        dayMap.set(dayKey, {
+          date: label,
+          revenue: Number(bill.grand_total) || 0,
+          invoiceCount: 1,
+        });
+      }
+    }
+
+    return Array.from(dayMap.values()).map((item) => ({
+      date: item.date,
+      revenue: Math.round(item.revenue * 100) / 100,
+      invoiceCount: item.invoiceCount,
+    }));
+  }, [revenueData?.recentBills]);
+
   const tabs = [
     { id: "tech", label: "Technician Performance", icon: <Users size={16} /> },
     { id: "customer", label: "Customer History", icon: <History size={16} /> },
@@ -268,7 +399,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 min-h-full flex flex-col">
       <PageHeader 
         title="Reports & Analytics" 
         description="Analyze shop operational metrics, technician productivity, and revenue trends."
@@ -350,21 +481,31 @@ export default function ReportsPage() {
 
         {/* CUSTOMER TAB */}
         {activeTab === "customer" && (
-          <Card noAccentLine className="h-full flex flex-col border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
+          <Card noAccentLine className="min-h-[460px] flex flex-col border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
             <CardHeader className="border-b border-admin-border pb-4">
               <CardTitle className="text-base font-semibold">Customer Repair History</CardTitle>
               <div className="flex items-center gap-3 max-w-lg mt-3">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted" size={16} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-admin-text-muted pointer-events-none" size={16} />
                   <Input 
                     type="text" 
                     placeholder="Search by customer name or phone..." 
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && onSearchSubmit()}
-                    className="pl-9 h-10 text-sm"
+                    className="pl-9 pr-9 h-10 text-sm"
                     aria-label="Customer Search"
                   />
+                  {customerSearch.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearCustomerSearch}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-admin-text-muted hover:text-admin-text-primary p-0.5 rounded transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-admin-accent"
+                      aria-label="Clear customer search"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
                 </div>
                 <Button size="sm" onClick={onSearchSubmit} isLoading={customerLoading} className="h-10 px-4">
                   Search
@@ -393,8 +534,8 @@ export default function ReportsPage() {
                           <td colSpan={5} className="p-8">
                             <EmptyState 
                               icon={<History size={40} className="text-admin-text-muted" />}
-                              heading="No jobs found"
-                              subtext={customerSearch ? 'No jobs found matching this query.' : 'Search for a customer to view their repair history.'}
+                              heading={customerSearch.trim() ? "No jobs found" : "Customer Repair History"}
+                              subtext={customerSearch.trim() ? "No jobs found matching this query." : "Enter a customer name or phone number above to view past repair history."}
                               asCard={false}
                             />
                           </td>
@@ -472,11 +613,8 @@ export default function ReportsPage() {
                     <CardTitle className="text-base font-semibold">Revenue Trend</CardTitle>
                   </CardHeader>
                   <CardContent className="flex-1 pb-4">
-                    {revenueData.recentBills.length > 0 ? (
-                      <RevenueChart data={revenueData.recentBills.slice().reverse().map((b: any) => ({
-                        date: formatDate(b.created_at).substring(0, 6),
-                        revenue: b.grand_total || 0
-                      }))} />
+                    {dailyRevenueTrend.length > 0 ? (
+                      <RevenueChart data={dailyRevenueTrend} />
                     ) : (
                       <EmptyState heading="No Data" subtext="No revenue data available to graph." asCard={false} />
                     )}
@@ -580,7 +718,7 @@ export default function ReportsPage() {
                             {formatDate(job.started_at)}
                           </span>
                           {job.status === 'success' && job.drive_link && (
-                            <a href={job.drive_link} target="_blank" rel="noreferrer" className="text-admin-accent hover:underline flex items-center gap-1 font-semibold">
+                            <a href={job.drive_link} target="_blank" rel="noreferrer" className="text-admin-accent-text hover:underline flex items-center gap-1 font-semibold">
                               View in Drive <ExternalLink size={12} />
                             </a>
                           )}
@@ -618,7 +756,7 @@ export default function ReportsPage() {
                             {formatDate(job.started_at)}
                           </span>
                           {job.status === 'success' && job.drive_link && (
-                            <a href={job.drive_link} target="_blank" rel="noreferrer" className="text-admin-accent hover:underline flex items-center gap-1 font-semibold">
+                            <a href={job.drive_link} target="_blank" rel="noreferrer" className="text-admin-accent-text hover:underline flex items-center gap-1 font-semibold">
                               View in Drive <ExternalLink size={12} />
                             </a>
                           )}

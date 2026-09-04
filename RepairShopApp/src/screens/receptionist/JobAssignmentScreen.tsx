@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal,  } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { printInvoice } from '../../lib/invoiceService';
 import { CheckCircle2, Printer, ChevronRight, MessageCircle } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +20,7 @@ import Button from '../../components/common/Button';
 import ScreenScrollView from '../../components/common/ScreenScrollView';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
+import { usePdfGenerator } from '../../context/PdfProgressContext';
 import { createWhatsAppUrl } from '@repairshop/shared';
 
 export default function JobAssignmentScreen() {
@@ -29,6 +29,7 @@ export default function JobAssignmentScreen() {
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const { generatePdf } = usePdfGenerator();
 
   const formState = route.params?.formState as NewJobFormValues;
 
@@ -125,11 +126,11 @@ export default function JobAssignmentScreen() {
 
   const printReceipt = async () => {
     if (!createdJob) return;
-    try {
-      await printInvoice({ docType: 'receipt', jobId: createdJob.id });
-    } catch (error: any) {
-      showToast({ title: 'Print Failed', message: error.message, type: 'error' });
-    }
+    await generatePdf({
+      request: { docType: 'receipt', jobId: createdJob.id },
+      title: 'Generating Job Receipt',
+      mode: 'print',
+    });
   };
 
   const resetFlow = () => {
@@ -148,7 +149,7 @@ export default function JobAssignmentScreen() {
 
   const handleWhatsAppInvoice = async () => {
     if (!createdJob) return;
-    const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing RepairShop.`;
+    const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing Digital Solution.`;
     const url = createWhatsAppUrl(createdJob.customer_contact, msg);
     if (!url) {
       showToast({ title: 'Invalid number', message: 'Could not format the contact number for WhatsApp.', type: 'error' });

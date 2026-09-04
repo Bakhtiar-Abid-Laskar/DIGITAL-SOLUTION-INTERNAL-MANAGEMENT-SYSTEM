@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { MapPin } from 'lucide-react';
 import { GeofenceSettings } from '@repairshop/shared';
 
 // Fix for default marker icons in Leaflet with webpack/Next.js
@@ -352,8 +353,9 @@ export default function GeofenceMap({ initialSetting, onSave, radius = 100 }: Ge
       <div className="flex justify-between items-center bg-admin-bg p-4 rounded-xl border border-admin-border">
         <div>
           {position ? (
-            <p className="text-sm text-admin-text-primary font-medium">
-              📍 {position[0].toFixed(6)}, {position[1].toFixed(6)}
+            <p className="text-sm text-admin-text-primary font-medium flex items-center gap-1.5">
+              <MapPin size={15} className="text-admin-accent shrink-0" />
+              <span>{position[0].toFixed(6)}, {position[1].toFixed(6)}</span>
             </p>
           ) : (
             <p className="text-sm text-admin-text-muted">

@@ -11,5 +11,10 @@ config.resolver.extraNodeModules = {
   '@repairshop/shared': path.resolve(__dirname, 'src/lib/shared'),
 };
 
+config.server = {
+  ...config.server,
+  unstable_serverRoot: __dirname,
+};
+
 module.exports = config;
 

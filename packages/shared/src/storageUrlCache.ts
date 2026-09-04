@@ -9,7 +9,7 @@ export async function getSignedUrlCached(
   supabaseClient: any, 
   bucket: string, 
   path: string | null, 
-  expiresInSeconds: number = 3600
+  expiresInSeconds: number = 3000
 ): Promise<string | null> {
   if (!path) return null;
   if (path.startsWith('http')) return path; 
