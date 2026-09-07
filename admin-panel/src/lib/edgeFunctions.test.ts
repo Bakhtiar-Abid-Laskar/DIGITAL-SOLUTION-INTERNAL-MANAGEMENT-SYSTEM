@@ -111,3 +111,43 @@ describe('Edge Function Contracts & Input Validation (generate-invoice)', () => 
     expect(result.errors).toContain('items[0].rate must be >= 0');
   });
 });
+
+import { parseEdgeFunctionError } from './edgeFunctions';
+
+describe('parseEdgeFunctionError', () => {
+  it('extracts error string from context json payload', async () => {
+    const mockContext = {
+      clone: () => ({
+        json: async () => ({ error: 'Cannot delete staff member with linked jobs' }),
+      }),
+    };
+    const err = {
+      message: 'Edge Function returned a non-2xx status code',
+      context: mockContext,
+    };
+
+    const msg = await parseEdgeFunctionError(err);
+    expect(msg).toBe('Cannot delete staff member with linked jobs');
+  });
+
+  it('falls back to error.message if context parsing fails', async () => {
+    const err = {
+      message: 'Network request failed',
+      context: null,
+    };
+
+    const msg = await parseEdgeFunctionError(err);
+    expect(msg).toBe('Network request failed');
+  });
+
+  it('handles user-friendly message for FunctionsFetchError', async () => {
+    const err = {
+      message: 'FunctionsFetchError: Failed to send a request to the Edge Function',
+      context: null,
+    };
+
+    const msg = await parseEdgeFunctionError(err);
+    expect(msg).toContain('Could not connect to the Edge Function service');
+  });
+});
+

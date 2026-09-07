@@ -19,6 +19,7 @@ import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useAppConfig } from "@/context/AppConfigContext";
 import { Pagination } from "@/components/common/Pagination";
 import { formatDate } from "@/utils/formatDate";
+import { parseEdgeFunctionError } from "@/lib/edgeFunctions";
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<User[]>([]);
@@ -123,11 +124,18 @@ export default function StaffPage() {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          const { error } = await supabase.functions.invoke('admin-delete-user', {
+          const { data, error } = await supabase.functions.invoke('admin-delete-user', {
             body: { userId: id }
           });
           
-          if (error) throw new Error(error.message);
+          if (error) {
+            const errorMsg = await parseEdgeFunctionError(error, `Failed to delete ${name}`);
+            throw new Error(errorMsg);
+          }
+
+          if (data?.error) {
+            throw new Error(data.error);
+          }
           
           showToast(`Successfully deleted ${name}`, 'success');
           fetchStaff();

@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/common/Button";
 import { supabase } from "@/lib/supabase";
 import { useAppConfig } from "@/context/AppConfigContext";
+import { parseEdgeFunctionError } from "@/lib/edgeFunctions";
 
 interface AddStaffModalProps {
   isOpen: boolean;
@@ -91,10 +92,7 @@ export function AddStaffModal({ isOpen, onClose, onSuccess }: AddStaffModalProps
       });
 
       if (functionError) {
-        let msg = functionError.message || "Failed to create staff member";
-        if (msg.includes("Failed to send a request") || msg.includes("FunctionsFetchError")) {
-          msg = "Edge Function 'admin-create-user' is not deployed to your Supabase project yet. Deploy it using: npx supabase functions deploy admin-create-user --project-ref jywydhtiorslayghcycf";
-        }
+        const msg = await parseEdgeFunctionError(functionError, "Failed to create staff member");
         throw new Error(msg);
       }
 

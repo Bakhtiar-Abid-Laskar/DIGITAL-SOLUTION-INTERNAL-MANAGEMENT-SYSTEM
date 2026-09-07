@@ -31,15 +31,13 @@ serve(async (req: Request) => {
 
     const token = authHeader.replace('Bearer ', '')
     
-    // Create a regular client to verify the user token
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || supabaseKey)
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseKey)
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
     
     if (userError || !user) {
-      throw new Error('Unauthorized')
+      throw new Error('Unauthorized: Invalid or expired admin token')
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseKey)
     const { data: adminUser, error: adminError } = await supabaseAdmin
       .from('users')
       .select('role, is_active')
@@ -47,7 +45,7 @@ serve(async (req: Request) => {
       .single()
 
     if (adminError || !adminUser || adminUser.role !== 'admin' || !adminUser.is_active) {
-      return new Response(JSON.stringify({ error: 'Forbidden: Admins only' }), {
+      return new Response(JSON.stringify({ error: 'Forbidden: Only active admins can perform user deletion' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       })
@@ -65,13 +63,16 @@ serve(async (req: Request) => {
       throw new Error('Cannot delete your own admin account')
     }
 
-    // 3. Delete from public.users (will set related FKs to NULL due to our migration)
+    // 3. Delete from public.users
     const { error: dbError } = await supabaseAdmin
       .from('users')
       .delete()
       .eq('id', userId)
 
     if (dbError) {
+      if (dbError.code === '23503' || dbError.message?.includes('foreign key constraint')) {
+        throw new Error('Cannot permanently delete this staff member because they have associated records (such as jobs, payments, attendance, or customer ledger logs). Please deactivate them instead to disable access while preserving financial records.')
+      }
       throw new Error('Failed to delete user record: ' + dbError.message)
     }
 
