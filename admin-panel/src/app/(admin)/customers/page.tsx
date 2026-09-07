@@ -23,11 +23,14 @@ import {
   UserCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Customer, CustomerAuditLog, Job, formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatCard } from '@/components/common/StatCard';
+import { Card } from '@/components/common/Card';
 import { SearchFilterBar } from '@/components/common/SearchFilterBar';
-import { DataTable, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '@/components/common/DataTable';
+import { Pagination } from '@/components/common/Pagination';
+import { DataTableSkeleton } from '@/components/common/Skeleton';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Textarea } from '@/components/common/Textarea';
@@ -37,6 +40,19 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { useToast } from '@/components/common/ToastProvider';
 import { formatDate } from '@/utils/formatDate';
+import dynamic from 'next/dynamic';
+
+const CustomerLedgerTab = dynamic(
+  () => import('@/components/customers/CustomerLedgerTab').then((mod) => mod.CustomerLedgerTab),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-64 w-full animate-pulse rounded-xl bg-admin-bg-subtle flex items-center justify-center text-sm text-admin-text-muted">
+        Loading customer financial ledger...
+      </div>
+    ),
+  }
+);
 
 interface CustomerDetailState {
   customer: Customer;
@@ -50,56 +66,103 @@ export default function CustomersPage() {
   const router = useRouter();
   const { showToast } = useToast();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
   const pageSize = 20;
-  
+
+  // Reset pagination to page 1 whenever search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery]);
+
+  // Global directory counts (for top stat cards)
+  const { data: globalStats = null, refetch: refetchGlobalStats } = useQuery<{ totalCustomers: number; totalJobs: number; totalSales: number } | null>({
+    queryKey: ['customer-global-stats'],
+    queryFn: async () => {
+      const [custRes, jobRes, saleRes] = await Promise.all([
+        supabase.from('customers').select('*', { count: 'exact', head: true }),
+        supabase.from('jobs').select('*', { count: 'exact', head: true }),
+        supabase.from('invoices').select('*', { count: 'exact', head: true }),
+      ]);
+      return {
+        totalCustomers: custRes.count ?? 0,
+        totalJobs: jobRes.count ?? 0,
+        totalSales: saleRes.count ?? 0,
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // TanStack Query for Paginated Customers Directory with Server-Side Search RPC
+  const {
+    data: queryResult = { customers: [] as Customer[], totalCount: 0 },
+    isLoading: loading,
+    error: queryError,
+    refetch: refetchCustomers,
+  } = useQuery<{ customers: Customer[]; totalCount: number }>({
+    queryKey: ['customers', debouncedSearchQuery.trim(), currentPage],
+    queryFn: async () => {
+      const q = debouncedSearchQuery.trim();
+      const offset = (currentPage - 1) * pageSize;
+
+      const [listRes, countRes] = await Promise.all([
+        supabase.rpc('search_customers_v2', {
+          p_query: q,
+          p_limit: pageSize,
+          p_offset: offset,
+        }),
+        supabase.rpc('count_customers_v2', {
+          p_query: q,
+        }),
+      ]);
+
+      if (listRes.error) throw listRes.error;
+      if (countRes.error) throw countRes.error;
+
+      return {
+        customers: (listRes.data || []) as Customer[],
+        totalCount: Number(countRes.data || 0),
+      };
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const customers = queryResult.customers;
+  const totalCount = queryResult.totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const error = queryError ? (queryError as Error).message || 'Failed to load customers directory.' : null;
+
+  // Real-time cache invalidation on customer table changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-customers-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+          queryClient.invalidateQueries({ queryKey: ['customer-global-stats'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   // Selected Customer Modal / Drawer
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDetailState | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Customer>>({});
   const [savingEdit, setSavingEdit] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'sales' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'jobs' | 'sales' | 'audit'>('overview');
 
-  const fetchCustomers = useCallback(async (pageIndex = 1) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const offset = (pageIndex - 1) * pageSize;
-
-      const { data, error: rpcError } = await supabase.rpc('search_customers_v2', {
-        p_query: debouncedSearchQuery.trim(),
-        p_limit: pageSize,
-        p_offset: offset,
-      });
-
-      if (rpcError) throw rpcError;
-      
-      const results = (data || []) as Customer[];
-      setCustomers(results);
-      setHasMore(results.length === pageSize);
-      setCurrentPage(pageIndex);
-    } catch (err: any) {
-      console.error('Error fetching customers:', err);
-      setError(err.message || 'Failed to load customers directory.');
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearchQuery]);
-
-  useEffect(() => {
-    fetchCustomers(1);
-  }, [fetchCustomers]);
-
-  const loadCustomerDetails = async (cust: Customer) => {
+  const loadCustomerDetails = useCallback(async (cust: Customer) => {
     setSelectedCustomer({
       customer: cust,
       jobs: [],
@@ -141,7 +204,7 @@ export default function CustomersPage() {
       console.error('Error loading customer history:', err);
       setSelectedCustomer((prev) => (prev ? { ...prev, loadingDetails: false } : null));
     }
-  };
+  }, []);
 
   const handleSaveProfile = async () => {
     if (!selectedCustomer || !editForm.name?.trim()) {
@@ -166,7 +229,8 @@ export default function CustomersPage() {
       const updatedCust = data as Customer;
       setSelectedCustomer((prev) => (prev ? { ...prev, customer: updatedCust } : null));
       setIsEditing(false);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-global-stats'] });
     } catch (err: any) {
       showToast(err.message || 'Failed to update customer profile.', 'error');
     } finally {
@@ -175,14 +239,29 @@ export default function CustomersPage() {
   };
 
   const summary = useMemo(() => {
-    const totalCusts = customers.length;
-    const totalJobs = customers.reduce((sum, c) => sum + Number(c.total_jobs || 0), 0);
-    const totalSales = customers.reduce((sum, c) => sum + Number(c.total_sales || 0), 0);
-    return { totalCusts, totalJobs, totalSales };
-  }, [customers]);
+    const isSearching = searchQuery.trim().length > 0;
+    if (isSearching) {
+      return {
+        totalCusts: totalCount,
+        totalCustsDetail: `Matching search results (${totalCount} total)`,
+        totalJobs: customers.reduce((sum, c) => sum + Number(c.total_jobs || 0), 0),
+        totalJobsDetail: 'Jobs for matching clients on page',
+        totalSales: customers.reduce((sum, c) => sum + Number(c.total_sales || 0), 0),
+        totalSalesDetail: 'Sales for matching clients on page',
+      };
+    }
+    return {
+      totalCusts: globalStats?.totalCustomers ?? totalCount,
+      totalCustsDetail: 'Registered clients in directory',
+      totalJobs: globalStats?.totalJobs ?? customers.reduce((sum, c) => sum + Number(c.total_jobs || 0), 0),
+      totalJobsDetail: 'Associated service jobs',
+      totalSales: globalStats?.totalSales ?? customers.reduce((sum, c) => sum + Number(c.total_sales || 0), 0),
+      totalSalesDetail: 'Completed product retail transactions',
+    };
+  }, [customers, totalCount, searchQuery, globalStats]);
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6">
       <PageHeader
         title="Customers Directory"
         description="Central registry of customer contact information, GST numbers, addresses, and service histories."
@@ -192,7 +271,11 @@ export default function CustomersPage() {
               variant="outline"
               size="sm"
               leftIcon={<RefreshCw size={14} />}
-              onClick={() => fetchCustomers(currentPage)}
+              onClick={() => {
+                refetchCustomers();
+                refetchGlobalStats();
+              }}
+              isLoading={loading}
             >
               Refresh
             </Button>
@@ -203,23 +286,23 @@ export default function CustomersPage() {
       {/* Top Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          title="Total Customers"
+          title={searchQuery.trim() ? "Matching Clients" : "Total Customers"}
           value={summary.totalCusts}
-          detail="Registered clients in directory"
+          detail={summary.totalCustsDetail}
           icon={<Users size={18} />}
           tone="info"
         />
         <StatCard
           title="Linked Repair Jobs"
           value={summary.totalJobs}
-          detail="Associated service jobs"
+          detail={summary.totalJobsDetail}
           icon={<Briefcase size={18} />}
           tone="warning"
         />
         <StatCard
           title="Linked Counter Sales"
           value={summary.totalSales}
-          detail="Completed product retail transactions"
+          detail={summary.totalSalesDetail}
           icon={<ShoppingBag size={18} />}
           tone="success"
         />
@@ -230,134 +313,70 @@ export default function CustomersPage() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search customers by name, phone, email, GSTIN, or address..."
+        showClearButton={Boolean(searchQuery)}
+        onClearFilters={() => setSearchQuery('')}
       />
 
-      {/* Main Customers DataTable */}
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-admin-bg-surface border border-admin-border skeleton-pulse" />
-          ))}
-        </div>
+      {/* Main Customers Table Card */}
+      {loading && customers.length === 0 ? (
+        <DataTableSkeleton rows={6} cols={7} hasFilterBar={false} />
       ) : error ? (
-        <ErrorState message={error} onRetry={fetchCustomers} />
+        <ErrorState message={error} onRetry={() => { refetchCustomers(); }} />
       ) : customers.length === 0 ? (
         <EmptyState
+          icon={<Users size={40} className="text-admin-text-muted" />}
           heading="No customers found"
           subtext={
             searchQuery
-              ? "No records matched your search query. Try searching with a different name or phone number."
+              ? `No customer matches "${searchQuery}". Try searching with a different name, phone number, email, or address.`
               : "New customers will automatically populate here whenever a Job or Sale is created."
+          }
+          action={
+            searchQuery ? (
+              <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            ) : undefined
           }
         />
       ) : (
-        <div className="flex flex-col h-full">
-          <DataTable>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Customer Name</TableHeaderCell>
-              <TableHeaderCell>Phone / Contact</TableHeaderCell>
-              <TableHeaderCell>Email Address</TableHeaderCell>
-              <TableHeaderCell>GSTIN</TableHeaderCell>
-              <TableHeaderCell>Address</TableHeaderCell>
-              <TableHeaderCell align="center">Activity</TableHeaderCell>
-              <TableHeaderCell align="right">Actions</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
-            {customers.map((cust) => (
-              <TableRow key={cust.id} className="hover:bg-admin-bg-hover transition-colors">
-                <TableCell className="font-semibold text-admin-text-primary">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-admin-accent/10 border border-admin-accent/20 text-admin-accent flex items-center justify-center font-bold text-xs shrink-0">
-                      {cust.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="truncate">{cust.name}</span>
-                  </div>
-                </TableCell>
-
-                <TableCell className="font-mono text-admin-text-secondary text-sm">
-                  {cust.phone || <span className="text-admin-text-muted text-xs">—</span>}
-                </TableCell>
-
-                <TableCell className="text-admin-text-secondary text-sm">
-                  {cust.email ? (
-                    <span className="truncate block max-w-[180px]">{cust.email}</span>
-                  ) : (
-                    <span className="text-admin-text-muted text-xs">—</span>
-                  )}
-                </TableCell>
-
-                <TableCell className="font-mono text-xs font-semibold text-admin-text-primary">
-                  {cust.gstin || <span className="text-admin-text-muted font-normal">—</span>}
-                </TableCell>
-
-                <TableCell className="text-admin-text-secondary text-xs max-w-xs truncate">
-                  {cust.address || <span className="text-admin-text-muted">—</span>}
-                </TableCell>
-
-                <TableCell align="center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    {Number(cust.total_jobs || 0) > 0 && (
-                      <Badge variant="accent" className="text-xs">
-                        {cust.total_jobs} Jobs
-                      </Badge>
-                    )}
-                    {Number(cust.total_sales || 0) > 0 && (
-                      <Badge variant="success" className="text-xs">
-                        {cust.total_sales} Sales
-                      </Badge>
-                    )}
-                    {Number(cust.total_jobs || 0) === 0 && Number(cust.total_sales || 0) === 0 && (
-                      <span className="text-xs text-admin-text-muted font-normal">New</span>
-                    )}
-                  </div>
-                </TableCell>
-
-                <TableCell align="right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => loadCustomerDetails(cust)}
-                      className="h-8 px-2.5 text-xs text-admin-accent hover:bg-admin-accent-dim"
-                      leftIcon={<Eye size={13} />}
-                    >
-                      View & History
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </DataTable>
-        
-        <div className="mt-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-t border-admin-border bg-admin-bg-base">
-            <div className="text-sm text-admin-text-secondary">
-              Page <span className="font-medium text-admin-text-primary">{currentPage}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchCustomers(currentPage - 1)}
-                disabled={currentPage <= 1 || loading}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchCustomers(currentPage + 1)}
-                disabled={!hasMore || loading}
-              >
-                Next
-              </Button>
-            </div>
+        <Card noAccentLine className="overflow-hidden border border-admin-border bg-admin-bg-surface rounded-lg shadow-xs">
+          <div className="overflow-x-auto table-scroll-shadow">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border sticky top-0 z-10 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th scope="col" className="px-6 py-3.5">Customer Name</th>
+                  <th scope="col" className="px-6 py-3.5">Phone / Contact</th>
+                  <th scope="col" className="px-6 py-3.5">Email Address</th>
+                  <th scope="col" className="px-6 py-3.5">GSTIN</th>
+                  <th scope="col" className="px-6 py-3.5">Address</th>
+                  <th scope="col" className="px-6 py-3.5 text-center">Activity</th>
+                  <th scope="col" className="px-6 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-admin-border bg-admin-bg-surface">
+                {customers.map((cust) => (
+                  <CustomerTableRow
+                    key={cust.id}
+                    cust={cust}
+                    onSelect={loadCustomerDetails}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-        </div>
+
+          <div className="p-4 border-t border-admin-border bg-admin-bg-surface">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalCount}
+              pageSize={pageSize}
+              onPageChange={(page) => setCurrentPage(page)}
+              disabled={loading}
+            />
+          </div>
+        </Card>
       )}
 
       {/* Customer Details & History Modal */}
@@ -365,18 +384,18 @@ export default function CustomersPage() {
         <Modal
           isOpen={!!selectedCustomer}
           onClose={() => setSelectedCustomer(null)}
-          size="xl"
+          size="4xl"
           title={
-            <div className="flex items-center justify-between w-full pr-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-admin-accent/10 border border-admin-accent/20 flex items-center justify-center text-admin-accent font-bold text-base">
+            <div className="flex items-center justify-between w-full pr-8">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-admin-accent/10 border border-admin-accent/20 flex items-center justify-center text-admin-accent font-bold text-base shrink-0">
                   {selectedCustomer.customer.name.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-admin-text-primary leading-tight">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold text-admin-text-primary leading-tight truncate">
                     {selectedCustomer.customer.name}
                   </h3>
-                  <p className="text-xs text-admin-text-muted">
+                  <p className="text-xs text-admin-text-muted truncate">
                     Customer ID: {selectedCustomer.customer.id.slice(0, 8)} · Created {formatDate(selectedCustomer.customer.created_at)}
                   </p>
                 </div>
@@ -388,6 +407,7 @@ export default function CustomersPage() {
                   size="sm"
                   leftIcon={<Edit3 size={14} />}
                   onClick={() => setIsEditing(true)}
+                  className="shrink-0 ml-3"
                 >
                   Edit Profile
                 </Button>
@@ -425,6 +445,16 @@ export default function CustomersPage() {
                 }`}
               >
                 Overview & Profile
+              </button>
+              <button
+                onClick={() => setActiveTab('ledger')}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'ledger'
+                    ? 'border-admin-accent text-admin-accent'
+                    : 'border-transparent text-admin-text-muted hover:text-admin-text-primary'
+                }`}
+              >
+                <span>Financial Ledger & Wallet</span>
               </button>
               <button
                 onClick={() => setActiveTab('jobs')}
@@ -578,6 +608,10 @@ export default function CustomersPage() {
             )}
 
             {/* TAB CONTENT: Linked Jobs */}
+            {activeTab === 'ledger' && (
+              <CustomerLedgerTab customer={selectedCustomer.customer} />
+            )}
+
             {activeTab === 'jobs' && (
               <div className="space-y-3">
                 {selectedCustomer.jobs.length === 0 ? (
@@ -693,3 +727,84 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+interface CustomerTableRowProps {
+  cust: Customer;
+  onSelect: (cust: Customer) => void;
+}
+
+const CustomerTableRow = React.memo(function CustomerTableRow({
+  cust,
+  onSelect,
+}: CustomerTableRowProps) {
+  return (
+    <tr
+      onClick={() => onSelect(cust)}
+      className="hover:bg-admin-bg-hover transition-colors cursor-pointer group"
+    >
+      <td className="px-6 py-4 font-semibold text-admin-text-primary">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-admin-accent/10 border border-admin-accent/20 text-admin-accent flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+            {cust.name.charAt(0).toUpperCase()}
+          </div>
+          <span className="truncate">{cust.name}</span>
+        </div>
+      </td>
+
+      <td className="px-6 py-4 font-mono text-admin-text-secondary text-sm">
+        {cust.phone || <span className="text-admin-text-muted text-xs">—</span>}
+      </td>
+
+      <td className="px-6 py-4 text-admin-text-secondary text-sm">
+        {cust.email ? (
+          <span className="truncate block max-w-[180px]">{cust.email}</span>
+        ) : (
+          <span className="text-admin-text-muted text-xs">—</span>
+        )}
+      </td>
+
+      <td className="px-6 py-4 font-mono text-xs font-semibold text-admin-text-primary">
+        {cust.gstin || <span className="text-admin-text-muted font-normal">—</span>}
+      </td>
+
+      <td className="px-6 py-4 text-admin-text-secondary text-xs max-w-xs truncate">
+        {cust.address || <span className="text-admin-text-muted">—</span>}
+      </td>
+
+      <td className="px-6 py-4 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          {Number(cust.total_jobs || 0) > 0 && (
+            <Badge variant="accent" className="text-xs">
+              {cust.total_jobs} {Number(cust.total_jobs) === 1 ? 'Job' : 'Jobs'}
+            </Badge>
+          )}
+          {Number(cust.total_sales || 0) > 0 && (
+            <Badge variant="success" className="text-xs">
+              {cust.total_sales} {Number(cust.total_sales) === 1 ? 'Sale' : 'Sales'}
+            </Badge>
+          )}
+          {Number(cust.total_jobs || 0) === 0 && Number(cust.total_sales || 0) === 0 && (
+            <span className="text-xs text-admin-text-muted font-normal">New</span>
+          )}
+        </div>
+      </td>
+
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(cust);
+            }}
+            className="h-8 px-2.5 text-xs text-admin-accent hover:bg-admin-accent-dim"
+            leftIcon={<Eye size={13} />}
+          >
+            View & History
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+});

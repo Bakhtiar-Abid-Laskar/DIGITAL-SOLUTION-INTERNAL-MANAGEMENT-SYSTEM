@@ -24,7 +24,7 @@ import { usePdfGenerator } from '../../context/PdfProgressContext';
 import { createWhatsAppUrl } from '@repairshop/shared';
 
 export default function JobAssignmentScreen() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
@@ -135,12 +135,16 @@ export default function JobAssignmentScreen() {
 
   const resetFlow = () => {
     setState({ createdJob: null });
-    navigation.navigate('New Job'); // Navigate back to step 1
+    navigation.replace('CustomerIntake');
   };
 
   const goHome = () => {
     setState({ createdJob: null });
-    navigation.navigate('ReceptionistTabs', { screen: 'Dashboard' });
+    if (role === 'admin') {
+      navigation.navigate('AdminTabs', { screen: 'Dashboard' });
+    } else {
+      navigation.navigate('ReceptionistTabs', { screen: 'Dashboard' });
+    }
   };
 
   const priorityColor = 

@@ -4,11 +4,32 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { InventoryWithProduct, useDebounceValue, formatCurrency } from '@repairshop/shared';
-import { Plus, Edit2, Trash2, AlertTriangle, Package, PlusCircle, History, Layers } from "lucide-react";
-import InventoryFormModal from "@/components/inventory/InventoryFormModal";
-import PurchaseIntakeModal from "@/components/inventory/PurchaseIntakeModal";
-import AddStockModal from "@/components/inventory/AddStockModal";
-import { PurchaseHistoryTab } from "@/components/inventory/PurchaseHistoryTab";
+import { Plus, Edit2, Trash2, AlertTriangle, Package, PlusCircle, History, Layers, Tag } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const InventoryFormModal = dynamic(
+  () => import("@/components/inventory/InventoryFormModal"),
+  { ssr: false }
+);
+const PurchaseIntakeModal = dynamic(
+  () => import("@/components/inventory/PurchaseIntakeModal"),
+  { ssr: false }
+);
+const AddStockModal = dynamic(
+  () => import("@/components/inventory/AddStockModal"),
+  { ssr: false }
+);
+const StockSerialBackfillModal = dynamic(
+  () => import("@/components/inventory/StockSerialBackfillModal"),
+  { ssr: false }
+);
+const PurchaseHistoryTab = dynamic(
+  () => import("@/components/inventory/PurchaseHistoryTab").then((mod) => mod.PurchaseHistoryTab),
+  {
+    ssr: false,
+    loading: () => <DataTableSkeleton rows={6} cols={7} hasFilterBar={false} />
+  }
+);
 import { PageHeader } from "@/components/common/PageHeader";
 import { Tabs, TabItem } from "@/components/common/Tabs";
 import { SearchFilterBar } from "@/components/common/SearchFilterBar";
@@ -37,6 +58,7 @@ export default function InventoryPage() {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [showSerialModal, setShowSerialModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryWithProduct | null>(null);
   
   const { showToast } = useToast();
@@ -259,6 +281,14 @@ export default function InventoryPage() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button 
+                                onClick={() => { setEditingItem(item); setShowSerialModal(true); }}
+                                className="p-1.5 text-admin-text-secondary hover:text-admin-brand hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Manage Tracked Serials"
+                                aria-label="Manage Tracked Serials"
+                              >
+                                <Tag size={15} />
+                              </button>
+                              <button 
                                 onClick={() => { setEditingItem(item); setShowAddStockModal(true); }}
                                 className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
                                 title="Quick Add Stock"
@@ -318,12 +348,29 @@ export default function InventoryPage() {
         />
       )}
 
-      {/* Edit Item Modal */}
+      {/* Inventory Item Edit Modal */}
       {showEditModal && editingItem && (
-        <InventoryFormModal 
-          item={editingItem}
+        <InventoryFormModal
           onClose={() => { setShowEditModal(false); setEditingItem(null); }}
-          onSuccess={() => { setShowEditModal(false); setEditingItem(null); fetchInventory(); showToast('Product details updated', 'success'); }}
+          item={editingItem}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingItem(null);
+            fetchInventory();
+            showToast('Product details updated', 'success');
+          }}
+        />
+      )}
+
+      {/* Progressive Stock Serial Backfill Modal */}
+      {showSerialModal && editingItem && (
+        <StockSerialBackfillModal
+          item={editingItem}
+          onClose={() => { setShowSerialModal(false); setEditingItem(null); }}
+          onSuccess={() => {
+            showToast("Serials registered successfully!", "success");
+            fetchInventory();
+          }}
         />
       )}
 

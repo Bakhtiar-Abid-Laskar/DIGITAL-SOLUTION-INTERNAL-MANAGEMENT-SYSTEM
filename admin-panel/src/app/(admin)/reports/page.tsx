@@ -5,8 +5,14 @@ import { supabase } from "@/lib/supabase";
 import { Search, History, DollarSign, Cloud, ExternalLink, Users, Download, Wrench, Package, TrendingUp, X } from "lucide-react";
 import dynamic from 'next/dynamic';
 
-const TechPerformanceChart = dynamic(() => import('@/components/dashboard/TechPerformanceChart'), { ssr: false });
-const RevenueChart = dynamic(() => import('@/components/dashboard/RevenueChart'), { ssr: false });
+const TechPerformanceChart = dynamic(() => import('@/components/dashboard/TechPerformanceChart'), {
+  ssr: false,
+  loading: () => <div className="h-[280px] w-full animate-pulse rounded-lg bg-slate-100" />
+});
+const RevenueChart = dynamic(() => import('@/components/dashboard/RevenueChart'), {
+  ssr: false,
+  loading: () => <div className="h-[280px] w-full animate-pulse rounded-lg bg-slate-100" />
+});
 import { formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { formatDate } from '@/utils/formatDate';
 import { useToast } from "@/components/common/ToastProvider";

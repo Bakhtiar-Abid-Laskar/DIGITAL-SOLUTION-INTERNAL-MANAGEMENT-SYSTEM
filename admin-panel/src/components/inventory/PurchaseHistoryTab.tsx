@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { PurchaseWithDetails, getImageThumbnailUrl, isGoogleDriveUrl, formatCurrency, useDebounceValue } from '@repairshop/shared';
 import { Search, Filter, Calendar, Building2, Package, Eye, ExternalLink, Image as ImageIcon, Plus, FileText, ArrowUpDown } from 'lucide-react';
@@ -11,7 +12,12 @@ import { Pagination } from '../common/Pagination';
 import { DataTableSkeleton } from '../common/Skeleton';
 import { EmptyState } from '../common/EmptyState';
 import { formatDate } from '@/utils/formatDate';
-import PurchaseDetailModal from './PurchaseDetailModal';
+import dynamic from 'next/dynamic';
+
+const PurchaseDetailModal = dynamic(
+  () => import('./PurchaseDetailModal'),
+  { ssr: false }
+);
 
 interface PurchaseHistoryTabProps {
   onOpenIntakeModal: () => void;
@@ -217,13 +223,13 @@ export function PurchaseHistoryTab({ onOpenIntakeModal }: PurchaseHistoryTabProp
                             className="inline-flex items-center gap-1.5 p-1 bg-admin-bg-elevated hover:bg-admin-bg-hover rounded-lg border border-admin-border transition-colors group"
                             title={isGDrive ? "Open in Google Drive" : "View Invoice Image"}
                           >
-                            <img
+                            <Image
                               src={thumb || item.invoice_image_url}
                               alt="Invoice Thumb"
+                              width={28}
+                              height={28}
                               className="w-7 h-7 object-cover rounded bg-black/10"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
+                              unoptimized
                             />
                             <ExternalLink size={12} className="text-admin-text-muted group-hover:text-admin-brand" />
                           </a>

@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
-import { formatCurrency } from '@repairshop/shared';
+import { formatCurrency, reverseCalcLineFromTotal } from '@repairshop/shared';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { Package, Wrench, Tag, Hash, Trash2, Plus } from 'lucide-react-native';
+
+import { SerialSelectionModalMobile } from '../inventory/SerialSelectionModalMobile';
 
 export interface ItemizedLineItem {
   id: string;
@@ -13,8 +15,12 @@ export interface ItemizedLineItem {
   tax_percent: number;     // Editable tax percentage (default 18)
   hsn_code?: string | null;
   serial_number?: string | null;
+  selected_serial_ids?: string[];
+  selected_serial_numbers?: string[];
   is_labour?: boolean;
   product_id?: string | null;
+  line_total_input?: string;
+  is_rate_auto_derived?: boolean;
 }
 
 interface ItemizedBillTableProps {
@@ -36,19 +42,79 @@ export default function ItemizedBillTable({
   onRemoveItem,
   onAddItem,
 }: ItemizedBillTableProps) {
+  const [activeSerialItem, setActiveSerialItem] = React.useState<ItemizedLineItem | null>(null);
   const handlePriceChange = (id: string, text: string) => {
     const parsed = parseFloat(text);
-    onUpdateItem?.(id, { unit_price: isNaN(parsed) || parsed < 0 ? 0 : parsed });
+    onUpdateItem?.(id, { 
+      unit_price: isNaN(parsed) || parsed < 0 ? 0 : parsed,
+      line_total_input: undefined,
+      is_rate_auto_derived: false,
+    });
   };
 
   const handleTaxChange = (id: string, text: string) => {
     const parsed = parseFloat(text);
-    onUpdateItem?.(id, { tax_percent: isNaN(parsed) || parsed < 0 ? 0 : parsed });
+    onUpdateItem?.(id, { 
+      tax_percent: isNaN(parsed) || parsed < 0 ? 0 : parsed,
+      line_total_input: undefined,
+      is_rate_auto_derived: false,
+    });
   };
 
   const handleQtyChange = (id: string, text: string) => {
     const parsed = parseFloat(text);
-    onUpdateItem?.(id, { quantity: isNaN(parsed) || parsed <= 0 ? 1 : parsed });
+    onUpdateItem?.(id, { 
+      quantity: isNaN(parsed) || parsed <= 0 ? 1 : parsed,
+      line_total_input: undefined,
+      is_rate_auto_derived: false,
+    });
+  };
+
+  const handleLineTotalChange = (id: string, text: string) => {
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+    const parsed = parseFloat(text);
+    if (text === '' || isNaN(parsed)) {
+      onUpdateItem?.(id, { line_total_input: text });
+      return;
+    }
+    const targetTotal = Math.max(0, parsed);
+    const res = reverseCalcLineFromTotal(
+      {
+        id,
+        qty: Number(item.quantity) || 1,
+        rate: Number(item.unit_price) || 0,
+        taxPct: item.tax_percent !== undefined ? Number(item.tax_percent) : 18,
+      },
+      targetTotal
+    );
+    onUpdateItem?.(id, {
+      unit_price: res.rate,
+      line_total_input: text,
+      is_rate_auto_derived: true,
+    });
+  };
+
+  const handleLineTotalBlur = (id: string) => {
+    const item = items.find(it => it.id === id);
+    if (!item || item.line_total_input === undefined) return;
+    const parsed = parseFloat(item.line_total_input);
+    if (!isNaN(parsed) && parsed >= 0) {
+      const res = reverseCalcLineFromTotal(
+        {
+          id,
+          qty: Number(item.quantity) || 1,
+          rate: Number(item.unit_price) || 0,
+          taxPct: item.tax_percent !== undefined ? Number(item.tax_percent) : 18,
+        },
+        parsed
+      );
+      onUpdateItem?.(id, {
+        unit_price: res.rate,
+        line_total_input: res.lineTotal.toFixed(2),
+        is_rate_auto_derived: true,
+      });
+    }
   };
 
   return (
@@ -121,11 +187,28 @@ export default function ItemizedBillTable({
               </View>
             </View>
 
-            {/* Serial Number (if attached to item) */}
-            {item.serial_number ? (
-              <View style={styles.itemSerialRow}>
-                <Text style={styles.itemSerialText}>S/N: {item.serial_number}</Text>
-              </View>
+            {/* Serial Number Selector (for parts/materials) */}
+            {!item.is_labour ? (
+              <AppPressable
+                style={styles.itemSerialRow}
+                onPress={() => editable && setActiveSerialItem(item)}
+                disabled={!editable}
+              >
+                <Tag 
+                  size={12} 
+                  color={item.selected_serial_numbers?.length ? colors.primary : colors.textMuted} 
+                  style={{ marginRight: 4 }} 
+                />
+                <Text 
+                  style={[
+                    styles.itemSerialText, 
+                    item.selected_serial_numbers?.length ? { color: colors.primary, fontWeight: '700' } : null
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.serial_number ? `S/N: ${item.serial_number}` : 'Assign Serial Number...'}
+                </Text>
+              </AppPressable>
             ) : null}
 
             {/* Editing Controls Row: Qty | Price (₹) | Tax (%) */}
@@ -149,7 +232,12 @@ export default function ItemizedBillTable({
 
               {/* Price (Editable) */}
               <View style={styles.controlGroupMedium}>
-                <Text style={styles.controlLabel}>Price (₹)</Text>
+                <View style={styles.priceHeader}>
+                  <Text style={styles.controlLabel}>Price (₹)</Text>
+                  {item.is_rate_auto_derived && (
+                    <Text style={styles.autoTag}>Auto</Text>
+                  )}
+                </View>
                 {editable ? (
                   <TextInput
                     style={styles.controlInput}
@@ -185,10 +273,22 @@ export default function ItemizedBillTable({
                 )}
               </View>
 
-              {/* Line Total */}
+              {/* Line Total (Editable) */}
               <View style={styles.lineTotalGroup}>
                 <Text style={styles.controlLabelRight}>Line Total</Text>
-                <Text style={styles.lineTotalValue}>{formatCurrency(lineTotal)}</Text>
+                {editable ? (
+                  <TextInput
+                    style={[styles.controlInput, styles.lineTotalInput]}
+                    keyboardType="numeric"
+                    value={item.line_total_input !== undefined ? item.line_total_input : (lineTotal ? lineTotal.toFixed(2) : '')}
+                    onChangeText={(val) => handleLineTotalChange(item.id, val)}
+                    onBlur={() => handleLineTotalBlur(item.id)}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                ) : (
+                  <Text style={styles.lineTotalValue}>{formatCurrency(lineTotal)}</Text>
+                )}
                 <Text style={styles.lineTaxSubtext}>
                   (Tax: {formatCurrency(lineTaxAmount)})
                 </Text>
@@ -197,6 +297,27 @@ export default function ItemizedBillTable({
           </View>
         );
       })}
+
+      {activeSerialItem && (
+        <SerialSelectionModalMobile
+          visible={!!activeSerialItem}
+          onClose={() => setActiveSerialItem(null)}
+          productId={activeSerialItem.product_id || null}
+          productName={activeSerialItem.item_name}
+          maxQuantity={Number(activeSerialItem.quantity) || 1}
+          selectedSerialIds={activeSerialItem.selected_serial_ids || []}
+          selectedSerialNumbers={activeSerialItem.selected_serial_numbers || []}
+          legacyFreeText={activeSerialItem.serial_number || ''}
+          onConfirm={(ids, numbers, freeText) => {
+            onUpdateItem?.(activeSerialItem.id, {
+              selected_serial_ids: ids,
+              selected_serial_numbers: numbers,
+              serial_number: numbers.length > 0 ? numbers.join(', ') : (freeText || null),
+            });
+            setActiveSerialItem(null);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -335,14 +456,35 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
   },
   controlGroupSmall: {
-    width: 54,
+    width: 50,
   },
   controlGroupMedium: {
-    flex: 1,
+    flex: 1.1,
+  },
+  priceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  autoTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
   lineTotalGroup: {
-    width: 90,
+    flex: 1.2,
     alignItems: 'flex-end',
+  },
+  lineTotalInput: {
+    textAlign: 'right',
+    color: colors.primary,
+    fontWeight: '800',
+    width: '100%',
   },
   controlLabel: {
     fontSize: 10,

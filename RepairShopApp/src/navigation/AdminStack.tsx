@@ -10,6 +10,7 @@ import AttendanceScreen from '../screens/shared/AttendanceScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 import CustomerIntakeScreen from '../screens/receptionist/CustomerIntakeScreen';
+import JobAssignmentScreen from '../screens/receptionist/JobAssignmentScreen';
 import NewSaleScreen from '../screens/receptionist/NewSaleScreen';
 import InventoryScreen from '../screens/shared/InventoryScreen';
 import CustomersScreen from '../screens/receptionist/CustomersScreen';
@@ -42,6 +43,7 @@ export default function AdminStack() {
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="CustomerIntake" component={CustomerIntakeScreen} />
+      <Stack.Screen name="JobAssignment" component={JobAssignmentScreen} />
       <Stack.Screen name="NewSaleScreen" component={NewSaleScreen} />
       <Stack.Screen name="Inventory" component={InventoryScreen} />
       <Stack.Screen name="Customers" component={CustomersScreen} />

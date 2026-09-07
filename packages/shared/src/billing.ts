@@ -160,3 +160,229 @@ export function calculateBillingTotals(params: BillingTotalsParams): BillingTota
   return { subtotal, taxAmount, discount, grandTotal };
 }
 
+export interface LineItem {
+  id: string;
+  qty: number;
+  rate: number;
+  taxPct: number;
+}
+
+export type BillingTaxRegime = 'intra' | 'inter' | 'intra_state' | 'inter_state' | 'legacy';
+
+export interface CalculatedLine {
+  subtotal: number;
+  taxAmount: number;
+  lineTotal: number;
+}
+
+export interface BillRecalcResult {
+  items: (LineItem & CalculatedLine)[];
+  billSubtotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  billTax: number;
+  grandTotal: number;
+}
+
+/**
+ * 1.1 Forward calculation
+ * Computes subtotal, taxAmount, and lineTotal from qty, rate, and taxPct.
+ */
+export function forwardCalcLine(item: LineItem): CalculatedLine {
+  const qty = Math.max(0, Number(item.qty) || 0);
+  const rate = Math.max(0, Number(item.rate) || 0);
+  const taxPct = Math.max(0, Number(item.taxPct) || 0);
+
+  const subtotal = roundMoney(qty * rate);
+  const taxAmount = roundMoney(subtotal * (taxPct / 100));
+  const lineTotal = roundMoney(subtotal + taxAmount);
+
+  return { subtotal, taxAmount, lineTotal };
+}
+
+/**
+ * 1.2 Reverse calculation — editing a single row's Line Total
+ * Given a target newLineTotal with qty and taxPct held fixed:
+ * Reverse-calculates pre-tax rate (rounded to 2 decimal places),
+ * subtotal, and taxAmount.
+ */
+export function reverseCalcLineFromTotal(
+  item: LineItem,
+  newLineTotal: number
+): LineItem & CalculatedLine {
+  const qty = Math.max(0.0001, Number(item.qty) || 1);
+  const taxPct = Math.max(0, Number(item.taxPct) || 0);
+  const targetTotal = Math.max(0, roundMoney(Number(newLineTotal) || 0));
+
+  // Reverse rate formula: rate = targetTotal / (qty * (1 + taxPct / 100))
+  // Round rate to 2 decimal places before computing dependent figures
+  const rawRate = targetTotal / (qty * (1 + taxPct / 100));
+  const rate = roundMoney(Math.max(0, rawRate));
+
+  const subtotal = roundMoney(rate * qty);
+  const taxAmount = roundMoney(Math.max(0, targetTotal - subtotal));
+  const lineTotal = roundMoney(subtotal + taxAmount);
+
+  return {
+    ...item,
+    qty: Number(item.qty) || 1,
+    rate,
+    taxPct,
+    subtotal,
+    taxAmount,
+    lineTotal,
+  };
+}
+
+/**
+ * Re-runs bill-level rollups from line items and tax regime.
+ */
+export function recalcBill(
+  items: LineItem[],
+  taxRegime: BillingTaxRegime = 'intra_state'
+): BillRecalcResult {
+  const computedItems = items.map((it) => {
+    const calc = forwardCalcLine(it);
+    return {
+      ...it,
+      ...calc,
+    };
+  });
+
+  const billSubtotal = roundMoney(
+    computedItems.reduce((acc, it) => acc + it.subtotal, 0)
+  );
+  const billTax = roundMoney(
+    computedItems.reduce((acc, it) => acc + it.taxAmount, 0)
+  );
+  const grandTotal = roundMoney(billSubtotal + billTax);
+
+  const isIntra = taxRegime === 'intra' || taxRegime === 'intra_state';
+  const cgst = isIntra ? roundMoney(billTax / 2) : 0;
+  const sgst = isIntra ? roundMoney(billTax - cgst) : 0;
+  const igst = isIntra ? 0 : billTax;
+
+  return {
+    items: computedItems,
+    billSubtotal,
+    cgst,
+    sgst,
+    igst,
+    billTax,
+    grandTotal,
+  };
+}
+
+/**
+ * 1.3 Reverse calculation — editing the overall Grand Total
+ * Uses proportional scaling across all line items, then applies §1.4 Silent Reconciliation
+ * on the last line item's tax amount so billSubtotal + billTax === newGrandTotal exactly.
+ */
+export function reverseCalcBillFromGrandTotal(
+  items: LineItem[],
+  newGrandTotal: number,
+  taxRegime: BillingTaxRegime = 'intra_state'
+): BillRecalcResult {
+  const targetGrandTotal = Math.max(0, roundMoney(Number(newGrandTotal) || 0));
+
+  if (!items || items.length === 0) {
+    return {
+      items: [],
+      billSubtotal: 0,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      billTax: 0,
+      grandTotal: 0,
+    };
+  }
+
+  // Single item case: exactly collapses to reverseCalcLineFromTotal
+  if (items.length === 1) {
+    const single = reverseCalcLineFromTotal(items[0], targetGrandTotal);
+    const billSubtotal = single.subtotal;
+    const billTax = single.taxAmount;
+    const grandTotal = single.lineTotal;
+
+    const isIntra = taxRegime === 'intra' || taxRegime === 'intra_state';
+    const cgst = isIntra ? roundMoney(billTax / 2) : 0;
+    const sgst = isIntra ? roundMoney(billTax - cgst) : 0;
+    const igst = isIntra ? 0 : billTax;
+
+    return {
+      items: [single],
+      billSubtotal,
+      cgst,
+      sgst,
+      igst,
+      billTax,
+      grandTotal,
+    };
+  }
+
+  // Multi-item case: proportional scaling
+  const currentBill = recalcBill(items, taxRegime);
+  const oldGrandTotal = currentBill.grandTotal;
+
+  let scaledItems: (LineItem & CalculatedLine)[];
+
+  if (oldGrandTotal <= 0) {
+    // Distribute equally across items if old total was 0
+    const equalShare = targetGrandTotal / items.length;
+    scaledItems = items.map((it) => reverseCalcLineFromTotal(it, equalShare));
+  } else {
+    const scaleFactor = targetGrandTotal / oldGrandTotal;
+    scaledItems = items.map((it) => {
+      const oldLineTotal = forwardCalcLine(it).lineTotal;
+      const newLineTotal = oldLineTotal * scaleFactor;
+      return reverseCalcLineFromTotal(it, newLineTotal);
+    });
+  }
+
+  // §1.4 Silent reconciliation:
+  // Re-sum post-rounding and adjust last line item's taxAmount by residual paise difference
+  const prelimSubtotal = roundMoney(
+    scaledItems.reduce((acc, it) => acc + it.subtotal, 0)
+  );
+  const prelimTax = roundMoney(
+    scaledItems.reduce((acc, it) => acc + it.taxAmount, 0)
+  );
+  const prelimGrandTotal = roundMoney(prelimSubtotal + prelimTax);
+  const diff = roundMoney(targetGrandTotal - prelimGrandTotal);
+
+  if (diff !== 0 && scaledItems.length > 0) {
+    const lastIdx = scaledItems.length - 1;
+    const last = scaledItems[lastIdx];
+    const adjustedTax = roundMoney(Math.max(0, last.taxAmount + diff));
+    scaledItems[lastIdx] = {
+      ...last,
+      taxAmount: adjustedTax,
+      lineTotal: roundMoney(last.subtotal + adjustedTax),
+    };
+  }
+
+  const billSubtotal = roundMoney(
+    scaledItems.reduce((acc, it) => acc + it.subtotal, 0)
+  );
+  const billTax = roundMoney(
+    scaledItems.reduce((acc, it) => acc + it.taxAmount, 0)
+  );
+  const grandTotal = roundMoney(billSubtotal + billTax);
+
+  const isIntra = taxRegime === 'intra' || taxRegime === 'intra_state';
+  const cgst = isIntra ? roundMoney(billTax / 2) : 0;
+  const sgst = isIntra ? roundMoney(billTax - cgst) : 0;
+  const igst = isIntra ? 0 : billTax;
+
+  return {
+    items: scaledItems,
+    billSubtotal,
+    cgst,
+    sgst,
+    igst,
+    billTax,
+    grandTotal,
+  };
+}
+

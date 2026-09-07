@@ -16,6 +16,8 @@ import {
   createWhatsAppUrl,
   formatCurrency,
   calculateBillingTotals,
+  reverseCalcBillFromGrandTotal,
+  LineItem,
 } from '@repairshop/shared';
 import { AppPressable } from '../../components/common/AppPressable';
 import { ArrowLeft, ArrowRight, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react-native';
@@ -35,6 +37,8 @@ type SaleItem = {
   unit_price: number;
   product_id: string | null;
   serial_number?: string;
+  selected_serial_ids?: string[];
+  selected_serial_numbers?: string[];
   hsn_code?: string | null;
   tax_percent?: number;
 };
@@ -111,6 +115,8 @@ export default function NewSaleScreen() {
       tax_percent: it.tax_percent !== undefined ? Number(it.tax_percent) : 18,
       hsn_code: it.hsn_code || null,
       serial_number: it.serial_number || null,
+      selected_serial_ids: it.selected_serial_ids || [],
+      selected_serial_numbers: it.selected_serial_numbers || [],
       product_id: it.product_id || null,
       is_labour: false,
     }));
@@ -177,10 +183,35 @@ export default function NewSaleScreen() {
           ...(updates.unit_price !== undefined ? { unit_price: updates.unit_price } : {}),
           ...(updates.tax_percent !== undefined ? { tax_percent: updates.tax_percent } : {}),
           ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+          ...(updates.serial_number !== undefined ? { serial_number: updates.serial_number || '' } : {}),
+          ...(updates.selected_serial_ids !== undefined ? { selected_serial_ids: updates.selected_serial_ids } : {}),
+          ...(updates.selected_serial_numbers !== undefined ? { selected_serial_numbers: updates.selected_serial_numbers } : {}),
         };
       }
       return it;
     }));
+  };
+
+  const handleUpdateGrandTotal = (newGrandTotal: number) => {
+    const lineItems: LineItem[] = itemizedLines.map(l => ({
+      id: l.id,
+      qty: Number(l.quantity) || 1,
+      rate: Number(l.unit_price) || 0,
+      taxPct: Number(l.tax_percent) || 18,
+    }));
+
+    const result = reverseCalcBillFromGrandTotal(lineItems, newGrandTotal, 'intra_state');
+
+    setItems(prev =>
+      prev.map(it => {
+        const scaled = result.items.find(si => si.id === it.clientId);
+        if (!scaled) return it;
+        return {
+          ...it,
+          unit_price: scaled.rate,
+        };
+      })
+    );
   };
 
   const selectInventoryItem = (index: number, suggestion: InventorySuggestion) => {
@@ -317,11 +348,15 @@ export default function NewSaleScreen() {
         : grandTotal;
       const derivedStatus = enteredAmountPaid >= grandTotal && grandTotal > 0 ? 'paid' : 'draft';
 
+      if (!customerId) throw new Error('Customer could not be resolved. Please check the name and contact.');
+
       const { data, error } = await supabase.rpc('create_invoice', {
         p_customer_name: form.customer_name.trim(),
+        p_customer_id: customerId,
         p_customer_contact: form.customer_contact.trim() || null,
         p_customer_email: form.customer_email.trim() || null,
         p_customer_gstin: form.customer_gstin.trim() || null,
+        p_customer_address: form.customer_address.trim() || null,
         p_tax_regime: 'intra_state',
         p_items: payloadItems,
         p_discount: 0,
@@ -333,14 +368,24 @@ export default function NewSaleScreen() {
       });
       if (error) throw error;
 
-      if (data?.invoice_id && customerId) {
-        await supabase
-          .from('invoices')
-          .update({
-            customer_id: customerId,
-            customer_address: form.customer_address.trim() || null,
-          })
-          .eq('id', data.invoice_id);
+      // Atomically claim selected serial numbers
+      const serialClaims = items
+        .map((it, idx) => ({
+          line_index: idx,
+          product_id: it.product_id || null,
+          serial_ids: it.selected_serial_ids || [],
+        }))
+        .filter((c) => c.serial_ids.length > 0);
+
+      if (serialClaims.length > 0 && data?.invoice_id) {
+        try {
+          await supabase.rpc('claim_invoice_serials', {
+            p_invoice_id: data.invoice_id,
+            p_claims: serialClaims,
+          });
+        } catch (claimErr: any) {
+          console.warn('Mobile sale serial claim warning:', claimErr);
+        }
       }
 
       setCreatedSale({
@@ -438,6 +483,8 @@ export default function NewSaleScreen() {
               subtotal={subtotal}
               totalTax={totalTax}
               grandTotal={grandTotal}
+              editable={true}
+              onUpdateGrandTotal={handleUpdateGrandTotal}
             />
 
             {/* Payment Recording Card */}

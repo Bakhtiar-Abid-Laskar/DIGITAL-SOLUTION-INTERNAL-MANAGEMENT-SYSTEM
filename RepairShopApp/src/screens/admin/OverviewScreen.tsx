@@ -154,6 +154,7 @@ export default function OverviewScreen() {
     { id: 'new_job', label: 'New Job', icon: PlusSquare, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('CustomerIntake') },
     { id: 'new_sale', label: 'New Sale', icon: Receipt, bgColor: QUICK_ACTION_COLORS.greenTile.bg, iconColor: QUICK_ACTION_COLORS.greenTile.fg, onPress: () => navigation.navigate('NewSaleScreen') },
     { id: 'pending_payments', label: 'Pending Payments', icon: CreditCard, bgColor: '#FFF4E5', iconColor: '#E65100', onPress: () => navigation.navigate('PendingPayments') },
+    { id: 'customers', label: 'Customers', icon: Users, bgColor: QUICK_ACTION_COLORS.purpleTile.bg, iconColor: QUICK_ACTION_COLORS.purpleTile.fg, onPress: () => navigation.navigate('Customers') },
     { id: 'allotted_materials', label: 'Allotted Materials', icon: Package, bgColor: QUICK_ACTION_COLORS.orangeTile.bg, iconColor: QUICK_ACTION_COLORS.orangeTile.fg, onPress: () => navigation.navigate('AllottedMaterialsScreen', { mode: 'all' }) },
     { id: 'attendance', label: 'Attendance', icon: UserCheck, bgColor: QUICK_ACTION_COLORS.tealTile.bg, iconColor: QUICK_ACTION_COLORS.tealTile.fg, onPress: () => navigation.navigate('StaffAttendanceOverview') },
     { id: 'salary', label: 'Payroll', icon: Banknote, bgColor: QUICK_ACTION_COLORS.blueTile.bg, iconColor: QUICK_ACTION_COLORS.blueTile.fg, onPress: () => navigation.navigate('Salary') },

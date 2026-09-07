@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { X, CalendarDays, Download, ChevronLeft, ChevronRight, User as UserIcon, MapPin, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/common/Button';
@@ -287,8 +288,14 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
                               className="w-8 h-8 rounded-md overflow-hidden border border-admin-border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
                               title="View Check-In Selfie"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={record.checkInUrl} alt="Check In" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <Image 
+                                src={record.checkInUrl} 
+                                alt="Check In" 
+                                width={32} 
+                                height={32} 
+                                className="w-full h-full object-cover" 
+                                unoptimized 
+                              />
                             </button>
                           )}
                           {record.checkOutUrl && (
@@ -297,8 +304,14 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
                               className="w-8 h-8 rounded-md overflow-hidden border border-admin-border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs"
                               title="View Check-Out Selfie"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={record.checkOutUrl} alt="Check Out" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <Image 
+                                src={record.checkOutUrl} 
+                                alt="Check Out" 
+                                width={32} 
+                                height={32} 
+                                className="w-full h-full object-cover" 
+                                unoptimized 
+                              />
                             </button>
                           )}
                         </div>
@@ -348,12 +361,13 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
               </button>
             </div>
             <div className="bg-black/90 flex items-center justify-center p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={previewImage.url.replace('sz=w400', 'sz=w1200')}
                 alt={previewImage.label}
-                className="max-w-full max-h-[70vh] object-contain rounded"
-                referrerPolicy="no-referrer"
+                width={700}
+                height={500}
+                className="max-w-full max-h-[70vh] object-contain rounded w-auto h-auto"
+                unoptimized
               />
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { Attendance, getSignedUrlCached, useDebounceValue } from '@repairshop/shared';
 import { CalendarDays, MapPin, Clock, Image as ImageIcon, Download, X } from "lucide-react";
@@ -14,7 +15,11 @@ import { useToast } from "@/components/common/ToastProvider";
 import { DataTableSkeleton } from "@/components/common/Skeleton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
-import { StaffAttendanceDrawer } from "@/components/attendance/StaffAttendanceDrawer";
+import dynamic from "next/dynamic";
+const StaffAttendanceDrawer = dynamic(
+  () => import("@/components/attendance/StaffAttendanceDrawer").then((mod) => mod.StaffAttendanceDrawer),
+  { ssr: false }
+);
 import { exportAttendanceToCSV } from "@/utils/csv";
 import { formatDate } from "@/utils/formatDate";
 
@@ -201,8 +206,14 @@ export default function AttendancePage() {
         className="relative w-10 h-10 rounded-md overflow-hidden border border-admin-border hover:opacity-80 transition-opacity cursor-pointer shadow-xs group"
         title={`View ${alt} selfie`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt={alt} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <Image 
+          src={url} 
+          alt={alt} 
+          width={40} 
+          height={40} 
+          className="w-full h-full object-cover" 
+          unoptimized
+        />
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
           <ImageIcon size={12} className="text-white" />
         </div>
@@ -421,13 +432,14 @@ export default function AttendancePage() {
                 <X size={18} />
               </button>
             </div>
-            <div className="bg-black flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            <div className="bg-black flex items-center justify-center p-2">
+              <Image
                 src={previewImage.url.replace('sz=w400', 'sz=w1200')}
                 alt={previewImage.label}
-                className="max-w-full max-h-[75vh] object-contain"
-                referrerPolicy="no-referrer"
+                width={800}
+                height={600}
+                className="max-w-full max-h-[75vh] object-contain w-auto h-auto"
+                unoptimized
               />
             </div>
           </div>
@@ -435,10 +447,12 @@ export default function AttendancePage() {
       )}
 
       {/* Staff Drawer */}
-      <StaffAttendanceDrawer 
-        staff={selectedStaff} 
-        onClose={() => setSelectedStaff(null)} 
-      />
+      {selectedStaff && (
+        <StaffAttendanceDrawer 
+          staff={selectedStaff} 
+          onClose={() => setSelectedStaff(null)} 
+        />
+      )}
     </div>
   );
 }

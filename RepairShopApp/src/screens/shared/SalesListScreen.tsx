@@ -1,15 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, Platform, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import AppHeader from '../../components/common/AppHeader';
 import { AppPressable } from '../../components/common/AppPressable';
 import EmptyState from '../../components/common/EmptyState';
+import { SkeletonList } from '../../components/common/SkeletonCard';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { formatDate, useDebounceValue } from '@repairshop/shared';
 import { Receipt, FileText, Search } from 'lucide-react-native';
-import { TextInput } from 'react-native';
 import StatusBadge from '../../components/jobs/StatusBadge';
 
 export type UnifiedSaleItem = {
@@ -22,19 +23,52 @@ export type UnifiedSaleItem = {
   status: string;
 };
 
+interface SaleListItemProps {
+  item: UnifiedSaleItem;
+  onPress: (id: string) => void;
+}
+
+const SaleListItem = React.memo(function SaleListItem({ item, onPress }: SaleListItemProps) {
+  return (
+    <AppPressable style={styles.card} onPress={() => onPress(item.id)}>
+      <View style={styles.cardHeader}>
+        <View style={styles.badgeRow}>
+          {item.source === 'Sale' ? (
+            <Receipt size={16} color={colors.primary} />
+          ) : (
+            <FileText size={16} color={colors.accentBlue} />
+          )}
+          <Text style={styles.codeText}>{item.code}</Text>
+        </View>
+        <Text style={styles.amountText}>₹{Number(item.amount).toFixed(2)}</Text>
+      </View>
+
+      <View style={styles.cardBody}>
+        <View>
+          <Text style={styles.customerText} numberOfLines={1}>{item.customer_name}</Text>
+          <Text style={styles.dateText}>{item.date ? formatDate(item.date) : 'Unknown Date'}</Text>
+        </View>
+        <StatusBadge status={item.status === 'paid' ? 'Completed' : (item.status === 'cancelled' ? 'Urgent' : 'Waiting')} />
+      </View>
+    </AppPressable>
+  );
+});
+
 export default function SalesListScreen() {
   const navigation = useNavigation<any>();
-  
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [items, setItems] = useState<UnifiedSaleItem[]>([]);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
 
-  const fetchSales = async () => {
-    try {
-      // Unified query: all invoices (counter sales have job_id=null, job invoices have job_id set).
-      // The old sales + billing_legacy path is replaced — new writes go via create_invoice RPC.
+  // TanStack Query with caching for Sales List
+  const {
+    data: items = [],
+    isLoading: loading,
+    isRefetching: refreshing,
+    refetch,
+  } = useQuery<UnifiedSaleItem[]>({
+    queryKey: ['mobile-sales', debouncedSearchQuery],
+    queryFn: async () => {
       let matchedSaleIds: string[] = [];
       if (debouncedSearchQuery) {
         const queryStr = `%${debouncedSearchQuery}%`;
@@ -63,62 +97,52 @@ export default function SalesListScreen() {
       }
 
       const { data: invoicesData, error } = await query;
-
       if (error) throw error;
 
-      const mapped: UnifiedSaleItem[] = (invoicesData || []).map((inv: any) => ({
-        id:            inv.id,
-        source:        inv.job_id ? 'Job' : 'Sale',
-        code:          inv.invoice_code || '—',
+      return (invoicesData || []).map((inv: any) => ({
+        id: inv.id,
+        source: inv.job_id ? 'Job' : 'Sale',
+        code: inv.invoice_code || '—',
         customer_name: inv.customer_name || 'Unknown',
-        date:          inv.created_at,
-        amount:        Number(inv.grand_total) || 0,
-        status:        inv.status,
+        date: inv.created_at,
+        amount: Number(inv.grand_total) || 0,
+        status: inv.status,
       }));
+    },
+    staleTime: 60 * 1000,
+  });
 
-      setItems(mapped);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
+  // Real-time invalidation on invoice changes
   useEffect(() => {
-    fetchSales();
-  }, [debouncedSearchQuery]);
+    const channel = supabase
+      .channel('mobile-sales-realtime-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['mobile-sales'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchSales();
-  }, []);
+    refetch();
+  }, [refetch]);
+
+  const handleOpenDetail = useCallback((id: string) => {
+    navigation.navigate('SaleDetail', { invoiceId: id });
+  }, [navigation]);
 
   const renderItem = useCallback(({ item }: { item: UnifiedSaleItem }) => {
-    return (
-      <AppPressable style={styles.card} onPress={() => navigation.navigate('SaleDetail', { invoiceId: item.id })}>
-        <View style={styles.cardHeader}>
-          <View style={styles.badgeRow}>
-            {item.source === 'Sale' ? (
-              <Receipt size={16} color={colors.primary} />
-            ) : (
-              <FileText size={16} color={colors.accentBlue} />
-            )}
-            <Text style={styles.codeText}>{item.code}</Text>
-          </View>
-          <Text style={styles.amountText}>₹{Number(item.amount).toFixed(2)}</Text>
-        </View>
+    return <SaleListItem item={item} onPress={handleOpenDetail} />;
+  }, [handleOpenDetail]);
 
-        <View style={styles.cardBody}>
-          <View>
-            <Text style={styles.customerText} numberOfLines={1}>{item.customer_name}</Text>
-            <Text style={styles.dateText}>{item.date ? formatDate(item.date) : 'Unknown Date'}</Text>
-          </View>
-          <StatusBadge status={item.status === 'paid' ? 'Completed' : (item.status === 'cancelled' ? 'Urgent' : 'Waiting')} />
-        </View>
-      </AppPressable>
-    );
-  }, []);
+  const getItemLayout = useCallback((_: any, index: number) => ({
+    length: 96,
+    offset: (96 + spacing.md) * index,
+    index,
+  }), []);
 
   return (
     <View style={styles.container}>
@@ -137,10 +161,8 @@ export default function SalesListScreen() {
         </View>
       </View>
       
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+      {loading && !refreshing ? (
+        <SkeletonList count={5} />
       ) : items.length === 0 ? (
         <EmptyState 
           icon={<Receipt size={48} color={colors.textMuted} />}
@@ -153,6 +175,11 @@ export default function SalesListScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          getItemLayout={getItemLayout}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}

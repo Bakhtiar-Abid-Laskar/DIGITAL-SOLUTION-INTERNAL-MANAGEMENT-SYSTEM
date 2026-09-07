@@ -28,6 +28,7 @@ export const viewport: Viewport = {
 };
 
 import { ToastProvider } from "@/components/common/ToastProvider";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 export default function RootLayout({
   children,
@@ -40,13 +41,15 @@ export default function RootLayout({
       className={`h-full antialiased ${inter.variable}`}
     >
       <body className="min-h-full flex flex-col font-sans bg-admin-bg-base text-admin-text-primary">
-        <ToastProvider>
-          <AuthProvider>
-            <AppConfigProvider>
-              {children}
-            </AppConfigProvider>
-          </AuthProvider>
-        </ToastProvider>
+        <QueryProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <AppConfigProvider>
+                {children}
+              </AppConfigProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </QueryProvider>
       </body>
     </html>
   );

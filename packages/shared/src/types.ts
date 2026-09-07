@@ -372,3 +372,115 @@ export interface LogPurchasePayload {
   location?: string | null;
   notes?: string | null;
 }
+
+/** Unit-level serial tracking */
+export type SerialStatus = 'available' | 'reserved' | 'sold' | 'returned' | 'damaged';
+
+export interface InventoryUnitSerial {
+  id: string;
+  serial_number: string;
+  serial_number_clean?: string;
+  product_id: string;
+  inventory_id: string;
+  purchase_id?: string | null;
+  purchase_item_id?: string | null;
+  unit_cost: number;
+  status: SerialStatus;
+  sold_invoice_id?: string | null;
+  sold_invoice_item_id?: string | null;
+  sold_at?: string | null;
+  sold_price?: number;
+  reserved_job_id?: string | null;
+  reserved_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AvailableSerial {
+  id: string;
+  serial_number: string;
+  unit_cost: number;
+  purchase_date?: string | null;
+  supplier_name?: string | null;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchase_id: string;
+  product_id: string;
+  inventory_id?: string | null;
+  quantity: number;
+  purchase_rate: number;
+  selling_rate: number;
+  tax_percent: number;
+  tax_mode: 'inclusive' | 'exclusive';
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  is_serial_tracked: boolean;
+  created_at: string;
+  // joined fields
+  product_name?: string;
+  sku?: string | null;
+  unit?: string;
+  serials?: Array<{
+    id: string;
+    serial_number: string;
+    status: SerialStatus;
+    sold_at?: string | null;
+  }>;
+}
+
+export interface MultiItemPurchaseLinePayload {
+  product_id?: string | null;
+  product_name: string;
+  sku?: string | null;
+  unit?: string;
+  hsn_sac?: string | null;
+  tax_percent: number;
+  tax_mode: 'inclusive' | 'exclusive';
+  quantity: number;
+  purchase_rate: number;
+  selling_rate: number;
+  is_serial_tracked: boolean;
+  serials: string[];
+}
+
+export interface MultiItemPurchasePayload {
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  supplier_phone?: string | null;
+  supplier_email?: string | null;
+  supplier_gstin?: string | null;
+  supplier_address?: string | null;
+  purchase_date: string;
+  supplier_invoice_id?: string | null;
+  invoice_image_url?: string | null;
+  notes?: string | null;
+  items: MultiItemPurchaseLinePayload[];
+}
+
+export interface PurchaseOrderDetails {
+  id: string;
+  purchase_code: string;
+  purchase_date: string;
+  supplier_invoice_number?: string | null;
+  invoice_image_url?: string | null;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  notes?: string | null;
+  status: string;
+  created_at: string;
+  logged_by_name?: string | null;
+  supplier: {
+    id?: string | null;
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    gstin?: string | null;
+    address?: string | null;
+  };
+  items: PurchaseItem[];
+}

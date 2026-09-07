@@ -92,7 +92,7 @@ export default function MaterialsPage() {
 
       if (allotError) throw allotError;
 
-      // 2. Fetch unconfirmed job_materials (legacy / in-use material line items)
+      // 2. Fetch unconfirmed job_materials (only active checkouts that have not yet been completed/used)
       const { data: jobMatsData, error: jobMatsError } = await supabase
         .from("job_materials")
         .select(`
@@ -110,11 +110,15 @@ export default function MaterialsPage() {
           total_cost,
           status,
           checkout_status,
+          usage_confirmed_at,
           created_at,
           returned_at,
           technicians:users!job_materials_technician_id_fkey ( id, name ),
-          jobs ( id, job_code, customer_name, technician:users!jobs_technician_id_fkey(name) )
+          jobs ( id, job_code, customer_name, status, technician:users!jobs_technician_id_fkey(name) )
         `)
+        .neq("checkout_status", "confirmed")
+        .neq("status", "used")
+        .is("usage_confirmed_at", null)
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -127,13 +131,22 @@ export default function MaterialsPage() {
         const qty = Number(row.quantity || 0);
         const techName = row.technician?.name || row.job?.technician?.name || row.allotted_by_user?.name || "Unassigned";
 
+        let rowStatus: 'allotted' | 'returned' | 'used' = 'allotted';
+        if (row.status === 'returned' || row.returned_at) {
+          rowStatus = 'returned';
+        } else if (row.status === 'used' || qty <= 0) {
+          rowStatus = 'used';
+        } else {
+          rowStatus = 'allotted';
+        }
+
         return {
           id: row.id,
           material_name: itemName,
           quantity: qty,
           unit_cost: unitCost,
           total_cost: qty * unitCost,
-          status: row.status as any,
+          status: rowStatus,
           allotted_at: row.allotted_at || new Date().toISOString(),
           returned_at: row.returned_at,
           technician_id: row.technician_id || row.job?.technician_id,
@@ -147,33 +160,46 @@ export default function MaterialsPage() {
         };
       });
 
-      // Format legacy / historical job_materials rows
-      const formattedJobMats: AllottedMaterialRow[] = (jobMatsData || []).map((row: any) => {
-        const qty = Number(row.quantity || 0);
-        const unitCost = Number(row.unit_cost || 0);
-        const techName = row.technicians?.name || row.jobs?.technician?.name || "Unassigned";
+      // Format unconfirmed job_materials rows (only pending items currently checked out on active jobs)
+      const formattedJobMats: AllottedMaterialRow[] = (jobMatsData || [])
+        .filter((row: any) => {
+          const jobStatus = row.jobs?.status;
+          // Discard items where parent job is already completed, delivered, or cancelled
+          if (jobStatus === 'Completed' || jobStatus === 'Delivered' || jobStatus === 'Cancelled') {
+            return false;
+          }
+          // Discard items already confirmed or marked used
+          if (row.status === 'used' || row.checkout_status === 'confirmed' || row.usage_confirmed_at != null) {
+            return false;
+          }
+          return Number(row.quantity || 0) > 0;
+        })
+        .map((row: any) => {
+          const qty = Number(row.quantity || 0);
+          const unitCost = Number(row.unit_cost || 0);
+          const techName = row.technicians?.name || row.jobs?.technician?.name || "Unassigned";
 
-        return {
-          id: row.id,
-          material_name: row.material_name,
-          quantity: qty,
-          unit_cost: unitCost,
-          total_cost: row.total_cost ? Number(row.total_cost) : qty * unitCost,
-          status: (row.status === 'returned' ? 'returned' : 'allotted') as any,
-          allotted_at: row.created_at || new Date().toISOString(),
-          returned_at: row.returned_at,
-          technician_id: row.technician_id,
-          technician_name: techName,
-          job_id: row.job_id,
-          job_code: row.jobs?.job_code || null,
-          customer_name: row.jobs?.customer_name || null,
-          inventory_id: row.inventory_id,
-          notes: null,
-          source: 'job_materials',
-        };
-      });
+          return {
+            id: row.id,
+            material_name: row.material_name,
+            quantity: qty,
+            unit_cost: unitCost,
+            total_cost: row.total_cost ? Number(row.total_cost) : qty * unitCost,
+            status: (row.status === 'returned' ? 'returned' : 'allotted') as any,
+            allotted_at: row.created_at || new Date().toISOString(),
+            returned_at: row.returned_at,
+            technician_id: row.technician_id,
+            technician_name: techName,
+            job_id: row.job_id,
+            job_code: row.jobs?.job_code || null,
+            customer_name: row.jobs?.customer_name || null,
+            inventory_id: row.inventory_id,
+            notes: row.jobs?.job_code ? `Checked out for ${row.jobs.job_code}` : null,
+            source: 'job_materials',
+          };
+        });
 
-      // Combine both dedicated holding allotments and active job materials without discarding either
+      // Combine both dedicated holding allotments and active unconfirmed job checkouts
       const combinedMaterials = [...formattedAllotments, ...formattedJobMats].sort(
         (a, b) => new Date(b.allotted_at).getTime() - new Date(a.allotted_at).getTime()
       );
@@ -401,7 +427,7 @@ export default function MaterialsPage() {
                 : 'border-transparent text-admin-text-muted hover:text-admin-text-primary'
             }`}
           >
-            Active Holdings ({allotments.filter(m => m.status === 'allotted').length})
+            Pending Holdings ({allotments.filter(m => m.status === 'allotted').length})
           </button>
           <button
             onClick={() => setActiveTab('returned')}
@@ -462,7 +488,7 @@ export default function MaterialsPage() {
           heading="No allocated materials found"
           subtext={
             activeTab === 'allotted'
-              ? "All technicians have zero outstanding parts holding."
+              ? "All technicians have zero outstanding parts holding. No pending items."
               : "No records matched your search or filters."
           }
         />
@@ -530,6 +556,8 @@ export default function MaterialsPage() {
                   <span className={`inline-block px-2.5 py-0.5 rounded-full font-mono font-bold text-xs border ${
                     row.status === 'allotted'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : row.status === 'used'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   }`}>
                     {row.quantity} unit(s)
@@ -549,6 +577,8 @@ export default function MaterialsPage() {
                     <div>
                       {row.status === 'returned' ? (
                         <Badge variant="success">Returned</Badge>
+                      ) : row.status === 'used' ? (
+                        <Badge variant="neutral">Used on Job</Badge>
                       ) : (
                         <Badge variant="warning">Holding</Badge>
                       )}
@@ -592,6 +622,12 @@ export default function MaterialsPage() {
                     {row.status === 'returned' && (
                       <span className="text-xs text-admin-text-muted italic flex items-center gap-1">
                         <CheckCircle2 size={13} className="text-emerald-500" /> Returned
+                      </span>
+                    )}
+
+                    {row.status === 'used' && (
+                      <span className="text-xs text-admin-text-muted italic flex items-center gap-1">
+                        <CheckCircle2 size={13} className="text-blue-500" /> Used on Job
                       </span>
                     )}
                   </div>

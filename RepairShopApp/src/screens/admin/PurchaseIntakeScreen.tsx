@@ -6,10 +6,10 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -629,7 +629,13 @@ export default function PurchaseIntakeScreen() {
 
                 {invoice_image_url ? (
                   <View style={styles.imagePreviewContainer}>
-                    <Image source={{ uri: invoice_image_url }} style={styles.imagePreview} resizeMode="cover" />
+                    <Image 
+                      source={{ uri: invoice_image_url }} 
+                      style={styles.imagePreview} 
+                      contentFit="cover" 
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
                     <View style={styles.imagePreviewOverlay}>
                       <Text style={styles.imageAttachedText}>Invoice Attached</Text>
                       <AppPressable style={styles.removeImageBtn} onPress={() => setState({ invoice_image_url: '' })}>

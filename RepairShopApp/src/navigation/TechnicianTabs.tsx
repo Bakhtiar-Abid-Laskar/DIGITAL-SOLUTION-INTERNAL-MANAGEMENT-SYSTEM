@@ -14,7 +14,10 @@ export default function TechnicianTabs() {
   return (
     <Tab.Navigator 
       tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ 
+        headerShown: false,
+        lazy: true,
+      }}
     >
       <Tab.Screen name="Dashboard" component={TechnicianDashboardScreen} />
       <Tab.Screen name="Jobs" component={TechnicianJobsStack} />

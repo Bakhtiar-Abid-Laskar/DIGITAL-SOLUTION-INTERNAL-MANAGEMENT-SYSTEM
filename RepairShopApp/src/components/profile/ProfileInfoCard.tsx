@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { AppPressable } from '../common/AppPressable';
 import { Pencil, Phone, Mail, Shield, Check, X } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../tokens';
@@ -46,7 +47,13 @@ export function ProfileInfoCard({
             {avatarLoading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : avatarSignedUrl ? (
-              <Image source={{ uri: avatarSignedUrl }} style={styles.avatarImage} resizeMode="cover" />
+              <Image 
+                source={{ uri: avatarSignedUrl }} 
+                style={styles.avatarImage} 
+                contentFit="cover" 
+                transition={200}
+                cachePolicy="memory-disk"
+              />
             ) : (
               <View style={styles.initialsAvatar}>
                 <Text style={styles.initialsText}>

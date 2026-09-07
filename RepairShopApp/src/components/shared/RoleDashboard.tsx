@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, StyleProp, ViewStyle, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StyleProp, ViewStyle, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { AppPressable } from '../common/AppPressable';
 import { LucideIcon, ChevronRight } from 'lucide-react-native';
@@ -178,7 +179,13 @@ export default function RoleDashboard({
             accessibilityLabel="View profile"
           >
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+              <Image 
+                source={{ uri: avatarUrl }} 
+                style={styles.avatarImage} 
+                contentFit="cover" 
+                transition={200}
+                cachePolicy="memory-disk"
+              />
             ) : (
               <View style={[styles.fallbackAvatar, { backgroundColor: bannerColor || colors.primary }]}>
                 {avatarElement ? (

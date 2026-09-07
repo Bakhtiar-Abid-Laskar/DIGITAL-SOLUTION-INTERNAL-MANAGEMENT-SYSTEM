@@ -11,7 +11,7 @@ import { CreditCard, CheckCircle2, AlertCircle } from 'lucide-react-native';
 interface PaymentRecordingBoxProps {
   invoiceId?: string;
   grandTotal: number;
-  amountPaid: number;
+  amountPaid: number;         // Current running total already paid (server-driven)
   paymentMethod?: string;
   status?: string;
   onPaymentRecorded?: (updatedInvoice: any) => void;
@@ -30,57 +30,53 @@ export default function PaymentRecordingBox({
   disabled = false,
 }: PaymentRecordingBoxProps) {
   const { showToast } = useToast();
-  const [amountInput, setAmountInput] = useState<string>(String(amountPaid ?? 0));
+  // Delta amount for THIS installment only (not cumulative)
+  const [amountInput, setAmountInput] = useState<string>('');
   const [method, setMethod] = useState<string>(paymentMethod || 'Cash');
+  const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setAmountInput(String(amountPaid ?? 0));
-  }, [amountPaid]);
 
   useEffect(() => {
     setMethod(paymentMethod || 'Cash');
   }, [paymentMethod]);
 
+  const balanceDue = Math.max(0, grandTotal - amountPaid);  // server-driven remaining balance
   const numAmount = parseFloat(amountInput) || 0;
-  const balanceDue = Math.max(0, grandTotal - numAmount);
-  const derivedStatus = derivePaymentStatus(numAmount, grandTotal);
+  const derivedStatus = derivePaymentStatus(amountPaid, grandTotal);
 
   const handleAmountChange = (val: string) => {
     setAmountInput(val);
     const parsed = parseFloat(val);
     if (val.trim() === '') {
-      setValidationError('Please enter a payment amount');
+      setValidationError(null);
       return;
     }
-    const validation = validatePaymentAmount(parsed, grandTotal);
-    if (!validation.isValid) {
-      setValidationError(validation.error || 'Invalid payment amount');
+    if (isNaN(parsed) || parsed <= 0) {
+      setValidationError('Enter a positive installment amount');
+    } else if (parsed > balanceDue) {
+      setValidationError(`Cannot exceed remaining balance (${formatCurrency(balanceDue)})`);
     } else {
       setValidationError(null);
     }
   };
 
   const handleSetFullAmount = () => {
-    setAmountInput(String(grandTotal));
+    setAmountInput(String(balanceDue));
     setValidationError(null);
   };
 
   const handleRecordPayment = async () => {
     const parsed = parseFloat(amountInput);
-    if (isNaN(parsed) || parsed < 0) {
-      setValidationError('Payment amount cannot be negative or empty');
+    if (isNaN(parsed) || parsed <= 0) {
+      setValidationError('Enter a positive installment amount');
       return;
     }
-
-    const validation = validatePaymentAmount(parsed, grandTotal);
-    if (!validation.isValid) {
-      setValidationError(validation.error || 'Amount exceeds grand total');
-      showToast({ title: 'Invalid Amount', message: validation.error || 'Amount exceeds grand total', type: 'error' });
+    if (parsed > balanceDue) {
+      setValidationError(`Cannot exceed remaining balance (${formatCurrency(balanceDue)})`);
+      showToast({ title: 'Invalid Amount', message: `Amount exceeds remaining balance of ${formatCurrency(balanceDue)}`, type: 'error' });
       return;
     }
-
     if (!invoiceId) {
       showToast({ title: 'Save Required', message: 'Please save the bill first before recording payment', type: 'error' });
       return;
@@ -88,13 +84,17 @@ export default function PaymentRecordingBox({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('record_payment', {
+      const { data, error } = await supabase.rpc('record_installment_payment', {
         p_invoice_id: invoiceId,
-        p_amount: parsed,
+        p_cash_amount: parsed,
         p_payment_method: method,
+        p_reference_number: referenceNumber.trim() || null,
       });
 
       if (error) throw new Error(error.message);
+
+      setAmountInput('');
+      setReferenceNumber('');
 
       showToast({
         title: 'Payment Recorded',
@@ -118,7 +118,7 @@ export default function PaymentRecordingBox({
   };
 
   const isFullPaid = derivedStatus === 'paid' && grandTotal > 0;
-  const isInvalid = Boolean(validationError) || numAmount > grandTotal || numAmount < 0;
+  const isInvalid = Boolean(validationError) || numAmount <= 0 || numAmount > balanceDue;
 
   const badgeStyles =
     derivedStatus === 'paid'
@@ -151,10 +151,10 @@ export default function PaymentRecordingBox({
       {/* Editable Amount Input with Header Shortcut */}
       <View style={styles.fieldGroup}>
         <View style={styles.fieldLabelRow}>
-          <Text style={styles.fieldLabel}>Amount Paid (₹)</Text>
-          {numAmount < grandTotal && (
+          <Text style={styles.fieldLabel}>Installment Amount (₹)</Text>
+          {balanceDue > 0 && (
             <AppPressable onPress={handleSetFullAmount} disabled={disabled || loading}>
-              <Text style={styles.payFullLink}>Pay Full ({formatCurrency(grandTotal)})</Text>
+              <Text style={styles.payFullLink}>Pay Full ({formatCurrency(balanceDue)})</Text>
             </AppPressable>
           )}
         </View>
@@ -195,6 +195,20 @@ export default function PaymentRecordingBox({
             );
           })}
         </View>
+      </View>
+
+      {/* Reference Number (UPI ID, Cheque No., etc.) */}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Reference No. (optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={referenceNumber}
+          onChangeText={setReferenceNumber}
+          editable={!disabled && !loading}
+          placeholder="UPI ref, cheque no., etc."
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+        />
       </View>
 
       {/* Balance Remaining Display */}

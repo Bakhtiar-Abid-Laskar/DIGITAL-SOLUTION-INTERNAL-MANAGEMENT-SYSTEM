@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
+import { useDebounceValue } from '@repairshop/shared';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
 
 const PAGE_SIZE = 20;
@@ -15,6 +16,7 @@ export default function AdminJobsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [jobs, setJobs] = useState<(Job & { technician_name?: string })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [activeTab, setActiveTab] = useState(route.params?.filter || 'All');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -32,28 +34,46 @@ export default function AdminJobsScreen() {
   // Prevent concurrent load-more calls
   const fetchingRef = useRef(false);
 
-  // ── Server-side count queries (same pattern as receptionist JobListScreen) ──
+  // ── Server-side count queries (consolidated RPC with fallback) ──
   const fetchTabCounts = async () => {
     try {
-      const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
-        supabase.from('jobs').select('id', { count: 'exact', head: true }),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
-      ]);
-
-      setCounts({
-        All: allRes.count ?? 0,
-        Received: recRes.count ?? 0,
-        'In Progress': progRes.count ?? 0,
-        'Waiting for Materials': waitRes.count ?? 0,
-        Completed: compRes.count ?? 0,
-        Urgent: urgRes.count ?? 0,
-      });
+      const { data, error } = await supabase.rpc('get_job_status_counts');
+      if (error) throw error;
+      if (data) {
+        const countsObj = (data as any).counts || {};
+        setCounts({
+          All: Number((data as any).total) || 0,
+          Received: Number(countsObj['Received']) || 0,
+          'In Progress': Number(countsObj['In Progress']) || 0,
+          'Waiting for Materials': Number(countsObj['Waiting for Materials']) || 0,
+          Completed: Number(countsObj['Completed']) || 0,
+          Urgent: Number((data as any).urgent) || 0,
+        });
+        return;
+      }
     } catch (err) {
-      console.error('Error fetching admin job tab counts:', err);
+      console.warn('RPC get_job_status_counts unavailable, using fallback:', err);
+      try {
+        const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
+          supabase.from('jobs').select('id', { count: 'exact', head: true }),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
+        ]);
+
+        setCounts({
+          All: allRes.count ?? 0,
+          Received: recRes.count ?? 0,
+          'In Progress': progRes.count ?? 0,
+          'Waiting for Materials': waitRes.count ?? 0,
+          Completed: compRes.count ?? 0,
+          Urgent: urgRes.count ?? 0,
+        });
+      } catch (fallbackErr) {
+        console.error('Error fetching admin job tab counts:', fallbackErr);
+      }
     }
   };
 
@@ -80,7 +100,7 @@ export default function AdminJobsScreen() {
       }
 
       // Server-side search filter
-      const trimmed = searchQuery.trim();
+      const trimmed = debouncedSearchQuery.trim();
       if (trimmed) {
         query = query.or(
           `job_code.ilike.%${trimmed}%,customer_name.ilike.%${trimmed}%,customer_contact.ilike.%${trimmed}%`
@@ -128,7 +148,7 @@ export default function AdminJobsScreen() {
       setLoading(true);
       fetchTabCounts();
       fetchJobs(0, true);
-    }, [route.params?.filter, activeTab, searchQuery])
+    }, [route.params?.filter, activeTab, debouncedSearchQuery])
   );
 
   // ── Pull-to-refresh ──

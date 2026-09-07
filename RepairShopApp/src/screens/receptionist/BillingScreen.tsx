@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking, Alert } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
@@ -10,6 +10,8 @@ import {
   createWhatsAppUrl,
   calculateBillingTotals,
   ItemizedBillLine,
+  reverseCalcBillFromGrandTotal,
+  LineItem,
 } from '@repairshop/shared';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import ErrorState from '../../components/common/ErrorState';
@@ -151,6 +153,30 @@ export default function BillingScreen() {
     );
   };
 
+  const handleUpdateGrandTotal = (newGrandTotal: number) => {
+    const lineItems: LineItem[] = itemizedLines.map(l => ({
+      id: l.id,
+      qty: Number(l.quantity) || 1,
+      rate: Number(l.unit_price) || 0,
+      taxPct: Number(l.tax_percent) || 18,
+    }));
+
+    const result = reverseCalcBillFromGrandTotal(lineItems, newGrandTotal, 'intra_state');
+
+    setItemizedLines(prev =>
+      prev.map(line => {
+        const scaled = result.items.find(si => si.id === line.id);
+        if (!scaled) return line;
+        return {
+          ...line,
+          unit_price: scaled.rate,
+          line_total_input: scaled.lineTotal.toFixed(2),
+          is_rate_auto_derived: true,
+        };
+      })
+    );
+  };
+
   // Calculations via shared billing functions
   const billingTotals = useMemo(() => calculateBillingTotals({ items: itemizedLines }), [itemizedLines]);
   const subtotal = billingTotals.subtotal;
@@ -158,6 +184,21 @@ export default function BillingScreen() {
   const grandTotal = billingTotals.grandTotal;
 
   const handleSaveBill = async () => {
+    if (invoice?.id && invoice?.status === 'paid') {
+      Alert.alert(
+        'Update Paid Invoice?',
+        `This will change the recorded rate/tax for this bill from ₹${Number(invoice.grand_total || 0).toFixed(2)} to ₹${grandTotal.toFixed(2)}. Continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => void executeSaveBill() },
+        ]
+      );
+      return;
+    }
+    await executeSaveBill();
+  };
+
+  const executeSaveBill = async () => {
     try {
       setSaving(true);
       const itemsToBill = itemizedLines.map(line => {
@@ -179,9 +220,27 @@ export default function BillingScreen() {
 
       let newInvoice = invoice;
       if (!invoice?.id) {
+        // Resolve or create customer record — required by the new create_invoice signature
+        let customerId: string | null = null;
+        if (job?.customer_name) {
+          const { data: custData } = await supabase.rpc('find_or_create_customer', {
+            p_customer_id: null,
+            p_name: job.customer_name,
+            p_phone: job.customer_contact || null,
+            p_email: job.customer_email || null,
+            p_gstin: job.customer_gstin || null,
+            p_address: null,
+            p_created_via: 'job',
+            p_user_id: null,
+          });
+          if (custData?.id) customerId = custData.id;
+        }
+        if (!customerId) throw new Error('Could not resolve customer. Ensure a customer record exists before saving billing.');
+
         // Create new invoice atomically via create_invoice RPC
         const { data, error } = await supabase.rpc('create_invoice', {
           p_customer_name: job?.customer_name || 'Walk-in',
+          p_customer_id: customerId,
           p_customer_contact: job?.customer_contact || null,
           p_customer_email: job?.customer_email || null,
           p_customer_gstin: job?.customer_gstin || null,
@@ -255,6 +314,26 @@ export default function BillingScreen() {
           .eq('job_id', jobId)
           .single();
         newInvoice = fetchInv;
+      }
+
+      // Claim serial numbers if any parts selected tracked units
+      const serialClaims = itemizedLines
+        .map((line, idx) => ({
+          line_index: idx,
+          product_id: line.product_id || null,
+          serial_ids: line.selected_serial_ids || [],
+        }))
+        .filter((c) => c.serial_ids.length > 0);
+
+      if (serialClaims.length > 0 && newInvoice?.id) {
+        try {
+          await supabase.rpc('claim_invoice_serials', {
+            p_invoice_id: newInvoice.id,
+            p_claims: serialClaims,
+          });
+        } catch (cErr: any) {
+          console.warn('Job billing serial claim warning:', cErr);
+        }
       }
 
       setInvoice(newInvoice);
@@ -448,6 +527,8 @@ export default function BillingScreen() {
               subtotal={subtotal}
               totalTax={totalTax}
               grandTotal={grandTotal}
+              editable={true}
+              onUpdateGrandTotal={handleUpdateGrandTotal}
             />
 
             {/* 3. Unified Payment Recording Section */}

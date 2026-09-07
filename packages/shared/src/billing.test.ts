@@ -7,7 +7,12 @@ import {
   calculateItemizedSubtotal,
   calculateItemizedTaxAmount,
   calculateItemizedGrandTotal,
-  calculateBillingTotals
+  calculateBillingTotals,
+  roundMoney,
+  forwardCalcLine,
+  reverseCalcLineFromTotal,
+  recalcBill,
+  reverseCalcBillFromGrandTotal,
 } from './billing';
 
 describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
@@ -238,6 +243,198 @@ describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
       expect(res.subtotal).toBe(99.99);
       expect(res.taxAmount).toBe(5.00);
       expect(res.grandTotal).toBe(104.94);
+    });
+  });
+
+  describe('Bidirectional Calculations (Line Total ↔ Rate ↔ Grand Total)', () => {
+    describe('forwardCalcLine', () => {
+      it('calculates subtotal, taxAmount, and lineTotal for standard line', () => {
+        // qty: 2, rate: 500, taxPct: 18 -> subtotal: 1000, tax: 180, lineTotal: 1180
+        const res = forwardCalcLine({ id: '1', qty: 2, rate: 500, taxPct: 18 });
+        expect(res.subtotal).toBe(1000);
+        expect(res.taxAmount).toBe(180);
+        expect(res.lineTotal).toBe(1180);
+      });
+
+      it('handles zero tax rate correctly', () => {
+        const res = forwardCalcLine({ id: '2', qty: 3, rate: 250, taxPct: 0 });
+        expect(res.subtotal).toBe(750);
+        expect(res.taxAmount).toBe(0);
+        expect(res.lineTotal).toBe(750);
+      });
+
+      it('handles fractional quantity correctly (e.g. 1.5 hrs labor)', () => {
+        const res = forwardCalcLine({ id: '3', qty: 1.5, rate: 400, taxPct: 18 });
+        expect(res.subtotal).toBe(600);
+        expect(res.taxAmount).toBe(108);
+        expect(res.lineTotal).toBe(708);
+      });
+    });
+
+    describe('reverseCalcLineFromTotal', () => {
+      it('reverses selling price and tax amount accurately from line total', () => {
+        // qty: 1, taxPct: 18%, target lineTotal: 118
+        // expected: rate = 118 / 1.18 = 100, subtotal: 100, tax: 18, lineTotal: 118
+        const res = reverseCalcLineFromTotal({ id: '1', qty: 1, rate: 0, taxPct: 18 }, 118);
+        expect(res.rate).toBe(100);
+        expect(res.subtotal).toBe(100);
+        expect(res.taxAmount).toBe(18);
+        expect(res.lineTotal).toBe(118);
+      });
+
+      it('rounds rate to 2 decimal places and ensures subtotal + taxAmount === lineTotal', () => {
+        // qty: 1, taxPct: 18%, target lineTotal: 150
+        // rate = 150 / 1.18 = 127.1186 -> rounded 127.12
+        // subtotal = 127.12, taxAmount = 150 - 127.12 = 22.88, lineTotal = 150
+        const res = reverseCalcLineFromTotal({ id: '1', qty: 1, rate: 0, taxPct: 18 }, 150);
+        expect(res.rate).toBe(127.12);
+        expect(res.subtotal).toBe(127.12);
+        expect(res.taxAmount).toBe(22.88);
+        expect(res.lineTotal).toBe(150);
+        expect(res.subtotal + res.taxAmount).toBe(150);
+      });
+
+      it('works for zero tax items (rate = lineTotal / qty)', () => {
+        const res = reverseCalcLineFromTotal({ id: '2', qty: 2, rate: 0, taxPct: 0 }, 500);
+        expect(res.rate).toBe(250);
+        expect(res.subtotal).toBe(500);
+        expect(res.taxAmount).toBe(0);
+        expect(res.lineTotal).toBe(500);
+      });
+
+      it('works for decimal quantities (e.g. 1.5 qty with 18% tax)', () => {
+        // lineTotal: 354, qty: 1.5, taxPct: 18
+        // rate = 354 / (1.5 * 1.18) = 354 / 1.77 = 200
+        const res = reverseCalcLineFromTotal({ id: '3', qty: 1.5, rate: 0, taxPct: 18 }, 354);
+        expect(res.rate).toBe(200);
+        expect(res.subtotal).toBe(300);
+        expect(res.taxAmount).toBe(54);
+        expect(res.lineTotal).toBe(354);
+      });
+
+      it('clamps negative or invalid target line totals to 0', () => {
+        const res = reverseCalcLineFromTotal({ id: '4', qty: 1, rate: 100, taxPct: 18 }, -50);
+        expect(res.rate).toBe(0);
+        expect(res.subtotal).toBe(0);
+        expect(res.taxAmount).toBe(0);
+        expect(res.lineTotal).toBe(0);
+      });
+    });
+
+    describe('recalcBill', () => {
+      const items = [
+        { id: '1', qty: 1, rate: 1000, taxPct: 18 }, // sub: 1000, tax: 180, total: 1180
+        { id: '2', qty: 2, rate: 200, taxPct: 12 },  // sub: 400, tax: 48, total: 448
+      ];
+
+      it('splits tax into CGST and SGST for intra_state regime', () => {
+        const bill = recalcBill(items, 'intra_state');
+        expect(bill.billSubtotal).toBe(1400);
+        expect(bill.billTax).toBe(228);
+        expect(bill.cgst).toBe(114);
+        expect(bill.sgst).toBe(114);
+        expect(bill.igst).toBe(0);
+        expect(bill.grandTotal).toBe(1628);
+      });
+
+      it('places all tax into IGST for inter_state regime', () => {
+        const bill = recalcBill(items, 'inter_state');
+        expect(bill.billSubtotal).toBe(1400);
+        expect(bill.billTax).toBe(228);
+        expect(bill.cgst).toBe(0);
+        expect(bill.sgst).toBe(0);
+        expect(bill.igst).toBe(228);
+        expect(bill.grandTotal).toBe(1628);
+      });
+
+      it('handles odd tax amounts cleanly without losing a paisa (e.g. ₹0.05 split)', () => {
+        const oddItem = [{ id: '1', qty: 1, rate: 0.28, taxPct: 18 }]; // sub: 0.28, tax: 0.05, total: 0.33
+        const bill = recalcBill(oddItem, 'intra_state');
+        expect(bill.billTax).toBe(0.05);
+        expect(bill.cgst + bill.sgst).toBe(0.05);
+      });
+    });
+
+    describe('reverseCalcBillFromGrandTotal', () => {
+      it('returns empty result when there are 0 line items', () => {
+        const res = reverseCalcBillFromGrandTotal([], 500);
+        expect(res.items.length).toBe(0);
+        expect(res.grandTotal).toBe(0);
+      });
+
+      it('produces identical result as reverseCalcLineFromTotal when there is 1 line item', () => {
+        const items = [{ id: '1', qty: 1, rate: 100, taxPct: 18 }];
+        const fromGrand = reverseCalcBillFromGrandTotal(items, 150);
+        const fromLine = reverseCalcLineFromTotal(items[0], 150);
+
+        expect(fromGrand.grandTotal).toBe(150);
+        expect(fromGrand.items[0].rate).toBe(fromLine.rate);
+        expect(fromGrand.items[0].subtotal).toBe(fromLine.subtotal);
+        expect(fromGrand.items[0].taxAmount).toBe(fromLine.taxAmount);
+        expect(fromGrand.items[0].lineTotal).toBe(fromLine.lineTotal);
+      });
+
+      it('proportionally scales multi-item bills and reconciles exact grandTotal with silent reconciliation', () => {
+        const items = [
+          { id: '1', qty: 1, rate: 500, taxPct: 18 }, // old lineTotal: 590
+          { id: '2', qty: 2, rate: 200, taxPct: 12 }, // old lineTotal: 448
+        ];
+        // old grandTotal = 1038
+        // new target grandTotal = 1500
+        const res = reverseCalcBillFromGrandTotal(items, 1500, 'intra_state');
+        expect(res.grandTotal).toBe(1500);
+        expect(res.billSubtotal + res.billTax).toBe(1500);
+        expect(res.cgst + res.sgst).toBe(res.billTax);
+
+        // Verify that rates scaled up proportionally
+        expect(res.items[0].rate).toBeGreaterThan(500);
+        expect(res.items[1].rate).toBeGreaterThan(200);
+
+        // Verify each line item has subtotal + taxAmount === lineTotal
+        res.items.forEach((it) => {
+          expect(roundMoney(it.subtotal + it.taxAmount)).toBe(it.lineTotal);
+        });
+      });
+
+      it('preserves each item individual tax percentage when scaling across multiple rates', () => {
+        const items = [
+          { id: '1', qty: 1, rate: 100, taxPct: 18 },
+          { id: '2', qty: 1, rate: 100, taxPct: 12 },
+          { id: '3', qty: 1, rate: 100, taxPct: 5 },
+          { id: '4', qty: 1, rate: 100, taxPct: 0 },
+        ];
+        const res = reverseCalcBillFromGrandTotal(items, 800, 'inter_state');
+        expect(res.grandTotal).toBe(800);
+        expect(res.igst).toBe(res.billTax);
+
+        expect(res.items[0].taxPct).toBe(18);
+        expect(res.items[1].taxPct).toBe(12);
+        expect(res.items[2].taxPct).toBe(5);
+        expect(res.items[3].taxPct).toBe(0);
+        expect(res.items[3].taxAmount).toBe(0); // 0 tax stays 0 tax
+      });
+
+      it('handles starting from an empty/zero bill when grand total is entered', () => {
+        const items = [
+          { id: '1', qty: 1, rate: 0, taxPct: 18 },
+          { id: '2', qty: 1, rate: 0, taxPct: 18 },
+        ];
+        const res = reverseCalcBillFromGrandTotal(items, 500, 'intra_state');
+        expect(res.grandTotal).toBe(500);
+        expect(res.items[0].lineTotal + res.items[1].lineTotal).toBe(500);
+      });
+
+      it('handles odd division with zero paise discrepancy through silent reconciliation', () => {
+        // ₹1000 across 3 items
+        const items = [
+          { id: '1', qty: 1, rate: 100, taxPct: 18 },
+          { id: '2', qty: 1, rate: 100, taxPct: 18 },
+          { id: '3', qty: 1, rate: 100, taxPct: 18 },
+        ];
+        const res = reverseCalcBillFromGrandTotal(items, 1000, 'intra_state');
+        expect(res.grandTotal).toBe(1000);
+        expect(res.billSubtotal + res.billTax).toBe(1000);
+      });
     });
   });
 });

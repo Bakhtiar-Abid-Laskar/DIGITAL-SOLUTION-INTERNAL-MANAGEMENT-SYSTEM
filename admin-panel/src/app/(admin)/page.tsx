@@ -36,7 +36,10 @@ import { PriorityBadge } from "@/components/common/PriorityBadge";
 import { TableSkeleton } from "@/components/common/LoadingState";
 import { cn } from "@/lib/utils";
 
-const RevenueChart = dynamic(() => import("@/components/dashboard/RevenueChart"), { ssr: false });
+const RevenueChart = dynamic(() => import("@/components/dashboard/RevenueChart"), {
+  ssr: false,
+  loading: () => <div className="h-[280px] w-full animate-pulse rounded-lg bg-slate-100" />
+});
 
 const ACTIVE_JOB_STATUSES = ["Received", "In Progress", "Waiting for Materials"] as const;
 const PIPELINE_STATUSES = ["Received", "In Progress", "Waiting for Materials", "Completed"] as const;
@@ -152,6 +155,7 @@ export default function OverviewPage() {
           job:jobs ( id, job_code )
         `)
         .eq("status", "allotted")
+        .gt("quantity", 0)
         .order("allotted_at", { ascending: false })
         .limit(8),
         
@@ -163,38 +167,54 @@ export default function OverviewPage() {
           quantity,
           status,
           checkout_status,
+          usage_confirmed_at,
           created_at,
           technician_id,
           job_id,
           technicians:users!job_materials_technician_id_fkey ( name ),
-          jobs ( job_code )
+          jobs ( job_code, status )
         `)
-        .or("status.eq.allotted,checkout_status.eq.checked_out")
+        .neq("checkout_status", "confirmed")
+        .neq("status", "used")
+        .is("usage_confirmed_at", null)
         .order("created_at", { ascending: false })
         .limit(8)
     ]);
 
-    const formattedAllotments: MaterialReturn[] = (allotments.data as any[] || []).map((row: any) => ({
-      id: row.id,
-      material_name: row.inventory?.item_name || row.product?.name || "Material",
-      quantity: numberValue(row.quantity),
-      technician_name: row.technician?.name || "Unassigned",
-      job_id: row.job?.id,
-      job_code: row.job?.job_code,
-      created_at: row.allotted_at || new Date().toISOString(),
-      source: "material_allotments",
-    }));
+    const formattedAllotments: MaterialReturn[] = (allotments.data as any[] || [])
+      .filter((row: any) => numberValue(row.quantity) > 0)
+      .map((row: any) => ({
+        id: row.id,
+        material_name: row.inventory?.item_name || row.product?.name || "Material",
+        quantity: numberValue(row.quantity),
+        technician_name: row.technician?.name || "Unassigned",
+        job_id: row.job?.id,
+        job_code: row.job?.job_code,
+        created_at: row.allotted_at || new Date().toISOString(),
+        source: "material_allotments",
+      }));
 
-    const formattedJobMats: MaterialReturn[] = (fallback.data as any[] || []).map((row: any) => ({
-      id: row.id,
-      material_name: row.material_name,
-      quantity: numberValue(row.quantity),
-      technician_name: row.technicians?.name || "Unassigned",
-      job_id: row.job_id,
-      job_code: row.jobs?.job_code,
-      created_at: row.created_at,
-      source: "job_materials",
-    }));
+    const formattedJobMats: MaterialReturn[] = (fallback.data as any[] || [])
+      .filter((row: any) => {
+        const jobStatus = row.jobs?.status;
+        if (jobStatus === "Completed" || jobStatus === "Delivered" || jobStatus === "Cancelled") {
+          return false;
+        }
+        if (row.status === "used" || row.checkout_status === "confirmed" || row.usage_confirmed_at != null) {
+          return false;
+        }
+        return numberValue(row.quantity) > 0;
+      })
+      .map((row: any) => ({
+        id: row.id,
+        material_name: row.material_name,
+        quantity: numberValue(row.quantity),
+        technician_name: row.technicians?.name || "Unassigned",
+        job_id: row.job_id,
+        job_code: row.jobs?.job_code,
+        created_at: row.created_at,
+        source: "job_materials",
+      }));
 
     // Combine both sources, newest first, max 8 items
     const combined = [...formattedAllotments, ...formattedJobMats]

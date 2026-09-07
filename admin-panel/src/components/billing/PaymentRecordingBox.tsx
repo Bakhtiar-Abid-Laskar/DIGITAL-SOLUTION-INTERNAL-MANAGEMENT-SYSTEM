@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
 import { formatCurrency, validatePaymentAmount, derivePaymentStatus } from "@repairshop/shared";
@@ -95,9 +95,9 @@ export function PaymentRecordingBox({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("record_payment", {
+      const { data, error } = await supabase.rpc("record_installment_payment", {
         p_invoice_id: invoiceId,
-        p_amount: paymentToRecord,
+        p_cash_amount: paymentToRecord,
         p_payment_method: method,
       });
 
@@ -160,7 +160,7 @@ export function PaymentRecordingBox({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-admin-text-secondary">
-            Amount Paid (₹)
+            Amount Paid (â‚¹)
           </label>
           {numAmount < grandTotal && (
             <button
@@ -225,7 +225,7 @@ export function PaymentRecordingBox({
                   : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
               }`}
             >
-              ₹{denomination}
+              â‚¹{denomination}
             </button>
           ))}
         </div>
@@ -292,3 +292,4 @@ export function PaymentRecordingBox({
     </div>
   );
 }
+

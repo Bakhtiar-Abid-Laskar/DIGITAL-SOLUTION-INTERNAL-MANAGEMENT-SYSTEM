@@ -27,7 +27,10 @@ export default function AdminTabs() {
     <>
       <Tab.Navigator 
         tabBar={props => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
+        screenOptions={{ 
+          headerShown: false,
+          lazy: true,
+        }}
       >
         <Tab.Screen name="Dashboard" component={OverviewScreen} />
         <Tab.Screen name="Jobs" component={AdminJobsScreen} />

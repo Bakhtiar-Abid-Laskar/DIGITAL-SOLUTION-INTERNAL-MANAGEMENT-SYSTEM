@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
+import { useDebounceValue } from '@repairshop/shared';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 
@@ -19,6 +20,7 @@ export default function JobListScreen() {
 
   const [jobs, setJobs] = useState<(Job & { technician_name?: string })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [activeTab, setActiveTab] = useState(route.params?.filter || 'All');
 
   // Status Tab Counts
@@ -33,25 +35,43 @@ export default function JobListScreen() {
 
   const fetchTabCounts = async () => {
     try {
-      const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
-        supabase.from('jobs').select('id', { count: 'exact', head: true }),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
-        supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
-      ]);
-
-      setCounts({
-        All: allRes.count || 0,
-        Received: recRes.count || 0,
-        'In Progress': progRes.count || 0,
-        'Waiting for Materials': waitRes.count || 0,
-        Completed: compRes.count || 0,
-        Urgent: urgRes.count || 0,
-      });
+      const { data, error } = await supabase.rpc('get_job_status_counts');
+      if (error) throw error;
+      if (data) {
+        const countsObj = (data as any).counts || {};
+        setCounts({
+          All: Number((data as any).total) || 0,
+          Received: Number(countsObj['Received']) || 0,
+          'In Progress': Number(countsObj['In Progress']) || 0,
+          'Waiting for Materials': Number(countsObj['Waiting for Materials']) || 0,
+          Completed: Number(countsObj['Completed']) || 0,
+          Urgent: Number((data as any).urgent) || 0,
+        });
+        return;
+      }
     } catch (err) {
-      console.error('Error fetching status tab counts:', err);
+      console.warn('RPC get_job_status_counts unavailable, using fallback:', err);
+      try {
+        const [allRes, recRes, progRes, waitRes, compRes, urgRes] = await Promise.all([
+          supabase.from('jobs').select('id', { count: 'exact', head: true }),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Waiting for Materials'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Completed'),
+          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('priority', 'Urgent').neq('status', 'Completed'),
+        ]);
+
+        setCounts({
+          All: allRes.count || 0,
+          Received: recRes.count || 0,
+          'In Progress': progRes.count || 0,
+          'Waiting for Materials': waitRes.count || 0,
+          Completed: compRes.count || 0,
+          Urgent: urgRes.count || 0,
+        });
+      } catch (fallbackErr) {
+        console.error('Error fetching status tab counts:', fallbackErr);
+      }
     }
   };
 
@@ -75,7 +95,7 @@ export default function JobListScreen() {
       }
 
       // Apply server-side search query
-      const trimmedQuery = searchQuery.trim();
+      const trimmedQuery = debouncedSearchQuery.trim();
       if (trimmedQuery) {
         query = query.or(
           `job_code.ilike.%${trimmedQuery}%,customer_name.ilike.%${trimmedQuery}%,customer_contact.ilike.%${trimmedQuery}%,reported_issue.ilike.%${trimmedQuery}%,remarks.ilike.%${trimmedQuery}%,work_notes.ilike.%${trimmedQuery}%`
@@ -130,7 +150,7 @@ export default function JobListScreen() {
       setPage(0);
       fetchJobs(0, true, cancelled);
       return () => { cancelled = true; };
-    }, [route.params?.filter, activeTab, searchQuery])
+    }, [route.params?.filter, activeTab, debouncedSearchQuery])
   );
 
   const onRefresh = () => {

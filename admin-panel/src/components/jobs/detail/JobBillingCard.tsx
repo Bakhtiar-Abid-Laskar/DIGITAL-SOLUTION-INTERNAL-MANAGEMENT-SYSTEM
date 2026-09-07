@@ -4,12 +4,13 @@ import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { Save, Printer, Wrench, Package, Hash, Tag, MessageCircle } from "lucide-react";
-import { formatCurrency, calculateBillingTotals } from '@repairshop/shared';
+import { formatCurrency, calculateBillingTotals, forwardCalcLine, reverseCalcLineFromTotal, recalcBill, reverseCalcBillFromGrandTotal, LineItem } from '@repairshop/shared';
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
 import { PaymentRecordingBox } from "@/components/billing/PaymentRecordingBox";
 import { openInvoicePrint } from "@/lib/invoiceClient";
 import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
+import { SerialSelectionDropdown } from "@/components/inventory/SerialSelectionDropdown";
 
 interface JobBillingCardProps {
   jobId: string;
@@ -40,6 +41,10 @@ interface AdminItemizedLine {
   serial_number?: string | null;
   product_id?: string | null;
   is_labour?: boolean;
+  line_total_input?: string;
+  is_rate_auto_derived?: boolean;
+  selected_serial_ids?: string[];
+  selected_serial_numbers?: string[];
 }
 
 export function JobBillingCard({
@@ -104,6 +109,69 @@ export function JobBillingCard({
     setLines(prev => prev.map(l => (l.id === id ? { ...l, ...updates } : l)));
   };
 
+  const [grandTotalInput, setGrandTotalInput] = useState<string | null>(null);
+
+  const handleGrandTotalChange = (newGrandTotal: number, isBlur = false) => {
+    const lineItems: LineItem[] = lines.map(l => ({
+      id: l.id,
+      qty: Number(l.quantity) || 1,
+      rate: Number(l.unit_price) || 0,
+      taxPct: Number(l.tax_percent) || 18,
+    }));
+
+    const result = reverseCalcBillFromGrandTotal(lineItems, newGrandTotal, 'intra_state');
+
+    setLines(prev =>
+      prev.map(l => {
+        const scaled = result.items.find(it => it.id === l.id);
+        if (!scaled) return l;
+        return {
+          ...l,
+          unit_price: scaled.rate,
+          line_total_input: isBlur ? scaled.lineTotal.toFixed(2) : (l.line_total_input || scaled.lineTotal.toFixed(2)),
+          is_rate_auto_derived: true,
+        };
+      })
+    );
+  };
+
+  const handleLineTotalChange = (id: string, valStr: string) => {
+    const targetLine = lines.find(l => l.id === id);
+    if (!targetLine) return;
+    const parsed = parseFloat(valStr);
+    if (valStr === "" || isNaN(parsed)) {
+      updateLine(id, { line_total_input: valStr });
+      return;
+    }
+    const targetTotal = Math.max(0, parsed);
+    const res = reverseCalcLineFromTotal(
+      { id, qty: Number(targetLine.quantity) || 1, rate: Number(targetLine.unit_price) || 0, taxPct: Number(targetLine.tax_percent) || 18 },
+      targetTotal
+    );
+    updateLine(id, {
+      line_total_input: valStr,
+      unit_price: res.rate,
+      is_rate_auto_derived: true,
+    });
+  };
+
+  const handleLineTotalBlur = (id: string) => {
+    const targetLine = lines.find(l => l.id === id);
+    if (!targetLine || targetLine.line_total_input === undefined) return;
+    const parsed = parseFloat(targetLine.line_total_input);
+    if (!isNaN(parsed) && parsed >= 0) {
+      const res = reverseCalcLineFromTotal(
+        { id, qty: Number(targetLine.quantity) || 1, rate: Number(targetLine.unit_price) || 0, taxPct: Number(targetLine.tax_percent) || 18 },
+        parsed
+      );
+      updateLine(id, {
+        unit_price: res.rate,
+        line_total_input: res.lineTotal.toFixed(2),
+        is_rate_auto_derived: true,
+      });
+    }
+  };
+
   const billingTotals = useMemo(() => calculateBillingTotals({ items: lines }), [lines]);
   const subtotal = billingTotals.subtotal;
   const totalTax = billingTotals.taxAmount;
@@ -124,9 +192,28 @@ export function JobBillingCard({
         serial_number: line.serial_number || null,
       }));
 
+      let createdInvoiceId: string | null = null;
       if (!billing?.id) {
+        // Resolve or create the customer record so create_invoice gets a valid customer_id
+        let customerId: string | null = job?.customer_id || null;
+        if (!customerId && job?.customer_name) {
+          const { data: custData } = await supabase.rpc('find_or_create_customer', {
+            p_customer_id: null,
+            p_name: job.customer_name,
+            p_phone: job.customer_contact || null,
+            p_email: job.customer_email || null,
+            p_gstin: job.customer_gstin || null,
+            p_address: null,
+            p_created_via: 'job',
+            p_user_id: null,
+          });
+          if (custData?.id) customerId = custData.id;
+        }
+        if (!customerId) throw new Error('Could not resolve customer. Please ensure a customer record exists before saving billing.');
+
         const { data, error } = await supabase.rpc('create_invoice', {
           p_customer_name: job?.customer_name || 'Walk-in',
+          p_customer_id: customerId,
           p_customer_contact: job?.customer_contact || null,
           p_customer_email: job?.customer_email || null,
           p_customer_gstin: job?.customer_gstin || null,
@@ -137,6 +224,7 @@ export function JobBillingCard({
           p_job_id: jobId,
         });
         if (error) throw new Error(error.message);
+        createdInvoiceId = data?.invoice_id || null;
       } else {
         const { error } = await supabase.from('invoices').update({
           customer_name: job?.customer_name || 'Walk-in',
@@ -184,8 +272,29 @@ export function JobBillingCard({
         await supabase.from('invoice_items').insert(newInvoiceItems);
       }
 
-      const { data } = await supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', jobId).single();
-      if (data) onUpdateBilling(data);
+      // Claim serial numbers if any parts selected tracked units
+      const serialClaims = lines
+        .map((l, idx) => ({
+          line_index: idx,
+          product_id: l.product_id || null,
+          serial_ids: l.selected_serial_ids || [],
+        }))
+        .filter((c) => c.serial_ids.length > 0);
+
+      const resolvedInvoiceId = billing?.id || createdInvoiceId;
+      if (serialClaims.length > 0 && resolvedInvoiceId) {
+        try {
+          await supabase.rpc('claim_invoice_serials', {
+            p_invoice_id: resolvedInvoiceId,
+            p_claims: serialClaims,
+          });
+        } catch (cErr: any) {
+          console.warn('Job billing serial claim warning:', cErr);
+        }
+      }
+
+      const { data: updatedInvoice } = await supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', jobId).single();
+      if (updatedInvoice) onUpdateBilling(updatedInvoice);
       showToast('Billing saved successfully', 'success');
     } catch (err: any) {
       showToast(err.message, "error");
@@ -198,7 +307,7 @@ export function JobBillingCard({
     setConfirmModal({
       isOpen: true,
       title: 'Confirm Billing Statement',
-      message: `Save itemized billing for job ${jobCode}? Grand Total: ₹${grandTotalPreview.toFixed(2)}.`,
+      message: `Save itemized billing for job ${jobCode}? Grand Total: â‚¹${grandTotalPreview.toFixed(2)}.`,
       isDestructive: false,
       onConfirm: async () => {
         setConfirmModal(null);
@@ -230,8 +339,8 @@ export function JobBillingCard({
         invoiceNo: billing?.invoice_code || jobCode || 'INV',
         invoiceDate: billing?.created_at || job?.created_at || new Date().toISOString(),
         customerName: job?.customer_name || 'Walk-in Customer',
-        customerAddress: job?.customer_address || '—',
-        customerPhone: job?.customer_contact || '—',
+        customerAddress: job?.customer_address || 'â€”',
+        customerPhone: job?.customer_contact || 'â€”',
         customerEmail: job?.customer_email || '',
         customerGstin: job?.customer_gstin || undefined,
         deviceSerialNumber: job?.serial_number || undefined,
@@ -364,7 +473,7 @@ export function JobBillingCard({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-admin-border/50">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-admin-border/50">
                       <div>
                         <label className="block text-[10px] font-medium text-admin-text-muted mb-1">
                           Qty
@@ -374,20 +483,25 @@ export function JobBillingCard({
                           min="1"
                           disabled={line.is_labour}
                           value={String(qty)}
-                          onChange={e => updateLine(line.id, { quantity: parseFloat(e.target.value) || 1 })}
+                          onChange={e => updateLine(line.id, { quantity: parseFloat(e.target.value) || 1, line_total_input: undefined, is_rate_auto_derived: false })}
                           className="h-7 text-xs text-center"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-admin-text-muted mb-1">
-                          Price (₹)
-                        </label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] font-medium text-admin-text-muted">
+                            Price (₹)
+                          </label>
+                          {line.is_rate_auto_derived && (
+                            <span className="text-[9px] text-admin-accent font-medium">Auto</span>
+                          )}
+                        </div>
                         <Input
                           type="number"
                           min="0"
                           step="0.01"
                           value={String(price)}
-                          onChange={e => updateLine(line.id, { unit_price: parseFloat(e.target.value) || 0 })}
+                          onChange={e => updateLine(line.id, { unit_price: parseFloat(e.target.value) || 0, line_total_input: undefined, is_rate_auto_derived: false })}
                           className="h-7 text-xs text-right"
                         />
                       </div>
@@ -400,11 +514,49 @@ export function JobBillingCard({
                           min="0"
                           max="100"
                           value={String(taxRate)}
-                          onChange={e => updateLine(line.id, { tax_percent: parseFloat(e.target.value) || 0 })}
+                          onChange={e => updateLine(line.id, { tax_percent: parseFloat(e.target.value) || 0, line_total_input: undefined, is_rate_auto_derived: false })}
                           className="h-7 text-xs text-right"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-admin-text-muted mb-1 text-right">
+                          Line Total (₹)
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.line_total_input !== undefined ? line.line_total_input : lineTotal.toFixed(2)}
+                          onChange={e => handleLineTotalChange(line.id, e.target.value)}
+                          onBlur={() => handleLineTotalBlur(line.id)}
+                          className="h-7 text-xs text-right font-bold"
+                        />
+                      </div>
                     </div>
+
+                    {/* Tracked Serial Dropdown for Hardware Parts */}
+                    {!line.is_labour && (
+                      <div className="pt-1.5 border-t border-admin-border/40">
+                        <label className="block text-[10px] font-semibold text-admin-text-muted mb-1 uppercase tracking-wider">
+                          Tracked Serial Number (Optional)
+                        </label>
+                        <SerialSelectionDropdown
+                          productId={line.product_id || null}
+                          productName={line.item_name}
+                          maxQuantity={qty}
+                          selectedSerialIds={line.selected_serial_ids || []}
+                          selectedSerialNumbers={line.selected_serial_numbers || []}
+                          legacyFreeText={line.serial_number || ''}
+                          onChange={(ids, numbers, freeText) => {
+                            updateLine(line.id, {
+                              selected_serial_ids: ids,
+                              selected_serial_numbers: numbers,
+                              serial_number: numbers.length > 0 ? numbers.join(', ') : (freeText || null),
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -421,9 +573,36 @@ export function JobBillingCard({
               <span className="text-admin-text-secondary">Total Tax</span>
               <span className="font-medium text-admin-text-primary">{formatCurrency(totalTax)}</span>
             </div>
-            <div className="pt-2.5 border-t border-admin-border flex justify-between items-center">
-              <span className="font-bold text-admin-text-primary text-base">TOTAL</span>
-              <span className="text-xl font-extrabold text-admin-accent">{formatCurrency(grandTotalPreview)}</span>
+            <div className="pt-2.5 border-t border-admin-border flex justify-between items-center gap-2">
+              <span className="font-bold text-admin-text-primary text-base shrink-0">TOTAL (₹)</span>
+              <div className="w-36">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  aria-label="Total"
+                  disabled={lines.length === 0}
+                  value={grandTotalInput !== null ? grandTotalInput : grandTotalPreview.toFixed(2)}
+                  onChange={e => {
+                    const valStr = e.target.value;
+                    setGrandTotalInput(valStr);
+                    const parsed = parseFloat(valStr);
+                    if (!isNaN(parsed) && parsed >= 0) {
+                      handleGrandTotalChange(parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (grandTotalInput !== null) {
+                      const parsed = parseFloat(grandTotalInput);
+                      if (!isNaN(parsed) && parsed >= 0) {
+                        handleGrandTotalChange(parsed, true);
+                      }
+                      setGrandTotalInput(null);
+                    }
+                  }}
+                  className="h-8 text-right text-base font-extrabold text-admin-accent py-0"
+                />
+              </div>
             </div>
           </div>
 
@@ -486,3 +665,4 @@ export function JobBillingCard({
     </>
   );
 }
+

@@ -5,10 +5,10 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Image,
   Linking,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { PurchaseWithDetails, getImageThumbnailUrl, getFullImageUrl, isGoogleDriveUrl, formatCurrency, formatDate } from '@repairshop/shared';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { AppPressable } from '../common/AppPressable';
@@ -171,7 +171,9 @@ export function PurchaseDetailModalMobile({
                   <Image
                     source={{ uri: thumbnailUrl || invoiceUrl }}
                     style={styles.invoiceImage}
-                    resizeMode="contain"
+                    contentFit="contain"
+                    transition={200}
+                    cachePolicy="memory-disk"
                   />
                 </View>
               </View>

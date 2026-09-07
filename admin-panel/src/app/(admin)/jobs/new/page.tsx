@@ -141,8 +141,13 @@ export default function CreateJobPage() {
 
     dispatch({ type: 'SET_LOADING', loading: true });
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Authentication required");
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user || (await supabase.auth.getUser()).data?.user;
+      if (!user) {
+        showToast("Your session has expired. Please log in again.", "error");
+        router.push('/login');
+        return;
+      }
 
       const { data: jobCode, error: rpcError } = await supabase.rpc('generate_job_code');
       if (rpcError || !jobCode) throw new Error(rpcError?.message || 'Failed to generate job code');

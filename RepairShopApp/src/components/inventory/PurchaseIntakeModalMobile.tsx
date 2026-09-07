@@ -7,9 +7,9 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Image,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Supplier, getImageThumbnailUrl, isGoogleDriveUrl } from '@repairshop/shared';
 import { supabase } from '../../lib/supabase';
@@ -534,7 +534,9 @@ export function PurchaseIntakeModalMobile({
                       <Image
                         source={{ uri: previewThumbnail }}
                         style={styles.previewImage}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        transition={200}
+                        cachePolicy="memory-disk"
                       />
                       <View style={styles.previewInfo}>
                         <Text style={styles.previewTitle} numberOfLines={1}>

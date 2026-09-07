@@ -10,10 +10,11 @@ import { Select } from "@/components/common/Select";
 import { Button } from "@/components/common/Button";
 import { Textarea } from "@/components/common/Textarea";
 import { useToast } from "@/components/common/ToastProvider";
-import { formatCurrency, Customer } from "@repairshop/shared";
+import { formatCurrency, Customer, forwardCalcLine, reverseCalcLineFromTotal, recalcBill, reverseCalcBillFromGrandTotal, roundMoney, LineItem } from "@repairshop/shared";
 import { openInvoicePrint } from '@/lib/invoiceClient';
 import { CustomerTypeahead } from "@/components/customers/CustomerTypeahead";
 import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
+import { SerialSelectionDropdown } from "@/components/inventory/SerialSelectionDropdown";
 import { 
   ArrowLeft, CheckCircle2, Plus, PlusCircle, Printer, Trash2, 
   User as UserIcon, ShoppingBag, CreditCard, Package, Search, Tag, Hash, X 
@@ -69,10 +70,14 @@ interface InvoiceLineForm {
   quantity: number;
   rate_input: string; // string for input typing
   amount_input: string; // string for input typing
+  line_total_input?: string; // string for line total input typing
   serial_number: string;
+  selected_serial_ids?: string[];
+  selected_serial_numbers?: string[];
   hsn_code: string;
   tax_percent: number; // defaults to 18
   tax_mode: 'exclusive' | 'inclusive';
+  is_rate_auto_derived?: boolean;
 }
 
 const emptyItem: InvoiceLineForm = {
@@ -82,10 +87,14 @@ const emptyItem: InvoiceLineForm = {
   quantity: 1,
   rate_input: "",
   amount_input: "",
+  line_total_input: undefined,
   serial_number: "",
+  selected_serial_ids: [],
+  selected_serial_numbers: [],
   hsn_code: "",
   tax_percent: 18,
-  tax_mode: "exclusive"
+  tax_mode: "exclusive",
+  is_rate_auto_derived: false,
 };
 
 export default function CreateSalePage() {
@@ -118,6 +127,58 @@ export default function CreateSalePage() {
   // Live Preview Data
   const [preview, setPreview] = useState<PreviewInvoiceResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [grandTotalInput, setGrandTotalInput] = useState<string | null>(null);
+
+  const handleGrandTotalChange = (newGrandTotal: number, isBlur = false) => {
+    const lineItems: LineItem[] = items.map((it, idx) => ({
+      id: String(idx),
+      qty: Number(it.quantity) || 1,
+      rate: Number(it.rate_input) || 0,
+      taxPct: Number(it.tax_percent) || 18,
+    }));
+
+    const result = reverseCalcBillFromGrandTotal(lineItems, newGrandTotal, form.tax_regime);
+
+    setItems(prev =>
+      prev.map((item, idx) => {
+        const scaled = result.items[idx];
+        if (!scaled) return item;
+        return {
+          ...item,
+          rate_input: String(scaled.rate),
+          amount_input: String(scaled.subtotal),
+          line_total_input: isBlur ? scaled.lineTotal.toFixed(2) : (item.line_total_input || scaled.lineTotal.toFixed(2)),
+          is_rate_auto_derived: true,
+        };
+      })
+    );
+
+    setPreview({
+      subtotal: result.billSubtotal,
+      total_cgst: result.cgst,
+      total_sgst: result.sgst,
+      total_igst: result.igst,
+      total_tax: result.billTax,
+      discount: 0,
+      round_off: 0,
+      grand_total: result.grandTotal,
+      items: result.items.map((it, idx) => ({
+        item_name: items[idx]?.item_name || 'Item',
+        quantity: it.qty,
+        selling_rate: it.rate,
+        taxable_amount: it.subtotal,
+        hsn_code: items[idx]?.hsn_code || undefined,
+        tax_percent: it.taxPct,
+        cgst_rate: form.tax_regime === 'intra_state' ? it.taxPct / 2 : 0,
+        cgst_amount: form.tax_regime === 'intra_state' ? roundMoney(it.taxAmount / 2) : 0,
+        sgst_rate: form.tax_regime === 'intra_state' ? it.taxPct / 2 : 0,
+        sgst_amount: form.tax_regime === 'intra_state' ? roundMoney(it.taxAmount / 2) : 0,
+        igst_rate: form.tax_regime === 'inter_state' ? it.taxPct : 0,
+        igst_amount: form.tax_regime === 'inter_state' ? it.taxAmount : 0,
+        line_total: it.lineTotal,
+      })),
+    });
+  };
 
   // Inventory Catalog State
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -302,7 +363,7 @@ export default function CreateSalePage() {
 
   const handleProductSelect = (index: number, inv: any) => {
     if (!inv) {
-      updateItem(index, { inventory_id: "", product_id: null, item_name: "", rate_input: "", amount_input: "", serial_number: "", hsn_code: "" });
+      updateItem(index, { inventory_id: "", product_id: null, item_name: "", rate_input: "", amount_input: "", line_total_input: undefined, is_rate_auto_derived: false, serial_number: "", hsn_code: "" });
       return;
     }
     const productName = getProductName(inv);
@@ -319,6 +380,8 @@ export default function CreateSalePage() {
       tax_percent: defaultTax,
       rate_input: rate ? String(rate) : "",
       amount_input: rate ? String(rate * qty) : "",
+      line_total_input: undefined,
+      is_rate_auto_derived: false,
       serial_number: "",
       tax_mode: prod?.tax_mode || 'exclusive'
     });
@@ -349,8 +412,8 @@ export default function CreateSalePage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         const { data: custData, error: custErr } = await supabase.rpc('find_or_create_customer', {
-          p_customer_id: customerId,
-          p_name: form.customer_name.trim(),
+          p_customer_id: customerId || null,
+          p_name: form.customer_name.trim() || 'Walk-in Customer',
           p_phone: form.customer_contact.trim() || null,
           p_email: form.customer_email.trim() || null,
           p_gstin: form.customer_gstin.trim() || null,
@@ -358,18 +421,24 @@ export default function CreateSalePage() {
           p_created_via: 'sale',
           p_user_id: user?.id,
         });
-        if (!custErr && custData) {
+        if (!custErr && custData?.id) {
           customerId = custData.id;
         }
       } catch (e) {
         console.warn('Customer upsert warning:', e);
       }
 
+      if (!customerId) {
+        throw new Error('Customer could not be resolved. Please enter valid customer details.');
+      }
+
       const { data, error } = await supabase.rpc('create_invoice', {
         p_customer_name: form.customer_name,
+        p_customer_id: customerId,
         p_customer_contact: form.customer_contact || null,
         p_customer_email: form.customer_email || null,
         p_customer_gstin: form.customer_gstin || null,
+        p_customer_address: form.customer_address || null,
         p_tax_regime: form.tax_regime,
         p_items: payloadItems,
         p_discount: 0,
@@ -382,14 +451,25 @@ export default function CreateSalePage() {
 
       if (error) throw new Error(error.message);
 
-      if (data?.invoice_id && customerId) {
-        await supabase
-          .from('invoices')
-          .update({
-            customer_id: customerId,
-            customer_address: form.customer_address || null,
-          })
-          .eq('id', data.invoice_id);
+      // Atomically claim selected serial numbers
+      const serialClaims = items
+        .map((it, idx) => ({
+          line_index: idx,
+          product_id: it.product_id || null,
+          serial_ids: it.selected_serial_ids || [],
+        }))
+        .filter((c) => c.serial_ids.length > 0);
+
+      if (serialClaims.length > 0 && data?.invoice_id) {
+        const { error: claimErr } = await supabase.rpc('claim_invoice_serials', {
+          p_invoice_id: data.invoice_id,
+          p_claims: serialClaims,
+        });
+
+        if (claimErr) {
+          console.error('Serial claim warning:', claimErr);
+          showToast(`Invoice created, but serial claim notice: ${claimErr.message}`, 'error');
+        }
       }
 
       setCreatedInvoiceCode(data.invoice_code);
@@ -541,13 +621,13 @@ export default function CreateSalePage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-admin-bg-subtle text-admin-text-secondary border-b border-admin-border">
                   <tr>
-                    <th className="px-4 py-3 font-medium w-2/5">Item / Service</th>
-                    <th className="px-3 py-3 font-medium w-28">HSN/SAC</th>
+                    <th className="px-4 py-3 font-medium min-w-[200px]">Item / Service</th>
+                    <th className="px-3 py-3 font-medium w-24">HSN/SAC</th>
                     <th className="px-3 py-3 font-medium w-32">Serial No.</th>
-                    <th className="px-3 py-3 font-medium w-20 text-center">Qty</th>
-                    <th className="px-3 py-3 font-medium w-28 text-right">Price (₹)</th>
-                    <th className="px-3 py-3 font-medium w-24 text-right">Tax (%)</th>
-                    <th className="px-3 py-3 font-medium w-28 text-right">Line Total</th>
+                    <th className="px-3 py-3 font-medium w-16 text-center">Qty</th>
+                    <th className="px-3 py-3 font-medium w-36 text-right">Price (₹)</th>
+                    <th className="px-3 py-3 font-medium w-20 text-right">Tax (%)</th>
+                    <th className="px-3 py-3 font-medium w-40 text-right">Line Total</th>
                     <th className="px-3 py-3 font-medium w-10 text-center"></th>
                   </tr>
                 </thead>
@@ -601,7 +681,7 @@ export default function CreateSalePage() {
                                     }
                                   }}
                                   error={!!errors[`item_${index}`]}
-                                  className="w-full pr-8 text-sm"
+                                  className="w-full pr-8 text-sm h-10"
                                 />
                                 <Search size={14} className="absolute right-2.5 top-3 text-admin-text-muted pointer-events-none" />
                               </div>
@@ -712,19 +792,26 @@ export default function CreateSalePage() {
                             placeholder="HSN"
                             value={item.hsn_code || ""}
                             onChange={(e) => updateItem(index, { hsn_code: e.target.value })}
-                            className="text-xs"
+                            className="text-xs h-10 px-2.5"
                           />
                         </td>
 
                         {/* Serial Number */}
-                        <td className="px-3 py-3 align-top">
-                          <Input
-                            aria-label="Serial Number" 
-                            type="text"
-                            placeholder="S/N (Optional)"
-                            value={item.serial_number}
-                            onChange={(e) => updateItem(index, { serial_number: e.target.value })}
-                            className="text-xs"
+                        <td className="px-3 py-3 align-top min-w-[140px] max-w-[200px]">
+                          <SerialSelectionDropdown
+                            productId={item.product_id}
+                            productName={item.item_name}
+                            maxQuantity={item.quantity}
+                            selectedSerialIds={item.selected_serial_ids || []}
+                            selectedSerialNumbers={item.selected_serial_numbers || []}
+                            legacyFreeText={item.serial_number}
+                            onChange={(ids, numbers, freeText) => {
+                              updateItem(index, {
+                                selected_serial_ids: ids,
+                                selected_serial_numbers: numbers,
+                                serial_number: numbers.length > 0 ? numbers.join(', ') : (freeText || ''),
+                              });
+                            }}
                           />
                         </td>
 
@@ -738,13 +825,16 @@ export default function CreateSalePage() {
                             onChange={(e) => {
                               const qty = Number(e.target.value);
                               const rate = Number(item.rate_input);
+                              const calc = forwardCalcLine({ id: String(index), qty, rate, taxPct: Number(item.tax_percent) || 18 });
                               updateItem(index, { 
                                 quantity: qty, 
-                                amount_input: rate && qty ? String(rate * qty) : item.amount_input 
+                                amount_input: rate && qty ? String(calc.subtotal) : item.amount_input,
+                                line_total_input: undefined,
+                                is_rate_auto_derived: false,
                               });
                             }}
                             error={!!errors[`qty_${index}`]}
-                            className="text-xs text-center"
+                            className="text-xs text-center h-10 px-1 font-semibold"
                           />
                         </td>
 
@@ -760,14 +850,27 @@ export default function CreateSalePage() {
                             onChange={(e) => {
                               const rate = Number(e.target.value);
                               const qty = item.quantity;
+                              const calc = forwardCalcLine({ id: String(index), qty, rate, taxPct: Number(item.tax_percent) || 18 });
                               updateItem(index, { 
                                 rate_input: e.target.value, 
-                                amount_input: rate && qty ? String(rate * qty) : "" 
+                                amount_input: rate && qty ? String(calc.subtotal) : "",
+                                line_total_input: undefined,
+                                is_rate_auto_derived: false,
                               });
                             }}
                             error={!!errors[`rate_${index}`]}
-                            className="text-xs text-right"
+                            className="text-xs text-right h-10 px-2.5 font-medium"
                           />
+                          <div className="flex justify-end mt-1 min-h-[18px]">
+                            {item.is_rate_auto_derived ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200/70 dark:border-indigo-800 shadow-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                Auto-calc
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-admin-text-muted">Rate / unit</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Tax % */}
@@ -779,27 +882,79 @@ export default function CreateSalePage() {
                             max="100"
                             placeholder="18"
                             value={String(item.tax_percent ?? 18)}
-                            onChange={(e) => updateItem(index, { tax_percent: parseFloat(e.target.value) || 0 })}
-                            className="text-xs text-right"
+                            onChange={(e) => {
+                              const tax = parseFloat(e.target.value) || 0;
+                              updateItem(index, { 
+                                tax_percent: tax,
+                                line_total_input: undefined,
+                                is_rate_auto_derived: false,
+                              });
+                            }}
+                            className="text-xs text-right h-10 px-2"
                           />
                         </td>
 
-                        {/* Line Total */}
+                        {/* Line Total (Editable) */}
                         <td className="px-3 py-3 align-top text-right">
-                          <div className="text-sm font-bold text-admin-text-primary">
-                            {formatCurrency(lineTotal)}
-                          </div>
-                          <div className="text-[10px] text-admin-text-muted">
-                            Tax: {formatCurrency(lineTax)}
+                          <Input
+                            aria-label="Line Total"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.line_total_input !== undefined ? item.line_total_input : (lineTotal ? lineTotal.toFixed(2) : "")}
+                            onChange={(e) => {
+                              const valStr = e.target.value;
+                              const parsed = parseFloat(valStr);
+                              if (valStr === "" || isNaN(parsed)) {
+                                updateItem(index, { line_total_input: valStr });
+                                return;
+                              }
+                              const targetTotal = Math.max(0, parsed);
+                              const res = reverseCalcLineFromTotal(
+                                { id: String(index), qty: item.quantity || 1, rate: Number(item.rate_input) || 0, taxPct: Number(item.tax_percent) || 18 },
+                                targetTotal
+                              );
+                              updateItem(index, {
+                                line_total_input: valStr,
+                                rate_input: String(res.rate),
+                                amount_input: String(res.subtotal),
+                                is_rate_auto_derived: true,
+                              });
+                            }}
+                            onBlur={() => {
+                              if (item.line_total_input !== undefined) {
+                                const parsed = parseFloat(item.line_total_input);
+                                if (!isNaN(parsed) && parsed >= 0) {
+                                  const res = reverseCalcLineFromTotal(
+                                    { id: String(index), qty: item.quantity || 1, rate: Number(item.rate_input) || 0, taxPct: Number(item.tax_percent) || 18 },
+                                    parsed
+                                  );
+                                  updateItem(index, {
+                                    line_total_input: res.lineTotal.toFixed(2),
+                                    rate_input: String(res.rate),
+                                    amount_input: String(res.subtotal),
+                                    is_rate_auto_derived: true,
+                                  });
+                                }
+                              }
+                            }}
+                            className="text-xs text-right font-bold h-10 px-2.5"
+                          />
+                          <div className="flex justify-end mt-1 min-h-[18px]">
+                            <span className="text-[10px] text-admin-text-muted font-medium">
+                              Tax: {formatCurrency(lineTax)}
+                            </span>
                           </div>
                         </td>
 
                         {/* Trash */}
-                        <td className="px-3 py-3 align-top text-center pt-4">
+                        <td className="px-3 py-3 align-top text-center pt-3.5">
                           <button 
                             type="button" 
                             onClick={() => setItems(curr => curr.length > 1 ? curr.filter((_, i) => i !== index) : curr)}
-                            className="text-admin-text-muted hover:text-admin-danger transition-colors p-1"
+                            className="text-admin-text-muted hover:text-admin-danger transition-colors p-1.5 rounded-lg hover:bg-admin-danger-dim/30"
+                            title="Remove item"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -839,23 +994,27 @@ export default function CreateSalePage() {
                   <label className="block text-sm font-medium text-admin-text-secondary mb-1">Payment Method</label>
                   <Select value={form.payment_method} onChange={(e) => setForm({...form, payment_method: e.target.value as any})}>
                     <option value="Cash">Cash</option>
+                    <option value="UPI">UPI / QR</option>
                     <option value="Card">Card</option>
-                    <option value="UPI">UPI</option>
                     <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Other">Other</option>
                   </Select>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-admin-text-secondary mb-1">Internal Notes (Optional)</label>
-                  <Textarea value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} rows={3} />
+                  <Textarea 
+                    rows={3} 
+                    placeholder="Add warranty terms, item serials, or special payment notes..." 
+                    value={form.notes} 
+                    onChange={(e) => setForm({...form, notes: e.target.value})}
+                  />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <div className="lg:col-span-1">
-            <Card className="sticky top-6">
-              <CardHeader className="pb-4 border-b border-admin-border bg-admin-bg-subtle">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3 border-b border-admin-border">
                 <CardTitle>Bill Totals</CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-3">
@@ -897,34 +1056,69 @@ export default function CreateSalePage() {
                   </span>
                 </div>
                 
-                <div className="pt-4 border-t border-admin-border flex justify-between items-center">
-                  <span className="text-base font-bold text-admin-text-primary">Grand Total:</span>
-                  <span className="text-xl font-extrabold text-admin-accent">
-                    {formatCurrency(preview?.grand_total || 0)}
+                <div className="pt-3 border-t border-admin-border flex justify-between items-center gap-3">
+                  <span className="text-base font-bold text-admin-text-primary shrink-0">
+                    Grand Total:
                   </span>
+                  <div className="relative w-36">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-admin-text-secondary pointer-events-none select-none">
+                      ₹
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      aria-label="Grand Total"
+                      disabled={items.length === 0 || !items.some(i => i.item_name?.trim() || i.product_id)}
+                      value={grandTotalInput !== null ? grandTotalInput : (preview?.grand_total !== undefined ? preview.grand_total.toFixed(2) : "")}
+                      onChange={(e) => {
+                        const valStr = e.target.value;
+                        setGrandTotalInput(valStr);
+                        const parsed = parseFloat(valStr);
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          handleGrandTotalChange(parsed);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (grandTotalInput !== null) {
+                          const parsed = parseFloat(grandTotalInput);
+                          if (!isNaN(parsed) && parsed >= 0) {
+                            handleGrandTotalChange(parsed, true);
+                          }
+                          setGrandTotalInput(null);
+                        }
+                      }}
+                      className="text-right text-base font-bold text-admin-text-primary pl-7 pr-2.5 h-10 bg-white border-admin-border rounded-md"
+                    />
+                  </div>
                 </div>
 
                 {/* Amount Paid & Fast Cash */}
-                <div className="space-y-2 pt-2 border-t border-admin-border">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-admin-text-secondary">Amount Paid (₹):</span>
-                    <div className="w-32">
+                <div className="space-y-2.5 pt-2 border-t border-admin-border">
+                  <div className="flex justify-between items-center gap-3">
+                    <div>
+                      <span className="text-sm font-medium text-admin-text-secondary">Amount Paid:</span>
+                    </div>
+                    <div className="relative w-36">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-admin-text-muted pointer-events-none select-none">
+                        ₹
+                      </span>
                       <Input 
                         type="number" min="0" step="0.01" 
                         placeholder={(form.status === 'paid' ? preview?.grand_total || 0 : 0).toString()}
                         value={form.amount_paid} 
                         onChange={(e) => setForm({...form, amount_paid: e.target.value})} 
-                        className="text-right h-8 py-1 text-xs font-semibold"
+                        className="text-right h-9 pl-7 pr-2.5 text-xs font-semibold"
                         aria-label="Amount Paid"
                       />
                     </div>
                   </div>
 
                   {/* Fast Cash Shortcuts */}
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-semibold text-admin-text-muted uppercase tracking-wider">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold text-admin-text-muted uppercase tracking-wider">
                       Fast Cash
-                    </span>
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
@@ -934,7 +1128,7 @@ export default function CreateSalePage() {
                           payment_method: 'Cash',
                           status: 'paid'
                         })}
-                        className="px-2 py-0.5 text-xs rounded border border-admin-border bg-admin-bg-surface hover:bg-admin-bg-subtle text-admin-text-secondary font-medium transition-colors"
+                        className="px-2.5 py-1 text-xs rounded-lg border border-admin-border bg-admin-bg-surface hover:bg-admin-accent/10 hover:border-admin-accent/30 hover:text-admin-accent text-admin-text-secondary font-medium transition-colors shadow-xs"
                       >
                         Exact
                       </button>
@@ -948,7 +1142,7 @@ export default function CreateSalePage() {
                             payment_method: 'Cash',
                             status: denomination >= (preview?.grand_total || 0) ? 'paid' : form.status
                           })}
-                          className="px-2 py-0.5 text-xs rounded border border-admin-border bg-admin-bg-surface hover:bg-admin-bg-subtle text-admin-text-secondary font-medium transition-colors"
+                          className="px-2.5 py-1 text-xs rounded-lg border border-admin-border bg-admin-bg-surface hover:bg-admin-accent/10 hover:border-admin-accent/30 hover:text-admin-accent text-admin-text-secondary font-medium transition-colors shadow-xs"
                         >
                           ₹{denomination}
                         </button>

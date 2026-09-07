@@ -190,6 +190,17 @@
 }
 
 @layer base {
+  /* Disable browser default number spinners to ensure clean, full-width digit display */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   /* Prevent iOS Safari auto-zoom by forcing minimum 16px text on inputs */
   @media (max-width: 768px) {
     input, textarea, select {

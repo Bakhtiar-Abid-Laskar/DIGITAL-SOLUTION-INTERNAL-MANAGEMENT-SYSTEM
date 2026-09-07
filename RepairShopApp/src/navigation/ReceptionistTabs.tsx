@@ -28,7 +28,10 @@ export default function ReceptionistTabs() {
     <>
       <Tab.Navigator 
         tabBar={props => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
+        screenOptions={{ 
+          headerShown: false,
+          lazy: true,
+        }}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />
         <Tab.Screen name="Jobs" component={ReceptionistJobsStack} />

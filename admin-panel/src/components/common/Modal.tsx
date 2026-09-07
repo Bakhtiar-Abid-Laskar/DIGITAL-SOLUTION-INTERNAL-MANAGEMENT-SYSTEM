@@ -11,7 +11,7 @@ export interface ModalProps {
   description?: string | React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
   className?: string;
   closeOnOutsideClick?: boolean;
 }
@@ -21,7 +21,11 @@ const sizeClasses = {
   md: 'max-w-md',
   lg: 'max-w-lg',
   xl: 'max-w-2xl',
-  full: 'max-w-4xl'
+  '2xl': 'max-w-4xl',
+  '3xl': 'max-w-5xl',
+  '4xl': 'max-w-6xl',
+  '5xl': 'max-w-7xl',
+  full: 'max-w-[95vw]'
 };
 
 export function Modal({
@@ -36,13 +40,22 @@ export function Modal({
   closeOnOutsideClick = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const hasFocusedRef = useRef(false);
 
   useEffect(() => {
-    if (!isOpen) return;
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasFocusedRef.current = false;
+      return;
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
       }
       if (e.key === 'Tab' && modalRef.current) {
         const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
@@ -69,18 +82,31 @@ export function Modal({
 
     document.addEventListener('keydown', handleKeyDown);
 
-    // Initial focus
-    const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable && focusable.length > 0) {
-      focusable[0].focus();
+    // Initial focus on opening ONLY (never steal focus while user is typing or if already focused inside modal)
+    if (!hasFocusedRef.current) {
+      hasFocusedRef.current = true;
+      if (!modalRef.current?.contains(document.activeElement)) {
+        // Look for explicit autofocus first, or first form input/textarea/select, before falling back to close button
+        const autoFocusEl = modalRef.current?.querySelector<HTMLElement>(
+          '[autofocus], input:not([type="hidden"]), select, textarea'
+        );
+        if (autoFocusEl) {
+          autoFocusEl.focus();
+        } else {
+          const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable && focusable.length > 0) {
+            focusable[0].focus();
+          }
+        }
+      }
     }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
 import { useAuth } from '../../context/AuthContext';
+import { useDebounceValue } from '@repairshop/shared';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 
@@ -24,6 +25,7 @@ export default function MyJobsScreen() {
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounceValue(searchQuery, 300);
   const [activeTab, setActiveTab] = useState(route.params?.filter || 'All');
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -40,27 +42,51 @@ export default function MyJobsScreen() {
   const fetchTabCounts = async () => {
     if (!user) return;
     try {
-      const [allRes, recRes, progRes, waitRes, compRes, unreadRes, urgRes] = await Promise.all([
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Received'),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'In Progress'),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Waiting for Materials'),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed'),
+      const [countsRes, unreadRes] = await Promise.all([
+        supabase.rpc('get_job_status_counts', { p_technician_id: user.id }),
         supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('priority', 'Urgent').neq('status', 'Completed'),
       ]);
 
-      setCounts({
-        All: allRes.count || 0,
-        Received: recRes.count || 0,
-        'In Progress': progRes.count || 0,
-        'Waiting for Materials': waitRes.count || 0,
-        Completed: compRes.count || 0,
-        Urgent: urgRes.count || 0,
-      });
-      setUnreadCount(unreadRes.count ?? 0);
+      if (!countsRes.error && countsRes.data) {
+        const data = countsRes.data as any;
+        const countsObj = data.counts || {};
+        setCounts({
+          All: Number(data.total) || 0,
+          Received: Number(countsObj['Received']) || 0,
+          'In Progress': Number(countsObj['In Progress']) || 0,
+          'Waiting for Materials': Number(countsObj['Waiting for Materials']) || 0,
+          Completed: Number(countsObj['Completed']) || 0,
+          Urgent: Number(data.urgent) || 0,
+        });
+        setUnreadCount(unreadRes.count ?? 0);
+        return;
+      }
+      throw countsRes.error || new Error('RPC returned empty');
     } catch (err) {
-      console.error('Error fetching technician tab counts:', err);
+      console.warn('RPC get_job_status_counts fallback for technician:', err);
+      try {
+        const [allRes, recRes, progRes, waitRes, compRes, unreadRes, urgRes] = await Promise.all([
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Received'),
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'In Progress'),
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Waiting for Materials'),
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed'),
+          supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
+          supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('priority', 'Urgent').neq('status', 'Completed'),
+        ]);
+
+        setCounts({
+          All: allRes.count || 0,
+          Received: recRes.count || 0,
+          'In Progress': progRes.count || 0,
+          'Waiting for Materials': waitRes.count || 0,
+          Completed: compRes.count || 0,
+          Urgent: urgRes.count || 0,
+        });
+        setUnreadCount(unreadRes.count ?? 0);
+      } catch (fallbackErr) {
+        console.error('Error fetching technician tab counts:', fallbackErr);
+      }
     }
   };
 
@@ -86,7 +112,7 @@ export default function MyJobsScreen() {
       }
 
       // Apply server-side search query
-      const trimmedQuery = searchQuery.trim();
+      const trimmedQuery = debouncedSearchQuery.trim();
       if (trimmedQuery) {
         query = query.or(
           `job_code.ilike.%${trimmedQuery}%,customer_name.ilike.%${trimmedQuery}%,customer_contact.ilike.%${trimmedQuery}%`
@@ -138,7 +164,7 @@ export default function MyJobsScreen() {
       setPage(0);
       fetchJobs(0, true, cancelled);
       return () => { cancelled = true; };
-    }, [route.params?.filter, activeTab, searchQuery])
+    }, [route.params?.filter, activeTab, debouncedSearchQuery])
   );
 
   const onRefresh = () => {

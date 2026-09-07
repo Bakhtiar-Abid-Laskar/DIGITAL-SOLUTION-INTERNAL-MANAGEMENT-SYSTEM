@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { formatCurrency } from '@repairshop/shared';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 
@@ -7,13 +7,19 @@ interface ItemizedBillTotalsProps {
   subtotal: number;
   totalTax: number;
   grandTotal: number;
+  editable?: boolean;
+  onUpdateGrandTotal?: (newTotal: number) => void;
 }
 
 export default function ItemizedBillTotals({
   subtotal,
   totalTax,
   grandTotal,
+  editable = false,
+  onUpdateGrandTotal,
 }: ItemizedBillTotalsProps) {
+  const [grandTotalInput, setGrandTotalInput] = useState<string | null>(null);
+
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Bill Totals</Text>
@@ -36,7 +42,42 @@ export default function ItemizedBillTotals({
       {/* Grand Total */}
       <View style={[styles.row, styles.totalRow]}>
         <Text style={styles.totalLabel}>TOTAL</Text>
-        <Text style={styles.totalValue}>{formatCurrency(grandTotal)}</Text>
+        {editable && onUpdateGrandTotal ? (
+          <View style={styles.totalInputContainer}>
+            <Text style={styles.currencySymbol}>₹</Text>
+            <TextInput
+              style={styles.totalInput}
+              keyboardType="numeric"
+              value={
+                grandTotalInput !== null
+                  ? grandTotalInput
+                  : grandTotal
+                  ? grandTotal.toFixed(2)
+                  : '0.00'
+              }
+              onChangeText={(text) => {
+                setGrandTotalInput(text);
+                const parsed = parseFloat(text);
+                if (!isNaN(parsed) && parsed >= 0) {
+                  onUpdateGrandTotal(parsed);
+                }
+              }}
+              onBlur={() => {
+                if (grandTotalInput !== null) {
+                  const parsed = parseFloat(grandTotalInput);
+                  if (!isNaN(parsed) && parsed >= 0) {
+                    onUpdateGrandTotal(parsed);
+                  }
+                  setGrandTotalInput(null);
+                }
+              }}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+        ) : (
+          <Text style={styles.totalValue}>{formatCurrency(grandTotal)}</Text>
+        )}
       </View>
     </View>
   );
@@ -91,5 +132,30 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: colors.textPrimary,
+  },
+  totalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    minWidth: 120,
+  },
+  currencySymbol: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.primary,
+    marginRight: 4,
+  },
+  totalInput: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.primary,
+    textAlign: 'right',
+    minWidth: 90,
+    paddingVertical: 2,
   },
 });

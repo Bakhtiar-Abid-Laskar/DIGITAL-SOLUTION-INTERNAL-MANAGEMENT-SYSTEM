@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/check-bundle-budget.mjs",
+    "check:budget": "node scripts/check-bundle-budget.mjs",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@repairshop/shared": "file:../packages/shared",
     "@supabase/supabase-js": "^2.45.4",
+    "@tanstack/react-query": "^5.102.8",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.13",
     "es-toolkit": "^1.50.0",

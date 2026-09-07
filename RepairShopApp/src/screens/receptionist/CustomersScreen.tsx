@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { colors, spacing, typography, radius, shadow } from '../../tokens';
 import { 
@@ -36,13 +37,12 @@ import Button from '../../components/common/Button';
 import EmptyState from '../../components/common/EmptyState';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import { useToast } from '../../context/ToastContext';
+import CustomerLedgerView from '../../components/customers/CustomerLedgerView';
 
 export default function CustomersScreen() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const { showToast } = useToast();
   const navigation = useNavigation<any>();
 
@@ -54,7 +54,7 @@ export default function CustomersScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Customer>>({});
   const [savingEdit, setSavingEdit] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'jobs' | 'sales'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'jobs' | 'sales'>('overview');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,28 +63,38 @@ export default function CustomersScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      setLoading(true);
+  // TanStack Query for Cached Mobile Customers Search
+  const {
+    data: customers = [],
+    isLoading: loading,
+    isRefetching: refreshing,
+    refetch,
+  } = useQuery<Customer[]>({
+    queryKey: ['mobile-customers', debouncedSearch.trim()],
+    queryFn: async () => {
       const { data, error } = await supabase.rpc('search_customers_v2', {
         p_query: debouncedSearch.trim(),
         p_limit: 50,
       });
-
       if (error) throw error;
-      setCustomers((data || []) as Customer[]);
-    } catch (err: any) {
-      console.error('Error fetching customers on mobile:', err);
-      showToast({ title: 'Error', message: err.message || 'Failed to load customers.', type: 'error' });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [debouncedSearch, showToast]);
+      return (data || []) as Customer[];
+    },
+    staleTime: 60 * 1000,
+  });
 
+  // Real-time cache invalidation on customer table changes
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    const channel = supabase
+      .channel('mobile-customers-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['mobile-customers'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const handleSelectCustomer = async (cust: Customer) => {
     setSelectedCust(cust);
@@ -139,7 +149,7 @@ export default function CustomersScreen() {
       const updated = data as Customer;
       setSelectedCust(updated);
       setIsEditing(false);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ['mobile-customers'] });
     } catch (err: any) {
       showToast({ title: 'Save Failed', message: err.message || 'Could not update profile.', type: 'error' });
     } finally {
@@ -243,8 +253,7 @@ export default function CustomersScreen() {
           contentContainerStyle={styles.listContent}
           refreshing={refreshing}
           onRefresh={() => {
-            setRefreshing(true);
-            fetchCustomers();
+            refetch();
           }}
           initialNumToRender={10}
           maxToRenderPerBatch={5}
@@ -319,6 +328,14 @@ export default function CustomersScreen() {
                 >
                   <Text style={[styles.tabBtnText, activeTab === 'overview' && styles.activeTabText]}>
                     Overview
+                  </Text>
+                </AppPressable>
+                <AppPressable
+                  style={[styles.tabBtn, activeTab === 'ledger' && styles.activeTabBtn]}
+                  onPress={() => setActiveTab('ledger')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'ledger' && styles.activeTabText]}>
+                    Ledger
                   </Text>
                 </AppPressable>
                 <AppPressable
@@ -449,6 +466,12 @@ export default function CustomersScreen() {
                         </View>
                       </View>
                     )}
+                  </View>
+                )}
+
+                {activeTab === 'ledger' && (
+                  <View style={styles.tabSection}>
+                    <CustomerLedgerView customer={selectedCust} />
                   </View>
                 )}
 

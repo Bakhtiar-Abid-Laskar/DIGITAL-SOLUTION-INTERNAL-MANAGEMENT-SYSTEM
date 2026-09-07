@@ -146,7 +146,10 @@ export default function SalesPage() {
     fetchInvoices(cancelled);
 
     const channel = supabase.channel("admin-invoices-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => {
+        fetchInvoices(true);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoice_payments" }, () => {
         fetchInvoices();
         fetchTabCounts();
       })

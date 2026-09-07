@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Card } from "@/components/common/Card";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MapPin, Map, Clock, X, ZoomIn } from "lucide-react";
@@ -118,12 +119,13 @@ export function OnsiteDetailsCard({ onsiteVisits }: OnsiteDetailsCardProps) {
               className="w-16 h-16 rounded-md border border-admin-border overflow-hidden shrink-0 bg-admin-surface group relative"
               title={`View ${title} photo`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={thumbUrl}
                 alt={title}
+                width={64}
+                height={64}
                 className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
+                unoptimized
               />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <ZoomIn size={16} className="text-white" />
@@ -178,12 +180,13 @@ export function OnsiteDetailsCard({ onsiteVisits }: OnsiteDetailsCardProps) {
                       className="w-20 h-20 rounded-md border border-admin-border overflow-hidden bg-admin-surface group relative"
                       title="View device photo"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={deviceThumb}
                         alt="Device Photo"
+                        width={80}
+                        height={80}
                         className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
+                        unoptimized
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <ZoomIn size={16} className="text-white" />
@@ -220,13 +223,14 @@ export function OnsiteDetailsCard({ onsiteVisits }: OnsiteDetailsCardProps) {
               </button>
             </div>
             {/* Full-size image (use larger sz param) */}
-            <div className="bg-black flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            <div className="bg-black flex items-center justify-center p-2">
+              <Image
                 src={lightbox.thumbUrl.replace('sz=w400', 'sz=w1200')}
                 alt={lightbox.label}
-                className="max-w-full max-h-[75vh] object-contain"
-                referrerPolicy="no-referrer"
+                width={800}
+                height={600}
+                className="max-w-full max-h-[75vh] object-contain w-auto h-auto"
+                unoptimized
               />
             </div>
           </div>
