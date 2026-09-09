@@ -41,6 +41,11 @@ export function getAttendanceDateIST(): string {
   return formatter.format(new Date());
 }
 
+export function getStartOfTodayIST(): string {
+  const istDateStr = getAttendanceDateIST();
+  return new Date(`${istDateStr}T00:00:00.000+05:30`).toISOString();
+}
+
 export function getDateIST(date: Date): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',

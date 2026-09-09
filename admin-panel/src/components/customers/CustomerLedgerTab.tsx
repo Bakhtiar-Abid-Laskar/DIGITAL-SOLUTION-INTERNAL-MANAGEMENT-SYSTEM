@@ -320,84 +320,32 @@ export function CustomerLedgerTab({ customer }: CustomerLedgerTabProps) {
   const handleExportXLSX = async () => {
     try {
       setExportingXlsx(true);
-      const XLSX = await import('xlsx');
+      const { buildCustomerLedgerWorkbook } = await import('@/lib/customerLedgerExcel');
 
-      const wsData: any[][] = [];
-
-      // 1. Letterhead / Statement Header Block
-      wsData.push(['RepairShop — Customer Ledger Statement']);
-      wsData.push(['Generated On:', new Date().toLocaleString('en-IN')]);
-      wsData.push([]);
-      wsData.push(['CUSTOMER DETAILS']);
-      wsData.push(['Customer Name:', customer.name, '', 'Contact Phone:', customer.phone || '—']);
-      wsData.push(['Email Address:', customer.email || '—', '', 'GSTIN:', customer.gstin || '—']);
-      wsData.push(['Address:', customer.address || 'No address on file']);
-      wsData.push([]);
-      wsData.push(['FINANCIAL SUMMARY']);
-      wsData.push([
-        'Wallet Advance Balance:', walletBalance,
-        '',
-        'Total Invoiced:', summary.totalInvoiced,
-        '',
-        'Total Collected:', summary.totalPaid,
-        '',
-        'Total Outstanding Due:', summary.pendingBalance
-      ]);
-      wsData.push([]);
-
-      // 2. Exact 10 Mandated Columns
-      wsData.push([
-        'Customer',
-        'Invoice #',
-        'Job #',
-        'Total Amount',
-        'Payment Date',
-        'Amount Paid (this installment)',
-        'Payment Method',
-        'Reference #',
-        'Amount Left After This Payment',
-        'Status'
-      ]);
-
-      // 3. Populate rows
-      groupedLedger.forEach(({ rows }) => {
-        rows.forEach((row) => {
-          wsData.push([
-            row.customerName,
-            row.invoiceCode,
-            row.jobCode,
-            row.totalAmount,
-            row.paymentDate ? formatDate(row.paymentDate) : '—',
-            row.amountPaid,
-            row.paymentMethod,
-            row.referenceNumber,
-            row.amountLeftAfterPayment,
-            row.isHistorical ? 'Historical — pre-ledger' : (row.status === 'paid' ? 'Paid' : row.status === 'partial' ? 'Partial' : 'Pending')
-          ]);
-        });
+      const wb = await buildCustomerLedgerWorkbook({
+        customer,
+        summary: {
+          totalInvoiced: summary.totalInvoiced,
+          totalPaid: summary.totalPaid,
+          pendingBalance: summary.pendingBalance,
+          walletBalance,
+        },
+        groupedLedger,
       });
 
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [
-        { wch: 22 }, // Customer
-        { wch: 18 }, // Invoice #
-        { wch: 16 }, // Job #
-        { wch: 15 }, // Total Amount
-        { wch: 15 }, // Payment Date
-        { wch: 26 }, // Amount Paid (this installment)
-        { wch: 18 }, // Payment Method
-        { wch: 20 }, // Reference #
-        { wch: 28 }, // Amount Left After This Payment
-        { wch: 22 }  // Status
-      ];
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Customer_Ledger');
-
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
       const cleanCustomerName = customer.name.replace(/[^a-zA-Z0-9_-]/g, '_');
       const filename = `Customer_Ledger_${cleanCustomerName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(url);
 
-      XLSX.writeFile(wb, filename);
       showToast('Customer ledger exported to XLSX successfully!', 'success');
     } catch (err: any) {
       console.error('Error exporting XLSX:', err);

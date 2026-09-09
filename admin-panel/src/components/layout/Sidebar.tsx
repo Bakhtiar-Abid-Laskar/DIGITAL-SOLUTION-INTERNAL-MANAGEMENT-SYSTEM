@@ -97,6 +97,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     };
   }, [isOpen, onClose]);
 
+  const filteredNavItems = NAV_ITEMS.filter((item) => {
+    if (profile?.role === 'receptionist') {
+      const adminOnlyPrefixes = ['/staff', '/reports', '/salary', '/expenditure', '/settings'];
+      return !adminOnlyPrefixes.some(prefix => item.href.startsWith(prefix));
+    }
+    return true;
+  });
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -136,7 +144,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
         
         <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto custom-scrollbar overscroll-contain">
-          {NAV_ITEMS.map((item) => {
+          {filteredNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             const Icon = item.icon;
             

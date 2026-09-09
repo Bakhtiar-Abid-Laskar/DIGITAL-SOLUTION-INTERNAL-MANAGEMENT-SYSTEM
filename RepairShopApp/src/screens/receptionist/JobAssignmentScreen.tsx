@@ -31,7 +31,7 @@ export default function JobAssignmentScreen() {
   const { showToast } = useToast();
   const { generatePdf } = usePdfGenerator();
 
-  const formState = route.params?.formState as NewJobFormValues;
+  const formState = (route.params?.formState || {}) as NewJobFormValues;
 
   const [state, setState] = React.useReducer(
     (prev: any, next: any) => ({ ...prev, ...next }),
@@ -47,6 +47,16 @@ export default function JobAssignmentScreen() {
   const { loading, showTechPicker, createdJob, technicianIds, techNames } = state;
 
   const submitJob = async () => {
+    if (!formState.customer_name?.trim() || !formState.customer_contact?.trim() || !formState.reported_issue?.trim()) {
+      showToast({ 
+        title: 'Missing Required Fields', 
+        message: 'Customer details or reported issue are missing. Please go back and complete the intake form.', 
+        type: 'error' 
+      });
+      setState({ loading: false });
+      return;
+    }
+
     setState({ loading: true });
     try {
       const { data: jobCode, error: rpcError } = await supabase.rpc('generate_job_code');
@@ -59,7 +69,7 @@ export default function JobAssignmentScreen() {
           p_customer_id: customerId,
           p_name: formState.customer_name.trim(),
           p_phone: cleanPhoneNumber(formState.customer_contact) || null,
-          p_email: formState.customer_email.trim() || null,
+          p_email: formState.customer_email?.trim() || null,
           p_gstin: formState.customer_gstin?.trim() || null,
           p_address: formState.customer_address?.trim() || null,
           p_created_via: 'job',
@@ -90,16 +100,16 @@ export default function JobAssignmentScreen() {
         customer_id:      customerId,
         customer_name:    formState.customer_name.trim(),
         customer_contact: cleanPhoneNumber(formState.customer_contact),
-        customer_email:   formState.customer_email.trim() || null,
+        customer_email:   formState.customer_email?.trim() || null,
         customer_gstin:   formState.customer_gstin?.trim() || null,
         customer_address: formState.customer_address?.trim() || null,
         device_type_id:   resolvedDeviceTypeId,
         reported_issue:   formState.reported_issue.trim(),
-        remarks:          formState.remarks.trim() || null,
-        job_type:         formState.job_type,
+        remarks:          formState.remarks?.trim() || null,
+        job_type:         formState.job_type || 'Inhouse',
         job_type_ref_id:  formState.job_type_ref_id || null,
         snap_technician_incentive:   formState.snap_technician_incentive || 0,
-        priority:         formState.priority,
+        priority:         formState.priority || 'Normal',
         status:           'Received',
         receptionist_id:  user?.id,
         technician_id:    technicianIds.length > 0 ? technicianIds[0] : null,
@@ -147,9 +157,10 @@ export default function JobAssignmentScreen() {
     }
   };
 
+  const activePriority = formState.priority || 'Normal';
   const priorityColor = 
-    formState.priority === 'Urgent' ? colors.statusUrgentFg :
-    formState.priority === 'High' ? colors.statusInProgressFg : colors.statusCompletedFg;
+    activePriority === 'Urgent' ? colors.statusUrgentFg :
+    activePriority === 'High' ? colors.statusInProgressFg : colors.statusCompletedFg;
 
   const handleWhatsAppInvoice = async () => {
     if (!createdJob) return;
@@ -215,13 +226,13 @@ export default function JobAssignmentScreen() {
         <SectionLabel title="JOB OVERVIEW" />
         <View style={styles.card}>
           <DetailRow label="Job ID"    value={createdJob ? createdJob.job_code : 'Auto-generated on save'} showDivider />
-          <DetailRow label="Priority" value={formState.priority} valueColor={priorityColor} showDivider />
-          <DetailRow label="Job Type" value={formState.job_type} showDivider />
-          <DetailRow label="Customer" value={formState.customer_name} showDivider />
-          <DetailRow label="Device"   value={formState.device_type_id} showDivider />
+          <DetailRow label="Priority" value={activePriority} valueColor={priorityColor} showDivider />
+          <DetailRow label="Job Type" value={formState.job_type || 'Inhouse'} showDivider />
+          <DetailRow label="Customer" value={formState.customer_name || 'N/A'} showDivider />
+          <DetailRow label="Device"   value={formState.device_type_id || 'Other'} showDivider />
           <View style={styles.issueBlock}>
             <Text style={styles.issueLabel}>Issue</Text>
-            <Text style={styles.issueValue}>{formState.reported_issue}</Text>
+            <Text style={styles.issueValue}>{formState.reported_issue || 'None specified'}</Text>
           </View>
         </View>
 

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Linking } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserRole, UserRow, fetchUserRow } from '../lib/auth';
+import { parseAuthUrl } from '../utils/authLink';
 
 interface AuthContextProps {
   user: User | null;
@@ -12,6 +13,8 @@ interface AuthContextProps {
   isLoading: boolean;
   displayName: string;
   avatarUrl: string | null;
+  isPasswordRecovery: boolean;
+  setIsPasswordRecovery: (val: boolean) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -24,6 +27,8 @@ const AuthContext = createContext<AuthContextProps>({
   isLoading: true,
   displayName: '',
   avatarUrl: null,
+  isPasswordRecovery: false,
+  setIsPasswordRecovery: () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -36,6 +41,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [displayName, setDisplayName] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
@@ -61,16 +67,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (mounted) {
+          if (event === 'PASSWORD_RECOVERY') {
+            setIsPasswordRecovery(true);
+          }
           await handleSessionUpdate(session);
         }
       }
     );
 
+    // Deep link handling for password recovery (e.g. repairshop://reset-password#access_token=...)
+    const handleDeepLink = async (url: string | null) => {
+      if (!url || !mounted) return;
+      try {
+        const parsed = parseAuthUrl(url);
+        if (parsed.accessToken && parsed.refreshToken) {
+          await supabase.auth.setSession({
+            access_token: parsed.accessToken,
+            refresh_token: parsed.refreshToken,
+          });
+          if (parsed.type === 'recovery' || url.includes('reset-password')) {
+            setIsPasswordRecovery(true);
+          }
+        } else if (parsed.code) {
+          await supabase.auth.exchangeCodeForSession(parsed.code);
+          if (url.includes('reset-password')) {
+            setIsPasswordRecovery(true);
+          }
+        } else if (url.includes('reset-password')) {
+          setIsPasswordRecovery(true);
+        }
+      } catch (err) {
+        console.error('Error handling deep link auth in AuthContext:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const linkingSub = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
+      linkingSub.remove();
     };
   }, []);
 
@@ -166,8 +207,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const contextValue = useMemo(() => ({
-    user, session, role, isActive, isLoading, displayName, avatarUrl, signOut, refreshProfile
-  }), [user, session, role, isActive, isLoading, displayName, avatarUrl, refreshProfile]);
+    user, session, role, isActive, isLoading, displayName, avatarUrl, isPasswordRecovery, setIsPasswordRecovery, signOut, refreshProfile
+  }), [user, session, role, isActive, isLoading, displayName, avatarUrl, isPasswordRecovery, refreshProfile]);
 
   return (
     <AuthContext.Provider value={contextValue}>

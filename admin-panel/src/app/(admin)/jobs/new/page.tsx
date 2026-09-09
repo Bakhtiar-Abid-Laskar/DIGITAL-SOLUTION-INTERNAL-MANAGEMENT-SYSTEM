@@ -114,14 +114,24 @@ export default function CreateJobPage() {
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!state.form.customer_name.trim()) newErrors.customer_name = 'Customer name is required';
+    const missing: string[] = [];
+
+    if (!state.form.customer_name.trim()) {
+      newErrors.customer_name = 'Customer name is required';
+      missing.push('Customer Name');
+    }
     
     const phoneCheck = validateAndNormalizeIndianPhone(state.form.customer_contact);
     if (!phoneCheck.isValid) {
-      newErrors.customer_contact = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+      const msg = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+      newErrors.customer_contact = msg;
+      missing.push(msg);
     }
 
-    if (!state.form.reported_issue.trim()) newErrors.reported_issue = 'Reported issue description is required';
+    if (!state.form.reported_issue.trim()) {
+      newErrors.reported_issue = 'Reported issue description is required';
+      missing.push('Reported Issue');
+    }
 
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i;
     if (state.form.customer_gstin.trim() && !gstinRegex.test(state.form.customer_gstin.trim())) {
@@ -129,7 +139,11 @@ export default function CreateJobPage() {
     }
 
     dispatch({ type: 'SET_ERRORS', errors: newErrors });
-    return Boolean(state.form.customer_name.trim() && phoneCheck.isValid && state.form.reported_issue.trim());
+    const isValid = Boolean(state.form.customer_name.trim() && phoneCheck.isValid && state.form.reported_issue.trim());
+    if (!isValid) {
+      showToast(`Please fill required fields: ${missing.join(' • ')}`, "error");
+    }
+    return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

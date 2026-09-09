@@ -16,8 +16,12 @@ import {
   Package,
   AlertCircle,
   Loader2,
+  CheckCircle2,
+  X,
+  Mail,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // 5 Brand Service Categories
 const SERVICES = [
@@ -63,6 +67,40 @@ export default function LoginPage() {
 
   // Dynamic greeting state
   const [firstName, setFirstName] = useState<string | null>(null);
+
+  // Forgot password state
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  const handleSendResetEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = forgotEmail.trim();
+    if (!trimmed || !trimmed.includes("@")) {
+      setForgotError("Please enter a valid registered email address.");
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError(null);
+    try {
+      const siteUrl = getSiteUrl();
+      const redirectTo = `${siteUrl}/reset-password`;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo,
+      });
+      if (resetError) {
+        setForgotError(resetError.message || "Failed to send reset email.");
+      } else {
+        setForgotSent(true);
+      }
+    } catch (err: any) {
+      setForgotError(err.message || "An error occurred while sending reset email.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   // Load remembered user info on mount
   useEffect(() => {
@@ -372,12 +410,18 @@ export default function LoginPage() {
                 <span className="font-medium text-[13px]">Remember me</span>
               </label>
 
-              <a
-                href="mailto:support@digitalsolution.com?subject=Password%20Reset%20Request"
-                className="font-semibold text-[13px] text-[#1E56CC] hover:text-[#14337A] transition-colors"
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email.trim());
+                  setForgotSent(false);
+                  setForgotError(null);
+                  setIsForgotModalOpen(true);
+                }}
+                className="font-semibold text-[13px] text-[#1E56CC] hover:text-[#14337A] transition-colors cursor-pointer"
               >
                 Forgot Password?
-              </a>
+              </button>
             </div>
 
             {/* ─── LOGIN BUTTON (Gradient Fill + Elevation) ─── */}
@@ -409,6 +453,90 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── FORGOT PASSWORD MODAL ─── */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#16233F] border border-[#24355A] rounded-3xl p-6 md:p-8 shadow-2xl relative">
+            <button
+              onClick={() => setIsForgotModalOpen(false)}
+              className="absolute top-5 right-5 text-[#8A94A6] hover:text-white transition-colors p-1 rounded-lg cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 bg-gradient-to-tr from-[#14337A] to-[#1E70E0] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-[#1E70E0]/20 border border-white/10">
+                <Mail className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-tight">Reset Password</h2>
+              <p className="text-xs text-[#8A94A6] mt-1.5">
+                Enter your account email and we'll send you a password recovery link.
+              </p>
+            </div>
+
+            {forgotSent ? (
+              <div className="space-y-5 text-center py-2">
+                <div className="w-14 h-14 bg-[#10B981]/15 text-[#10B981] rounded-full flex items-center justify-center mx-auto border border-[#10B981]/30">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-semibold text-white">Check Your Inbox</h3>
+                  <p className="text-xs text-[#8A94A6]">
+                    We've sent a recovery link to <span className="text-white font-medium">{forgotEmail}</span>. Follow the link to choose a new password.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsForgotModalOpen(false)}
+                  className="w-full bg-[#24355A] hover:bg-[#2e4270] text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendResetEmail} className="space-y-4">
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/30 flex items-start gap-2 text-xs text-[#FCA5A5]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#8A94A6] uppercase tracking-wider mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="staff@digitalsolution.com"
+                    className="w-full bg-[#0F172A] border border-[#24355A] focus:border-[#1E70E0] rounded-xl px-4 py-3 text-sm text-white placeholder-[#8A94A6]/50 outline-none transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full bg-gradient-to-r from-[#14337A] via-[#1A4BB5] to-[#1E70E0] hover:from-[#102963] hover:via-[#16419E] hover:to-[#195ec2] text-white font-bold py-3 rounded-xl text-sm shadow-lg shadow-[#1E70E0]/25 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+                >
+                  {forgotLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sending Link...</span>
+                    </>
+                  ) : (
+                    <span>Send Reset Link</span>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -61,7 +61,7 @@ export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
 </head>
 <body>
   <div class="header">
-    <h1>RepairShop</h1>
+    <h1>Digital Solution</h1>
     <h2>Salary Slip</h2>
   </div>
 
@@ -127,7 +127,7 @@ export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
     <div class="sig-box">Manager / Admin Signature</div>
   </div>
 
-  <div class="footer">RepairShop — This is a computer generated salary slip.</div>
+  <div class="footer">Digital Solution — This is a computer generated salary slip.</div>
 </body>
 </html>`;
 }

@@ -21,6 +21,7 @@ import CreatableDropdown from '../../components/shared/CreatableDropdown';
 import ScreenScrollView from '../../components/common/ScreenScrollView';
 import { CustomerTypeaheadMobile } from '../../components/customers/CustomerTypeaheadMobile';
 import { useAppConfig } from '../../context/AppConfigContext';
+import { useToast } from '../../context/ToastContext';
 import { colors, radius, spacing, typography } from '../../tokens';
 import { validateAndNormalizeIndianPhone, formatPhoneInput } from '@repairshop/shared';
 
@@ -34,6 +35,8 @@ type JobTypeCatalogItem = {
 export default function CustomerIntakeScreen() {
   const navigation = useNavigation<any>();
   const { config } = useAppConfig();
+  const { showToast } = useToast();
+  const scrollViewRef = React.useRef<any>(null);
 
   const [catalogItems, setCatalogItems] = useState<JobTypeCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -128,14 +131,24 @@ export default function CustomerIntakeScreen() {
 
   const validate = (): boolean => {
     const errors: typeof fieldErrors = {};
-    if (!form.customer_name.trim())    errors.customer_name    = 'Customer name is required';
+    const missingFields: string[] = [];
+
+    if (!form.customer_name.trim()) {
+      errors.customer_name = 'Customer name is required';
+      missingFields.push('Customer Name');
+    }
     
     const phoneCheck = validateAndNormalizeIndianPhone(form.customer_contact);
     if (!phoneCheck.isValid) {
-      errors.customer_contact = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+      const msg = phoneCheck.error || 'Valid 10-digit Indian phone number required';
+      errors.customer_contact = msg;
+      missingFields.push(msg);
     }
 
-    if (!form.reported_issue.trim())   errors.reported_issue   = 'Reported issue is required';
+    if (!form.reported_issue.trim()) {
+      errors.reported_issue = 'Reported issue is required';
+      missingFields.push('Reported Issue');
+    }
 
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i;
     if (form.customer_gstin?.trim() && !gstinRegex.test(form.customer_gstin.trim())) {
@@ -143,8 +156,20 @@ export default function CustomerIntakeScreen() {
     }
 
     setFieldErrors(errors);
-    // Only required fields block submission
-    return Boolean(form.customer_name.trim() && phoneCheck.isValid && form.reported_issue.trim());
+
+    const isValid = Boolean(form.customer_name.trim() && phoneCheck.isValid && form.reported_issue.trim());
+
+    if (!isValid) {
+      scrollViewRef.current?.scrollTo?.({ y: 0, animated: true });
+      showToast({
+        title: 'Required Information Needed',
+        message: `Please fill in: ${missingFields.join(' • ')}`,
+        type: 'error',
+      });
+      return false;
+    }
+
+    return true;
   };
 
   const handleNext = () => {
@@ -153,7 +178,15 @@ export default function CustomerIntakeScreen() {
     navigation.navigate('JobAssignment', { 
       formState: {
         ...form,
+        customer_name: form.customer_name.trim(),
         customer_contact: phoneCheck.isValid ? phoneCheck.e164 : form.customer_contact.trim(),
+        customer_email: form.customer_email.trim(),
+        customer_gstin: form.customer_gstin?.trim(),
+        customer_address: form.customer_address?.trim(),
+        reported_issue: form.reported_issue.trim(),
+        remarks: form.remarks.trim(),
+        priority: form.priority || 'Normal',
+        job_type: form.job_type || 'Inhouse',
       } 
     });
   };
@@ -209,7 +242,7 @@ export default function CustomerIntakeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <ScreenScrollView contentContainerStyle={styles.scrollContent}>
+        <ScreenScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
           <View style={styles.sectionHeaderBg}>
             <SectionLabel title="CUSTOMER DETAILS" />
           </View>
@@ -295,22 +328,29 @@ export default function CustomerIntakeScreen() {
           <View style={styles.card}>
             <Text style={styles.fieldLabel}>Service Location</Text>
             <SegmentedControl
-              options={config.serviceLocations.map(l => ({
+              options={(config.serviceLocations && config.serviceLocations.length > 0) ? config.serviceLocations.map(l => ({
                 label: l.id,
                 value: l.id,
                 activeBgColor: colors.primary
-              }))}
+              })) : [
+                { label: 'Inhouse', value: 'Inhouse', activeBgColor: colors.primary },
+                { label: 'Onsite', value: 'Onsite', activeBgColor: colors.primary },
+              ]}
               selectedValue={form.job_type}
               onValueChange={(val) => updateForm('job_type', val)}
             />
 
             <Text style={styles.fieldLabel}>Priority</Text>
             <SegmentedControl
-              options={config.priorities.map(p => ({
+              options={(config.priorities && config.priorities.length > 0) ? config.priorities.map(p => ({
                 label: p.id,
                 value: p.id,
-                activeBgColor: p.color_hex || colors.statusInProgressFg
-              }))}
+                activeBgColor: p.id === 'Urgent' ? colors.statusUrgentFg : p.id === 'High' ? colors.statusInProgressFg : colors.primary
+              })) : [
+                { label: 'Normal', value: 'Normal', activeBgColor: colors.primary },
+                { label: 'High', value: 'High', activeBgColor: colors.statusInProgressFg },
+                { label: 'Urgent', value: 'Urgent', activeBgColor: colors.statusUrgentFg },
+              ]}
               selectedValue={form.priority}
               onValueChange={(val) => updateForm('priority', val)}
             />

@@ -17,6 +17,7 @@ import BottomSheet from '../../components/common/BottomSheet';
 import StatusBadge from '../../components/jobs/StatusBadge';
 import Dropdown, { DropdownOption } from '../../components/shared/Dropdown';
 import { CompletionSelfieBanner } from '../../components/work/CompletionSelfieBanner';
+import { ArrivalSelfieBanner } from '../../components/work/ArrivalSelfieBanner';
 import { MaterialUsageModal } from '../../components/work/MaterialUsageModal';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
@@ -30,7 +31,6 @@ interface CatalogItem {
   id: string;
   title: string;
   customer_charge_amount: number;
-  technician_incentive: number;
 }
 
 export default function UpdateWorkScreen() {
@@ -38,7 +38,6 @@ export default function UpdateWorkScreen() {
   const navigation = useNavigation<any>();
   const { user, role } = useAuth();
   const jobId = route.params?.jobId;
-  const completionSelfieRequired: boolean = route.params?.completionSelfieRequired ?? false;
   const { showToast } = useToast();
 
   const [state, setState] = React.useReducer(
@@ -63,6 +62,9 @@ export default function UpdateWorkScreen() {
       confirmingMaterialsVisible: false,
       usageQuantities: {} as Record<string, string>,
       selectedJobType: 'Inhouse' as JobType,
+      arrivalRequired: false,
+      completionSelfieRequired: false,
+      visitData: null as any,
     }
   );
 
@@ -86,6 +88,8 @@ export default function UpdateWorkScreen() {
     confirmingMaterialsVisible,
     usageQuantities,
     selectedJobType,
+    arrivalRequired,
+    completionSelfieRequired,
   } = state;
 
   const fetchCatalog = useCallback(async () => {
@@ -93,7 +97,7 @@ export default function UpdateWorkScreen() {
       setState({ catalogLoading: true });
       const { data, error: catErr } = await supabase
         .from('job_types')
-        .select('id, title, customer_charge_amount, technician_incentive')
+        .select('id, title, customer_charge_amount')
         .eq('is_active', true)
         .order('title', { ascending: true });
 
@@ -134,7 +138,7 @@ export default function UpdateWorkScreen() {
       if (jobData.job_type_ref_id) {
         const { data: jtData } = await supabase
           .from('job_types')
-          .select('id, title, customer_charge_amount, technician_incentive')
+          .select('id, title, customer_charge_amount')
           .eq('id', jobData.job_type_ref_id)
           .maybeSingle();
         jobTypeRef = jtData;
@@ -164,12 +168,45 @@ export default function UpdateWorkScreen() {
         job_technicians: jobTechsData || [],
       };
 
+      // Server-side authoritative verification of onsite check-in gate
+      let isArrivalRequired = false;
+      let isCompletionRequired = false;
+      let visitRecord = null;
+
+      if (jobData.job_type === 'Onsite' && role === 'technician') {
+        const { data: visitData, error: visitErr } = await supabase
+          .from('onsite_visits')
+          .select('*')
+          .eq('job_id', jobId)
+          .eq('technician_id', user.id)
+          .order('arrival_time', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (visitErr) {
+          console.error('[UpdateWorkScreen fetchJobData] visit fetch error:', visitErr);
+        }
+
+        visitRecord = visitData;
+        const hasArrivalSelfie = !!(visitData?.arrival_selfie_drive_file_id || visitData?.arrival_selfie_url);
+        const hasDepartureSelfie = !!(visitData?.departure_selfie_drive_file_id || visitData?.departure_selfie_url);
+
+        if (!hasArrivalSelfie) {
+          isArrivalRequired = true;
+        } else if (!hasDepartureSelfie && jobData.status !== 'Completed') {
+          isCompletionRequired = true;
+        }
+      }
+
       setState({
         job: fullJob,
         notes: jobData.work_notes || '',
         selectedStatus: jobData.status,
         selectedCatalogId: jobData.job_type_ref_id || '',
         selectedJobType: jobData.job_type || 'Inhouse',
+        arrivalRequired: isArrivalRequired,
+        completionSelfieRequired: isCompletionRequired,
+        visitData: visitRecord,
       });
 
       const { data: matsData } = await supabase
@@ -178,6 +215,12 @@ export default function UpdateWorkScreen() {
         .eq('job_id', jobId);
 
       if (matsData) setState({ materials: matsData });
+
+      // If arrival check-in is required, automatically route technician to OnsiteVisitScreen
+      if (isArrivalRequired) {
+        navigation.replace('OnsiteVisit', { jobId });
+        return;
+      }
     } catch (err: any) {
       console.error('[UpdateWorkScreen fetchJobData]', err);
       setState({ error: mapErrorToUserMessage(err) });
@@ -195,6 +238,7 @@ export default function UpdateWorkScreen() {
         .channel(`update-work-${jobId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `id=eq.${jobId}` }, fetchJobData)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'job_materials', filter: `job_id=eq.${jobId}` }, fetchJobData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'onsite_visits', filter: `job_id=eq.${jobId}` }, fetchJobData)
         .subscribe();
       return () => {
         supabase.removeChannel(channel);
@@ -338,6 +382,14 @@ export default function UpdateWorkScreen() {
       });
       return;
     }
+    if (selectedStatus === 'Completed' && completionSelfieRequired) {
+      showToast({
+        title: 'Completion Selfie Required',
+        message: 'You must capture a departure selfie at the customer location before completing this job.',
+        type: 'error',
+      });
+      return;
+    }
     setState({ statusSelectorVisible: false });
     if (selectedStatus === 'Completed' && job.status !== 'Completed') {
       const unconfirmed = materials.filter((m: any) => m.checkout_status === 'checked_out');
@@ -354,13 +406,23 @@ export default function UpdateWorkScreen() {
   if (loading) return <View style={styles.container}><SkeletonList count={4} /></View>;
   if (error || !job) return <View style={styles.container}><ErrorState message={error || 'Failed to load'} onRetry={fetchJobData} /></View>;
 
+  if (arrivalRequired) {
+    return (
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <JobDetailShell job={job}>
+          <ArrivalSelfieBanner onNavigate={() => navigation.navigate('OnsiteVisit', { jobId })} />
+        </JobDetailShell>
+      </KeyboardAvoidingView>
+    );
+  }
+
   const isCompleted = job.status === 'Completed';
   const hasServiceType = !!job.job_type_ref_id;
   const statusOptions = completionSelfieRequired ? ALL_STATUS_OPTIONS.filter(s => s !== 'Completed') : ALL_STATUS_OPTIONS;
   const unconfirmedMaterials = materials.filter((m: any) => m.checkout_status === 'checked_out');
 
   const catalogOptions: DropdownOption[] = catalogItems.map((item: CatalogItem) => ({
-    label: `${item.title} (Charge: ₹${item.customer_charge_amount} | Incentive: ₹${item.technician_incentive})`,
+    label: `${item.title} (Customer Rate: ₹${item.customer_charge_amount})`,
     value: item.id,
   }));
 
@@ -405,7 +467,7 @@ export default function UpdateWorkScreen() {
           {!hasServiceType ? (
             <View style={{ gap: spacing.md }}>
               <Text style={styles.diagnosisHelperText}>
-                Diagnose the device and assign the Service / Repair Type to establish baseline labor pricing and technician incentive.
+                Diagnose the device and assign the Service / Repair Type to establish baseline labor and customer pricing.
               </Text>
               <Dropdown
                 options={catalogOptions}
@@ -417,14 +479,8 @@ export default function UpdateWorkScreen() {
               {selectedCatalogItem && (
                 <View style={styles.catalogPreview}>
                   <View style={styles.previewRow}>
-                    <Text style={styles.previewLabel}>Base Customer Charge:</Text>
+                    <Text style={styles.previewLabel}>Customer Rate:</Text>
                     <Text style={styles.previewValue}>₹{selectedCatalogItem.customer_charge_amount}</Text>
-                  </View>
-                  <View style={styles.previewRow}>
-                    <Text style={styles.previewLabel}>Your Incentive:</Text>
-                    <Text style={[styles.previewValue, { color: colors.accentGreen }]}>
-                      ₹{selectedCatalogItem.technician_incentive}
-                    </Text>
                   </View>
                 </View>
               )}
@@ -447,11 +503,7 @@ export default function UpdateWorkScreen() {
               </View>
               <View style={styles.serviceDetailsRow}>
                 <Text style={styles.serviceDetailText}>
-                  Base Rate: ₹{job.job_type_ref?.customer_charge_amount || 0}
-                </Text>
-                <Text style={styles.serviceDetailDot}>•</Text>
-                <Text style={[styles.serviceDetailText, { color: colors.accentGreen, fontWeight: '600' }]}>
-                  Incentive: ₹{job.snap_technician_incentive || job.job_type_ref?.technician_incentive || 0}
+                  Customer Rate: ₹{job.job_type_ref?.customer_charge_amount || 0}
                 </Text>
               </View>
             </View>

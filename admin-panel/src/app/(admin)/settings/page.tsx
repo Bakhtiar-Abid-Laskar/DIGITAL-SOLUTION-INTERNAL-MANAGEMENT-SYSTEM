@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Shop details
-  const [shopName, setShopName] = useState("RepairShop");
+  const [shopName, setShopName] = useState("Digital Solution");
   const [shopAddress, setShopAddress] = useState("");
   const [savingShop, setSavingShop] = useState(false);
   

@@ -4,7 +4,7 @@ import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../../lib/supabase';
-import { getTodayDateString } from '@repairshop/shared';
+import { getTodayDateString, getStartOfTodayIST } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
 import { playNotificationSound } from '../../utils/playNotificationSound';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
@@ -92,23 +92,73 @@ export default function TechnicianDashboardScreen() {
   const fetchDashboardData = async () => {
     if (!user) return;
     try {
-      const today = getTodayDateString();
-      const startOfToday = new Date(today + 'T00:00:00.000Z').toISOString();
+      const startOfToday = getStartOfTodayIST();
 
-      const [totalRes, inProgressRes, completedRes, urgentRes, unreadRes, activeJobsRes] = await Promise.all([
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).in('status', ['In Progress', 'Waiting for Materials', 'Received']),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('status', 'Completed').gte('completed_at', startOfToday),
-        supabase.from('jobs').select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true }).eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).eq('priority', 'Urgent').neq('status', 'Completed'),
-        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('recipient_user_id', user.id),
-        supabase.from('jobs').select('*, job_technicians!inner(technician_id, removed_at)').eq('job_technicians.technician_id', user.id).is('job_technicians.removed_at', null).neq('status', 'Completed').order('created_at', { ascending: false }).limit(20)
+      const [countsRes, completedRes, unreadRes, activeJobsRes] = await Promise.all([
+        supabase.rpc('get_job_status_counts', { p_technician_id: user.id }),
+        supabase
+          .from('jobs')
+          .select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true })
+          .eq('job_technicians.technician_id', user.id)
+          .is('job_technicians.removed_at', null)
+          .eq('status', 'Completed')
+          .gte('completed_at', startOfToday),
+        supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('recipient_user_id', user.id),
+        supabase
+          .from('jobs')
+          .select('*, job_technicians!inner(technician_id, removed_at)')
+          .eq('job_technicians.technician_id', user.id)
+          .is('job_technicians.removed_at', null)
+          .neq('status', 'Completed')
+          .order('created_at', { ascending: false })
+          .limit(20)
       ]);
 
+      let totalAssigned = 0;
+      let inProgress = 0;
+      let urgentPending = 0;
+
+      if (!countsRes.error && countsRes.data) {
+        const data = countsRes.data as any;
+        const countsObj = data.counts || {};
+        totalAssigned = Number(data.total) || 0;
+        inProgress = Number(countsObj['In Progress']) || 0;
+        urgentPending = Number(data.urgent) || 0;
+      } else {
+        // Fallback aligned with single source of truth
+        const [totalRes, inProgressRes, urgentRes] = await Promise.all([
+          supabase
+            .from('jobs')
+            .select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true })
+            .eq('job_technicians.technician_id', user.id)
+            .is('job_technicians.removed_at', null),
+          supabase
+            .from('jobs')
+            .select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true })
+            .eq('job_technicians.technician_id', user.id)
+            .is('job_technicians.removed_at', null)
+            .eq('status', 'In Progress'),
+          supabase
+            .from('jobs')
+            .select('id, job_technicians!inner(technician_id, removed_at)', { count: 'exact', head: true })
+            .eq('job_technicians.technician_id', user.id)
+            .is('job_technicians.removed_at', null)
+            .eq('priority', 'Urgent')
+            .neq('status', 'Completed'),
+        ]);
+        totalAssigned = totalRes.count ?? 0;
+        inProgress = inProgressRes.count ?? 0;
+        urgentPending = urgentRes.count ?? 0;
+      }
+
       setStatsData({
-        totalAssigned: totalRes.count ?? 0,
-        inProgress: inProgressRes.count ?? 0,
+        totalAssigned,
+        inProgress,
         completedToday: completedRes.count ?? 0,
-        urgentPending: urgentRes.count ?? 0,
+        urgentPending,
       });
       setUnreadCount(unreadRes.count ?? 0);
       if (activeJobsRes.data) {
@@ -130,12 +180,13 @@ export default function TechnicianDashboardScreen() {
       timeoutId = setTimeout(() => {
         fetchDashboardData();
         playNotificationSound();
-      }, 1500);
+      }, 1000);
     };
 
     const channel = supabase
-      .channel('tech-dashboard-jobs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `technician_id=eq.${user.id}` }, handleUpdate)
+      .channel(`tech-dashboard-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, handleUpdate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'job_technicians' }, handleUpdate)
       .subscribe();
 
     return () => { 
@@ -149,7 +200,8 @@ export default function TechnicianDashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
-      if (isFirstMount.current || now - lastFetchTime.current > 5 * 60 * 1000) {
+      // Refetch on focus if initial mount or at least 5 seconds have passed
+      if (isFirstMount.current || now - lastFetchTime.current > 5 * 1000) {
         fetchDashboardData().then(() => {
           isFirstMount.current = false;
           lastFetchTime.current = Date.now();
@@ -180,7 +232,7 @@ export default function TechnicianDashboardScreen() {
       <RoleDashboard
         roleTitle="Technician Dashboard"
         userName={displayName}
-        workloadText={statsData.urgentPending > 0 ? `${statsData.urgentPending} urgent jobs pending` : 'All caught up'}
+        workloadText={loading ? 'Checking workload…' : statsData.urgentPending > 0 ? `${statsData.urgentPending} urgent jobs pending` : 'All caught up'}
         bannerColor={colors.accentGreen}
         avatarUrl={avatarUrl}
         avatarElement={<Wrench color={colors.textInverse} size={24} />}

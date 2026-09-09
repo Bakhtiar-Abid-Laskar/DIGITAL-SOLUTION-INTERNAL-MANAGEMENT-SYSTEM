@@ -304,7 +304,7 @@ export default function PendingPaymentsScreen() {
         <div class="receipt-container">
           <div class="header">
             <h1 class="title">MONEY RECEIPT</h1>
-            <div class="subtitle">RepairShop - Service & Repair Management</div>
+            <div class="subtitle">Digital Solution - Service & Repair Management</div>
           </div>
   
           <div class="details-grid">

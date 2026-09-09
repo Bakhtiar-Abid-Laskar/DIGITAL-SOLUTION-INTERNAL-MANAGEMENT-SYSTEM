@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 import LoadingScreen from '../screens/shared/LoadingScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
+import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import InactiveUserScreen from '../screens/shared/InactiveUserScreen';
 
 import AdminStack from './AdminStack';
@@ -17,8 +18,18 @@ const Stack = createNativeStackNavigator();
 
 import { navigationRef } from './navigationRef';
 
+const linking = {
+  prefixes: ['repairshop://'],
+  config: {
+    screens: {
+      ResetPassword: 'reset-password',
+      Auth: 'login',
+    },
+  },
+};
+
 export default function RootNavigator() {
-  const { session, role, isActive, isLoading } = useAuth();
+  const { session, role, isActive, isLoading, isPasswordRecovery } = useAuth();
   
   // Register for push notifications if the user is authenticated
   usePushNotifications();
@@ -28,11 +39,13 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       {/* Global status bar — dark icons on white/light backgrounds */}
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!session ? (
+        {isPasswordRecovery ? (
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+        ) : !session ? (
           <Stack.Screen name="Auth" component={LoginScreen} />
         ) : !isActive ? (
           <Stack.Screen name="Inactive" component={InactiveUserScreen} />

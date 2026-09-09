@@ -332,7 +332,7 @@ export default function PendingPaymentsPage() {
       const wsData: any[][] = [];
 
       // Letterhead
-      wsData.push(['RepairShop — Pending Payments Summary']);
+      wsData.push(['Digital Solution — Pending Payments Summary']);
       wsData.push(['Generated On:', new Date().toLocaleString('en-IN')]);
       wsData.push(['Total Customers with Dues:', summary.customerCount]);
       wsData.push(['Total Outstanding Balance:', summary.totalBalance]);

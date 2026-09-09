@@ -44,7 +44,8 @@ export default function StaffPage() {
       let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
 
       if (roleFilter !== "All") query = query.eq('role', roleFilter);
-      if (statusFilter !== "All") query = query.eq('is_active', statusFilter === "Active");
+      if (statusFilter === "Active") query = query.eq('is_active', true);
+      if (statusFilter === "Inactive" || statusFilter === "Pending/Blocked") query = query.eq('is_active', false);
       if (debouncedSearchQuery) {
         query = query.or(`name.ilike.%${debouncedSearchQuery}%,email.ilike.%${debouncedSearchQuery}%`);
       }
@@ -88,30 +89,68 @@ export default function StaffPage() {
     onConfirm: () => void;
   } | null>(null);
 
-  const handleApprove = (id: string) => {
+  const handleApprove = (id: string, name: string) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Approve User',
-      message: 'Are you sure you want to approve this user? They will gain access to the system.',
+      title: 'Activate Staff Member',
+      message: `Are you sure you want to activate ${name}? They will regain login access to the system.`,
       isDestructive: false,
       onConfirm: async () => {
-        const { error } = await supabase.from('users').update({ is_active: true }).eq('id', id);
-        if (!error) fetchStaff();
-        setConfirmModal(null);
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_manage_staff_status', {
+            p_user_id: id,
+            p_action: 'activate',
+          });
+
+          if (rpcErr) {
+            const { error: invokeErr } = await supabase.functions.invoke('admin-delete-user', {
+              body: { userId: id, action: 'activate' }
+            });
+            if (invokeErr) throw invokeErr;
+          }
+
+          showToast(`${name} has been activated successfully.`, 'success');
+          fetchStaff();
+        } catch (err: any) {
+          showToast(`Failed to activate staff: ${err.message}`, 'error');
+        } finally {
+          setConfirmModal(null);
+        }
       }
     });
   };
 
-  const handleBlock = (id: string) => {
+  const handleDeactivate = (id: string, name: string) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Block User',
-      message: 'Are you sure you want to block this user? They will lose access immediately.',
+      title: 'Deactivate Staff Member',
+      message: `Are you sure you want to deactivate ${name}? Their login access will be immediately revoked, and they will no longer appear in job assignment pickers. All past jobs, payments, attendance, and financial history will remain intact.`,
       isDestructive: true,
       onConfirm: async () => {
-        const { error } = await supabase.from('users').update({ is_active: false }).eq('id', id);
-        if (!error) fetchStaff();
-        setConfirmModal(null);
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_manage_staff_status', {
+            p_user_id: id,
+            p_action: 'deactivate',
+          });
+
+          if (rpcErr) {
+            const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+              body: { userId: id, action: 'deactivate' }
+            });
+            if (error) {
+              const msg = await parseEdgeFunctionError(error, `Failed to deactivate ${name}`);
+              throw new Error(msg);
+            }
+          }
+
+          showToast(`${name} has been deactivated and login access revoked.`, 'success');
+          fetchStaff();
+        } catch (err: any) {
+          console.error(err);
+          showToast(`Failed to deactivate user: ${err.message}`, 'error');
+        } finally {
+          setConfirmModal(null);
+        }
       }
     });
   };
@@ -119,17 +158,17 @@ export default function StaffPage() {
   const handleDelete = (id: string, name: string) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Delete Staff Permanently',
-      message: `Are you absolutely sure you want to permanently delete ${name}? This action cannot be undone. Any past jobs or payments associated with them will remain in the system but will no longer show their name.`,
+      title: 'Delete Staff Member',
+      message: `Are you sure you want to permanently delete ${name}? If this staff member has associated historical records (such as jobs, payments, or attendance), they will remain safely deactivated to preserve financial audit trails. If they have no records, their account will be permanently erased.`,
       isDestructive: true,
       onConfirm: async () => {
         try {
           const { data, error } = await supabase.functions.invoke('admin-delete-user', {
-            body: { userId: id }
+            body: { userId: id, action: 'delete' }
           });
           
           if (error) {
-            const errorMsg = await parseEdgeFunctionError(error, `Failed to delete ${name}`);
+            const errorMsg = await parseEdgeFunctionError(error, `Failed to process ${name}`);
             throw new Error(errorMsg);
           }
 
@@ -137,11 +176,11 @@ export default function StaffPage() {
             throw new Error(data.error);
           }
           
-          showToast(`Successfully deleted ${name}`, 'success');
+          showToast(data?.message || `Successfully processed ${name}`, 'success');
           fetchStaff();
         } catch (err: any) {
           console.error(err);
-          showToast(`Failed to delete user: ${err.message}`, 'error');
+          showToast(`Action failed: ${err.message}`, 'error');
         } finally {
           setConfirmModal(null);
         }
@@ -199,8 +238,8 @@ export default function StaffPage() {
             aria-label="Filter by Status"
           >
             <option value="All">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Pending/Blocked">Pending/Blocked</option>
+            <option value="Active">Active Staff</option>
+            <option value="Inactive">Inactive Staff</option>
           </Select>
         </div>
       </SearchFilterBar>
@@ -263,7 +302,7 @@ export default function StaffPage() {
                       {user.is_active ? (
                         <Badge variant="success">Active</Badge>
                       ) : (
-                        <Badge variant="warning">Pending/Blocked</Badge>
+                        <Badge variant="warning">Inactive</Badge>
                       )}
                     </td>
                     <td className="px-6 py-4 text-admin-text-muted text-xs">{formatDate(user.created_at)}</td>
@@ -280,19 +319,19 @@ export default function StaffPage() {
                         
                         {user.is_active ? (
                           <button 
-                            onClick={() => handleBlock(user.id)}
+                            onClick={() => handleDeactivate(user.id, user.name)}
                             className="p-1.5 text-admin-text-secondary hover:text-admin-urgent-fg hover:bg-admin-urgent-bg/30 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
-                            title="Block User"
-                            aria-label="Block User"
+                            title="Deactivate Staff"
+                            aria-label="Deactivate Staff"
                           >
                             <Ban size={15} />
                           </button>
                         ) : (
                           <button 
-                            onClick={() => handleApprove(user.id)}
+                            onClick={() => handleApprove(user.id, user.name)}
                             className="p-1.5 text-admin-text-secondary hover:text-admin-completed-fg hover:bg-admin-completed-bg/30 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
-                            title="Approve User"
-                            aria-label="Approve User"
+                            title="Activate Staff"
+                            aria-label="Activate Staff"
                           >
                             <Check size={15} />
                           </button>
@@ -301,8 +340,8 @@ export default function StaffPage() {
                         <button 
                           onClick={() => handleDelete(user.id, user.name)}
                           className="p-1.5 text-admin-text-secondary hover:text-admin-danger hover:bg-admin-urgent-bg/30 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
-                          title="Delete Permanently"
-                          aria-label="Delete Permanently"
+                          title="Delete Staff"
+                          aria-label="Delete Staff"
                         >
                           <Trash2 size={15} />
                         </button>

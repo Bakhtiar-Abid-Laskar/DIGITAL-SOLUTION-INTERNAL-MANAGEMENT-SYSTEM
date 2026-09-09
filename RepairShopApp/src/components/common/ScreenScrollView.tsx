@@ -36,13 +36,13 @@ interface ScreenScrollViewProps extends ScrollViewProps {
  *     {children}
  *   </ScreenScrollView>
  */
-export default function ScreenScrollView({
+export default React.forwardRef<ScrollView, ScreenScrollViewProps>(function ScreenScrollView({
   children,
   contentContainerStyle,
   extraBottomPadding = 0,
   mode = 'nav',
   ...rest
-}: ScreenScrollViewProps) {
+}: ScreenScrollViewProps, ref) {
   const bottomPadding = useBottomInsetPadding(mode);
 
   const mergedContentStyle: StyleProp<ViewStyle> = [
@@ -53,6 +53,7 @@ export default function ScreenScrollView({
 
   return (
     <ScrollView
+      ref={ref}
       contentContainerStyle={mergedContentStyle}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
@@ -61,7 +62,7 @@ export default function ScreenScrollView({
       {children}
     </ScrollView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   defaultContent: {

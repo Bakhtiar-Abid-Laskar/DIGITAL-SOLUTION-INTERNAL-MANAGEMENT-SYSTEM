@@ -181,36 +181,8 @@ export default function MyJobsScreen() {
     fetchJobs(nextPage, false);
   };
 
-  const handleJobPress = async (jobId: string) => {
-    if (!user) return;
-
-    const job = jobs.find(j => j.id === jobId);
-    if (!job) return;
-
-    if (job.job_type === 'Onsite') {
-      // For onsite jobs, enforce the arrival → work → departure selfie sequence.
-      const { data: visitData } = await supabase
-        .from('onsite_visits')
-        .select('arrival_selfie_drive_file_id, departure_selfie_drive_file_id')
-        .eq('job_id', jobId)
-        .eq('technician_id', user.id)
-        .order('arrival_time', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const hasArrivalSelfie = !!visitData?.arrival_selfie_drive_file_id;
-      const hasDepartureSelfie = !!visitData?.departure_selfie_drive_file_id;
-
-      if (!hasArrivalSelfie) {
-        navigation.navigate('OnsiteVisit', { jobId });
-      } else if (!hasDepartureSelfie && job.status !== 'Completed') {
-        navigation.navigate('UpdateWork', { jobId, onsiteStarted: true, completionSelfieRequired: true });
-      } else {
-        navigation.navigate('UpdateWork', { jobId, onsiteStarted: true, completionSelfieRequired: false });
-      }
-    } else {
-      navigation.navigate('UpdateWork', { jobId });
-    }
+  const handleJobPress = (jobId: string) => {
+    navigation.navigate('UpdateWork', { jobId });
   };
 
   const statusTabs: TabDefinition[] = [

@@ -48,12 +48,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return null; 
   }
 
-  if (role !== 'admin') {
+  if (role !== 'admin' && role !== 'receptionist') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-admin-bg-base p-6">
         <div className="bg-admin-bg-surface border border-admin-border p-8 rounded-lg shadow-sm text-center max-w-md w-full border-t-[3px] border-t-admin-danger">
           <h2 className="text-xl font-bold mb-2 text-admin-text-primary">Access Denied</h2>
-          <p className="text-admin-text-secondary mb-6">You do not have permission to access the admin panel. Only administrators are allowed.</p>
+          <p className="text-admin-text-secondary mb-6">You do not have permission to access the management portal. Only administrators and receptionists are allowed.</p>
           <Button variant="danger" onClick={signOut} className="w-full">
             Sign Out
           </Button>

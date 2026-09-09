@@ -16,8 +16,8 @@
       "bundleIdentifier": "com.repairshop.app",
       "icon": "./assets/icon.png",
       "infoPlist": {
-        "NSCameraUsageDescription": "RepairShop uses the camera to capture attendance selfies and onsite visit photos.",
-        "NSLocationWhenInUseUsageDescription": "RepairShop uses your location to verify attendance check-in/check-out and onsite visit locations."
+        "NSCameraUsageDescription": "Digital Solution uses the camera to capture attendance selfies and onsite visit photos.",
+        "NSLocationWhenInUseUsageDescription": "Digital Solution uses your location to verify attendance check-in/check-out and onsite visit locations."
       }
     },
     "android": {
@@ -50,13 +50,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "RepairShop uses the camera to capture attendance selfies and onsite visit photos."
+          "cameraPermission": "Digital Solution uses the camera to capture attendance selfies and onsite visit photos."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "RepairShop uses your location to verify attendance check-in/check-out and onsite visit locations.",
+          "locationAlwaysAndWhenInUsePermission": "Digital Solution uses your location to verify attendance check-in/check-out and onsite visit locations.",
           "isAndroidBackgroundLocationEnabled": false
         }
       ],

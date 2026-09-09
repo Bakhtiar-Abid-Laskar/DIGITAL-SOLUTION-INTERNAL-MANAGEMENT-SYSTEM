@@ -127,7 +127,7 @@ export default function AdminCreateStaffScreen() {
             style={styles.input}
             value={email}
             onChangeText={(val) => setState({ email: val })}
-            placeholder="e.g. ahmed@repairshop.com"
+            placeholder="e.g. ahmed@digitalsolution.com"
             placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"

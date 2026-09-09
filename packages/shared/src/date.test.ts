@@ -6,6 +6,7 @@ import {
   getTodayDateString, 
   formatTime, 
   getAttendanceDateIST, 
+  getStartOfTodayIST,
   getDateIST,
   formatRelativeTime,
   formatFullDateTime
@@ -72,6 +73,13 @@ describe('Date & Time Formatting Utilities (@repairshop/shared/date.ts)', () => 
       const specificDate = new Date('2026-08-14T18:30:00Z');
       const istDate = getDateIST(specificDate);
       expect(istDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('returns ISO string for start of today in Asia/Kolkata timezone', () => {
+      const startOfToday = getStartOfTodayIST();
+      expect(startOfToday).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // IST is UTC+05:30, so IST midnight 00:00 corresponds to 18:30:00.000Z of the prior UTC day
+      expect(startOfToday).toContain('T18:30:00.000Z');
     });
   });
 

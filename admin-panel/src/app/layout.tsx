@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "RepairShop Admin",
-  description: "Admin Panel for RepairShop Service Management System",
+  title: "Digital Solution Admin",
+  description: "Admin Panel for Digital Solution Service Management System",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

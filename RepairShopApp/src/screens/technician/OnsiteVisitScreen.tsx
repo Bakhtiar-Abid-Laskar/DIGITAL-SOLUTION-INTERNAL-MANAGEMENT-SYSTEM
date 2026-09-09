@@ -19,7 +19,7 @@ import { CheckCircle2, MapPin, Camera } from 'lucide-react-native';
 export default function OnsiteVisitScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user, displayName } = useAuth();
+  const { user, displayName, role } = useAuth();
   const jobId = route.params?.jobId;
   const { showToast } = useToast();
 
@@ -38,10 +38,26 @@ export default function OnsiteVisitScreen() {
         .from('jobs')
         .select('*')
         .eq('id', jobId)
-        .eq('technician_id', user.id)
         .single();
 
-      if (jobError || !jobData) throw new Error('Job not found or not assigned to you.');
+      if (jobError || !jobData) throw new Error('Job not found.');
+
+      // Verify technician assignment including multi-technician assignments
+      const { data: jobTechsData } = await supabase
+        .from('job_technicians')
+        .select('technician_id, removed_at')
+        .eq('job_id', jobId)
+        .is('removed_at', null);
+
+      const isAssigned =
+        role === 'admin' ||
+        role === 'receptionist' ||
+        jobData.technician_id === user.id ||
+        (jobTechsData && jobTechsData.some((jt: any) => jt.technician_id === user.id));
+
+      if (!isAssigned) {
+        throw new Error('This job is not assigned to you.');
+      }
       setJob(jobData);
 
       const { data: visitData } = await supabase
@@ -73,25 +89,38 @@ export default function OnsiteVisitScreen() {
       setSaving(true);
       const timestamp = new Date().toISOString();
       if (mode === 'arrival') {
-        const payload = {
-          job_id: jobId,
-          technician_id: user.id,
-          arrival_time: timestamp,
-          arrival_selfie_drive_file_id: data.driveFileId,
-          arrival_photo_drive_link: data.driveLink,
-          arrival_gps_lat: data.gpsLat,
-          arrival_gps_lng: data.gpsLng
-        };
-        if (visit?.id) {
-          const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from('onsite_visits').insert(payload);
-          if (error) throw error;
-        }
-        // Officially start the job — move it to 'In Progress'
-        if (job && job.status === 'Received') {
-          await supabase.from('jobs').update({ status: 'In Progress' }).eq('id', jobId);
+        // Attempt atomic server-side RPC first
+        const { error: rpcErr } = await supabase.rpc('record_onsite_arrival_checkin', {
+          p_job_id: jobId,
+          p_technician_id: user.id,
+          p_drive_file_id: data.driveFileId,
+          p_drive_link: data.driveLink,
+          p_gps_lat: data.gpsLat,
+          p_gps_lng: data.gpsLng,
+        });
+
+        if (rpcErr) {
+          console.warn('[OnsiteVisit] RPC record_onsite_arrival_checkin fallback:', rpcErr.message);
+          const payload = {
+            job_id: jobId,
+            technician_id: user.id,
+            arrival_time: timestamp,
+            arrival_selfie_drive_file_id: data.driveFileId,
+            arrival_photo_drive_link: data.driveLink,
+            arrival_gps_lat: data.gpsLat,
+            arrival_gps_lng: data.gpsLng,
+          };
+          if (visit?.id) {
+            const { error } = await supabase.from('onsite_visits').update(payload).eq('id', visit.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('onsite_visits').insert(payload);
+            if (error) throw error;
+          }
+          // Officially start the job — move it to 'In Progress'
+          if (job && job.status === 'Received') {
+            await supabase.from('jobs').update({ status: 'In Progress' }).eq('id', jobId);
+          }
         }
       } else if (mode === 'device') {
         const payload = {

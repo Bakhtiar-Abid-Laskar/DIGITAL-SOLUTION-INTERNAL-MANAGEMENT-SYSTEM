@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl,  } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, Alert } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { User, ShieldCheck, Wrench, Headphones, MoreVertical, Plus } from 'lucide-react-native';
@@ -130,6 +130,7 @@ export default function StaffScreen() {
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 20;
   const [users, setUsers] = useState<UserData[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
@@ -153,16 +154,23 @@ export default function StaffScreen() {
     <AttendanceRow item={item} />
   ), []);
 
-  const fetchUsers = async (pageNum = 0, replace = true, cancelled = false) => {
+  const fetchUsers = async (pageNum = 0, replace = true, cancelled = false, filter = statusFilter) => {
     try {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('users')
         .select('*')
-        .order('name', { ascending: true })
-        .range(from, to);
+        .order('name', { ascending: true });
+
+      if (filter === 'active') {
+        query = query.eq('is_active', true);
+      } else if (filter === 'inactive') {
+        query = query.eq('is_active', false);
+      }
+
+      const { data, error } = await query.range(from, to);
 
       if (cancelled) return;
       if (error) throw error;
@@ -189,15 +197,15 @@ export default function StaffScreen() {
     useCallback(() => {
       let cancelled = false;
       setPage(0);
-      fetchUsers(0, true, cancelled);
+      fetchUsers(0, true, cancelled, statusFilter);
       return () => { cancelled = true; };
-    }, [])
+    }, [statusFilter])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
     setPage(0);
-    fetchUsers(0, true);
+    fetchUsers(0, true, false, statusFilter);
   };
 
   const onLoadMore = () => {
@@ -205,31 +213,106 @@ export default function StaffScreen() {
     const nextPage = page + 1;
     setPage(nextPage);
     setLoadingMore(true);
-    fetchUsers(nextPage, false);
+    fetchUsers(nextPage, false, false, statusFilter);
   };
 
+  const handleFilterChange = (newFilter: 'all' | 'active' | 'inactive') => {
+    setStatusFilter(newFilter);
+    setPage(0);
+    setLoading(true);
+    fetchUsers(0, true, false, newFilter);
+  };
 
-
-  const toggleStatus = async () => {
+  const handleManageStatus = async (action: 'activate' | 'deactivate' | 'delete') => {
     if (!selectedUser) return;
     setToggling(true);
     try {
-      const newStatus = !selectedUser.is_active;
-      const { error } = await supabase
-        .from('users')
-        .update({ is_active: newStatus })
-        .eq('id', selectedUser.id);
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_manage_staff_status', {
+        p_user_id: selectedUser.id,
+        p_action: action,
+      });
 
-      if (error) throw error;
+      if (rpcErr) {
+        const { data: efData, error: efErr } = await supabase.functions.invoke('admin-delete-user', {
+          body: { userId: selectedUser.id, action }
+        });
+        if (efErr) throw efErr;
+        if (efData?.error) throw new Error(efData.error);
+        
+        showToast({
+          title: 'Success',
+          message: efData?.message || 'Staff member updated successfully.',
+          type: 'success'
+        });
+      } else {
+        const res = rpcData as { success: boolean; message: string; action_taken: string };
+        showToast({
+          title: 'Success',
+          message: res?.message || 'Staff member updated successfully.',
+          type: 'success'
+        });
+      }
 
-      showToast({ title: 'Success', message: `User ${newStatus ? 'activated' : 'deactivated'} successfully.`, type: 'success' });
       setOptionsVisible(false);
-      fetchUsers();
+      setPage(0);
+      fetchUsers(0, true, false, statusFilter);
     } catch (err: any) {
-      showToast({ title: 'Error', message: err.message, type: 'error' });
+      console.error(`Failed to ${action} user:`, err);
+      showToast({
+        title: 'Error',
+        message: err.message || `Failed to ${action} staff member.`,
+        type: 'error'
+      });
     } finally {
       setToggling(false);
     }
+  };
+
+  const confirmDeactivate = () => {
+    if (!selectedUser) return;
+    Alert.alert(
+      'Deactivate Staff Member',
+      `Are you sure you want to deactivate ${selectedUser.name}? Their login access will be immediately revoked, and they will no longer appear in job assignment pickers. All past jobs, payments, attendance, and financial history will remain intact.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: () => handleManageStatus('deactivate'),
+        },
+      ]
+    );
+  };
+
+  const confirmActivate = () => {
+    if (!selectedUser) return;
+    Alert.alert(
+      'Activate Staff Member',
+      `Are you sure you want to activate ${selectedUser.name}? They will regain login access to the system.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Activate',
+          onPress: () => handleManageStatus('activate'),
+        },
+      ]
+    );
+  };
+
+  const confirmDelete = () => {
+    if (!selectedUser) return;
+    Alert.alert(
+      'Delete Staff Member',
+      `Are you sure you want to permanently delete ${selectedUser.name}? If this staff member has associated historical records (such as jobs, payments, or attendance), they will remain safely deactivated to preserve financial audit trails. If they have no records, their account will be permanently erased.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleManageStatus('delete'),
+        },
+      ]
+    );
   };
 
   const viewAttendance = async () => {
@@ -269,6 +352,24 @@ export default function StaffScreen() {
         rightIcon={<Plus size={20} color={colors.accentBlue} strokeWidth={2.5} />}
         onRightPress={() => navigation.navigate('AdminCreateStaff')}
       />
+
+      <View style={styles.filterBar}>
+        {(['all', 'active', 'inactive'] as const).map(tab => {
+          const isActive = statusFilter === tab;
+          const label = tab === 'all' ? 'All Staff' : tab === 'active' ? 'Active Staff' : 'Inactive Staff';
+          return (
+            <AppPressable
+              key={tab}
+              onPress={() => handleFilterChange(tab)}
+              style={[styles.chip, isActive && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                {label}
+              </Text>
+            </AppPressable>
+          );
+        })}
+      </View>
 
       {loading && !refreshing ? (
         <View style={styles.listContent}>
@@ -310,13 +411,32 @@ export default function StaffScreen() {
                 variant="secondary"
                 onPress={viewAttendance}
               />
-              <Button
-                label={selectedUser.is_active ? 'Deactivate User' : 'Activate User'}
-                onPress={toggleStatus}
-                loading={toggling}
-                variant={selectedUser.is_active ? 'secondary' : 'primary'}
-                style={selectedUser.is_active ? { borderColor: colors.accentRed } : { backgroundColor: colors.success }}
-              />
+              {selectedUser.is_active ? (
+                <Button
+                  label="Deactivate Staff"
+                  onPress={confirmDeactivate}
+                  loading={toggling}
+                  variant="secondary"
+                  style={{ borderColor: colors.accentRed }}
+                />
+              ) : (
+                <>
+                  <Button
+                    label="Activate Staff"
+                    onPress={confirmActivate}
+                    loading={toggling}
+                    variant="primary"
+                    style={{ backgroundColor: colors.success }}
+                  />
+                  <Button
+                    label="Delete Staff"
+                    onPress={confirmDelete}
+                    loading={toggling}
+                    variant="secondary"
+                    style={{ borderColor: colors.accentRed }}
+                  />
+                </>
+              )}
               <Button label="Cancel" variant="secondary" onPress={() => setOptionsVisible(false)} />
             </View>
           </>
@@ -359,6 +479,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.textInverse,
   },
 
   listContent: {

@@ -225,7 +225,10 @@ export default function LoginScreen() {
     setForgotError(null);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(trimmed);
+      const redirectUrl = process.env.EXPO_PUBLIC_RESET_REDIRECT_URL || 'repairshop://reset-password';
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: redirectUrl,
+      });
       if (error) {
         setForgotError(error.message || 'Failed to send password reset email.');
       } else {
