@@ -1,5 +1,8 @@
--- Migration: 20260909103000_admin_manage_staff_status_rpc.sql
--- Description: Centralized RPC to manage staff status (deactivate, activate, force delete)
+-- Migration: 20260909130001_update_admin_manage_staff_status_simplified.sql
+-- Description: Update admin_manage_staff_status to use simplified delete logic.
+--              Now that all FK references to users(id) are ON DELETE SET NULL
+--              (see 20260909130000_fix_user_fk_for_force_delete.sql),
+--              the delete action just needs to clean up job_technicians and delete the user row.
 
 CREATE OR REPLACE FUNCTION public.admin_manage_staff_status(
   p_user_id uuid,
@@ -83,26 +86,29 @@ BEGIN
       'message', format('Staff member %s has been deactivated and login access revoked. Historical records preserved.', v_target_name)
     );
 
-  -- 7. Handle ACTION: 'delete' (Force delete — DB ON DELETE SET NULL handles FK cleanup)
+  -- 7. Handle ACTION: 'delete' (Force delete)
+  --    All FK references to public.users(id) are now ON DELETE SET NULL
+  --    (migration 20260909130000), so deleting the user row automatically
+  --    nullifies those references. Only job_technicians needs explicit cleanup
+  --    (it was already ON DELETE CASCADE but we ensure it here).
   ELSIF p_action = 'delete' THEN
-    -- job_technicians uses ON DELETE CASCADE, but explicitly clean up to be safe
+    -- Remove technician assignment rows (junction table)
     DELETE FROM public.job_technicians WHERE technician_id = p_user_id;
 
-    -- Hard delete: all other FK references are ON DELETE SET NULL (see migration
-    -- 20260909130000_fix_user_fk_for_force_delete.sql) so the DB handles nullification.
+    -- Hard delete from public.users — DB constraints handle all FK nullification
     DELETE FROM public.users WHERE id = p_user_id;
 
-    -- Also delete from auth.users (Edge Function admin API handles this too as backup)
+    -- Also attempt to delete from auth.users (Edge Function admin API does this too as backup)
     DELETE FROM auth.users WHERE id = p_user_id;
 
     RETURN jsonb_build_object(
       'success', true,
       'action', 'deleted',
-      'message', format('Staff member %s has been permanently deleted. All associated records are preserved with staff references cleared.', v_target_name)
+      'message', format('Staff member %s has been permanently deleted. All historical records are preserved with staff references cleared.', v_target_name)
     );
 
   ELSE
-    RAISE EXCEPTION 'Invalid action: %. Expected deactivate, activate, or delete.', p_action;
+    RAISE EXCEPTION 'Invalid action: %. Expected activate, deactivate, or delete.', p_action;
   END IF;
 END;
 $$;
