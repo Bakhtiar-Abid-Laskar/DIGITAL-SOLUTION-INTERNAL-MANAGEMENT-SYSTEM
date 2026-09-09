@@ -33,7 +33,7 @@ export function getSiteUrl(): string {
 
   // 5. In production runtime without specific vars, use the production deployment domain
   if (process.env.NODE_ENV === 'production') {
-    return 'https://digital-solution-internal-management-system.vercel.app';
+    return 'https://internalmanagement.digitalsolution.cc';
   }
 
   // 6. Local development fallback

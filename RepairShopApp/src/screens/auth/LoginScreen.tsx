@@ -225,7 +225,7 @@ export default function LoginScreen() {
     setForgotError(null);
 
     try {
-      const DEFAULT_RESET_URL = 'https://digital-solution-internal-management-system.vercel.app/reset-password';
+      const DEFAULT_RESET_URL = 'https://internalmanagement.digitalsolution.cc/reset-password';
       const redirectUrl = process.env.EXPO_PUBLIC_RESET_REDIRECT_URL || DEFAULT_RESET_URL;
       const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
         redirectTo: redirectUrl,

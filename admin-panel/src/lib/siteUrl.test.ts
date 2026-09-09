@@ -38,6 +38,6 @@ describe('getSiteUrl', () => {
     (process.env as any).NODE_ENV = 'production';
 
     const url = getSiteUrl();
-    expect(url).toBe('https://digital-solution-internal-management-system.vercel.app');
+    expect(url).toBe('https://internalmanagement.digitalsolution.cc');
   });
 });
