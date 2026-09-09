@@ -162,11 +162,13 @@ export default function StaffPage() {
       message: `Are you sure you want to permanently delete ${name}? This will hard-delete their account immediately. Any jobs, payments, or attendance records they are linked to will be preserved — their name will simply be cleared from those records. This action cannot be undone.`,
       isDestructive: true,
       onConfirm: async () => {
+        // Dismiss modal immediately for snappy UX
+        setConfirmModal(null);
         try {
           const { data, error } = await supabase.functions.invoke('admin-delete-user', {
             body: { userId: id, action: 'delete' }
           });
-          
+
           if (error) {
             const errorMsg = await parseEdgeFunctionError(error, `Failed to process ${name}`);
             throw new Error(errorMsg);
@@ -175,14 +177,16 @@ export default function StaffPage() {
           if (data?.error) {
             throw new Error(data.error);
           }
-          
-          showToast(data?.message || `Successfully processed ${name}`, 'success');
+
+          // Remove from local state immediately (optimistic update)
+          setStaff(prev => prev.filter(s => s.id !== id));
+          showToast(data?.message || `${name} has been permanently deleted.`, 'success');
+          // Background re-sync with server
           fetchStaff();
         } catch (err: any) {
           console.error(err);
           showToast(`Action failed: ${err.message}`, 'error');
-        } finally {
-          setConfirmModal(null);
+          fetchStaff(); // Re-fetch to restore correct state on failure
         }
       }
     });
