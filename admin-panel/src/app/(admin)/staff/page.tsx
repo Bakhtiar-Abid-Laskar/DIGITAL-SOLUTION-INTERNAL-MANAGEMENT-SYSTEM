@@ -102,16 +102,13 @@ export default function StaffPage() {
             p_action: 'activate',
           });
 
-          if (rpcErr) {
-            const { error: invokeErr } = await supabase.functions.invoke('admin-delete-user', {
-              body: { userId: id, action: 'activate' }
-            });
-            if (invokeErr) throw invokeErr;
-          }
+          if (rpcErr) throw new Error(rpcErr.message);
+          if (rpcData?.error) throw new Error(rpcData.error);
 
           showToast(`${name} has been activated successfully.`, 'success');
           fetchStaff();
         } catch (err: any) {
+          console.error(err);
           showToast(`Failed to activate staff: ${err.message}`, 'error');
         } finally {
           setConfirmModal(null);
@@ -133,21 +130,14 @@ export default function StaffPage() {
             p_action: 'deactivate',
           });
 
-          if (rpcErr) {
-            const { data, error } = await supabase.functions.invoke('admin-delete-user', {
-              body: { userId: id, action: 'deactivate' }
-            });
-            if (error) {
-              const msg = await parseEdgeFunctionError(error, `Failed to deactivate ${name}`);
-              throw new Error(msg);
-            }
-          }
+          if (rpcErr) throw new Error(rpcErr.message);
+          if (rpcData?.error) throw new Error(rpcData.error);
 
           showToast(`${name} has been deactivated and login access revoked.`, 'success');
           fetchStaff();
         } catch (err: any) {
           console.error(err);
-          showToast(`Failed to deactivate user: ${err.message}`, 'error');
+          showToast(`Failed to deactivate staff: ${err.message}`, 'error');
         } finally {
           setConfirmModal(null);
         }
