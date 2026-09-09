@@ -1,5 +1,5 @@
 -- Migration: 20260909103000_admin_manage_staff_status_rpc.sql
--- Description: Centralized RPC to manage staff status (deactivate, activate, safe delete)
+-- Description: Centralized RPC to manage staff status (deactivate, activate, force delete)
 
 CREATE OR REPLACE FUNCTION public.admin_manage_staff_status(
   p_user_id uuid,
@@ -86,83 +86,67 @@ BEGIN
       'message', format('Staff member %s has been deactivated and login access revoked. Historical records preserved.', v_target_name)
     );
 
-  -- 7. Handle ACTION: 'delete' (Option A with smart hard-delete only if 0 records)
+  -- 7. Handle ACTION: 'delete' (Force delete — nullify FK references, then hard delete)
   ELSIF p_action = 'delete' THEN
-    -- Check dependent tables
-    -- a. jobs
-    SELECT count(*) INTO v_temp_count FROM public.jobs WHERE technician_id = p_user_id OR receptionist_id = p_user_id;
-    IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'jobs'; END IF;
+    -- Step 1: Nullify nullable FK references so the user row can be deleted
+    -- without violating foreign key constraints, while keeping all audit records intact.
 
-    -- b. job_technicians
-    IF NOT v_has_records THEN
-      SELECT count(*) INTO v_temp_count FROM public.job_technicians WHERE technician_id = p_user_id;
-      IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'job_technicians'; END IF;
-    END IF;
+    -- a. jobs — clear technician/receptionist assignments
+    UPDATE public.jobs
+    SET technician_id  = NULL WHERE technician_id  = p_user_id;
+    UPDATE public.jobs
+    SET receptionist_id = NULL WHERE receptionist_id = p_user_id;
 
-    -- c. payments
-    IF NOT v_has_records THEN
-      SELECT count(*) INTO v_temp_count FROM public.payments WHERE user_id = p_user_id OR recorded_by = p_user_id;
-      IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'payments'; END IF;
-    END IF;
+    -- b. job_technicians — remove assignment rows (junction table, safe to delete)
+    DELETE FROM public.job_technicians WHERE technician_id = p_user_id;
 
-    -- d. attendance
-    IF NOT v_has_records THEN
-      SELECT count(*) INTO v_temp_count FROM public.attendance WHERE user_id = p_user_id OR approved_by = p_user_id;
-      IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'attendance'; END IF;
-    END IF;
+    -- c. payments — clear user_id and recorded_by (keep payment rows for audit)
+    UPDATE public.payments
+    SET user_id = NULL WHERE user_id = p_user_id;
+    UPDATE public.payments
+    SET recorded_by = NULL WHERE recorded_by = p_user_id;
 
-    -- e. customer_ledger (if exists)
-    IF NOT v_has_records THEN
-      BEGIN
-        SELECT count(*) INTO v_temp_count FROM public.customer_ledger WHERE recorded_by = p_user_id;
-        IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'customer_ledger'; END IF;
-      EXCEPTION WHEN undefined_table THEN
-        -- table does not exist, ignore
-      END;
-    END IF;
+    -- d. attendance — clear user_id and approved_by
+    UPDATE public.attendance
+    SET user_id = NULL WHERE user_id = p_user_id;
+    UPDATE public.attendance
+    SET approved_by = NULL WHERE approved_by = p_user_id;
 
-    -- f. onsite_visits
-    IF NOT v_has_records THEN
-      BEGIN
-        SELECT count(*) INTO v_temp_count FROM public.onsite_visits WHERE technician_id = p_user_id;
-        IF v_temp_count > 0 THEN v_has_records := true; v_table_match := 'onsite_visits'; END IF;
-      EXCEPTION WHEN undefined_table THEN
-      END;
-    END IF;
+    -- e. customer_ledger — clear recorded_by (table may not exist on all deployments)
+    BEGIN
+      UPDATE public.customer_ledger
+      SET recorded_by = NULL WHERE recorded_by = p_user_id;
+    EXCEPTION WHEN undefined_table THEN
+      -- table does not exist, skip
+    END;
 
-    -- If has records: DO NOT HARD DELETE. Perform safe deactivation (Option A).
-    IF v_has_records THEN
-      UPDATE public.users
-      SET is_active = false,
-          updated_at = now()
-      WHERE id = p_user_id;
+    -- f. onsite_visits — clear technician_id (table may not exist on all deployments)
+    BEGIN
+      UPDATE public.onsite_visits
+      SET technician_id = NULL WHERE technician_id = p_user_id;
+    EXCEPTION WHEN undefined_table THEN
+      -- table does not exist, skip
+    END;
 
-      UPDATE auth.users
-      SET banned_until = '2999-12-31 23:59:59+00'
-      WHERE id = p_user_id;
+    -- g. salary — clear user_id if table exists
+    BEGIN
+      UPDATE public.salary
+      SET user_id = NULL WHERE user_id = p_user_id;
+    EXCEPTION WHEN undefined_table THEN
+    END;
 
-      RETURN jsonb_build_object(
-        'success', true,
-        'action', 'deactivated',
-        'has_records', true,
-        'reason', format('Staff member has associated records in %s.', v_table_match),
-        'message', format('Staff member %s has associated historical records (such as jobs or payments). The account has been deactivated and login access revoked while preserving all financial and job history.', v_target_name)
-      );
-    ELSE
-      -- Zero records: Hard delete is safe
-      DELETE FROM public.users WHERE id = p_user_id;
-      DELETE FROM auth.users WHERE id = p_user_id;
+    -- Step 2: Hard delete from public.users and auth.users
+    DELETE FROM public.users WHERE id = p_user_id;
+    DELETE FROM auth.users WHERE id = p_user_id;
 
-      RETURN jsonb_build_object(
-        'success', true,
-        'action', 'deleted',
-        'has_records', false,
-        'message', format('Staff member %s had zero associated records and has been permanently deleted.', v_target_name)
-      );
-    END IF;
+    RETURN jsonb_build_object(
+      'success', true,
+      'action', 'deleted',
+      'message', format('Staff member %s has been permanently deleted. All associated records have been preserved with their references cleared.', v_target_name)
+    );
 
   ELSE
-    RAISE EXCEPTION 'Invalid action: %s. Expected deactivate, activate, or delete.', p_action;
+    RAISE EXCEPTION 'Invalid action: %. Expected deactivate, activate, or delete.', p_action;
   END IF;
 END;
 $$;

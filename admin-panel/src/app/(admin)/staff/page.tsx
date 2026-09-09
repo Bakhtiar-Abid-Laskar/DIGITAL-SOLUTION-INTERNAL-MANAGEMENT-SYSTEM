@@ -159,7 +159,7 @@ export default function StaffPage() {
     setConfirmModal({
       isOpen: true,
       title: 'Delete Staff Member',
-      message: `Are you sure you want to permanently delete ${name}? If this staff member has associated historical records (such as jobs, payments, or attendance), they will remain safely deactivated to preserve financial audit trails. If they have no records, their account will be permanently erased.`,
+      message: `Are you sure you want to permanently delete ${name}? This will hard-delete their account immediately. Any jobs, payments, or attendance records they are linked to will be preserved — their name will simply be cleared from those records. This action cannot be undone.`,
       isDestructive: true,
       onConfirm: async () => {
         try {
