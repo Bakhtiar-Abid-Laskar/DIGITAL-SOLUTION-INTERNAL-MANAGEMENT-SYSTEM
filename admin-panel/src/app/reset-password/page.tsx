@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, ArrowLeft, Smartphone, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
@@ -18,11 +18,21 @@ export default function ResetPasswordPage() {
   const [isRecoveryReady, setIsRecoveryReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [mobileAppUrl, setMobileAppUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    // Listen for auth state changes (e.g. PASSWORD_RECOVERY event)
+    // Build the deep link URI to hand off to mobile app if the user prefers mobile
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash || search) {
+        setMobileAppUrl(`repairshop://reset-password${search}${hash}`);
+      }
+    }
+
+    // 1. Listen for auth state changes (e.g. PASSWORD_RECOVERY or SIGNED_IN event)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       if (event === 'PASSWORD_RECOVERY' || (session && event === 'SIGNED_IN')) {
@@ -31,22 +41,72 @@ export default function ResetPasswordPage() {
       }
     });
 
-    // Check if session is already established from the recovery link
-    const checkRecoverySession = async () => {
+    // 2. Proactively parse and exchange recovery tokens (both PKCE ?code= and hash #access_token=)
+    const checkAndEstablishSession = async () => {
       try {
+        if (typeof window === 'undefined') return;
+
+        // A. Check for error in query or hash
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashStr = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
+        const hashParams = new URLSearchParams(hashStr);
+
+        const errorDesc = urlParams.get('error_description') || hashParams.get('error_description');
+        const errorCode = urlParams.get('error') || hashParams.get('error');
+        if (errorDesc || errorCode) {
+          setError(errorDesc || 'This password reset link is invalid or has expired. Please request a new one.');
+          setSessionChecking(false);
+          return;
+        }
+
+        // B. Handle PKCE flow (?code=...)
+        const code = urlParams.get('code');
+        if (code) {
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (!mounted) return;
+          if (exchangeError) {
+            setError(exchangeError.message || 'Failed to verify password reset code. It may have expired.');
+            setSessionChecking(false);
+            return;
+          }
+          if (exchangeData.session) {
+            setIsRecoveryReady(true);
+            setSessionChecking(false);
+            return;
+          }
+        }
+
+        // C. Handle Implicit flow (#access_token=...&refresh_token=...)
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        if (accessToken && refreshToken) {
+          const { data: setData, error: setErrorObj } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!mounted) return;
+          if (setErrorObj) {
+            setError(setErrorObj.message || 'Failed to activate recovery session.');
+            setSessionChecking(false);
+            return;
+          }
+          if (setData.session) {
+            setIsRecoveryReady(true);
+            setSessionChecking(false);
+            return;
+          }
+        }
+
+        // D. Check existing session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (!mounted) return;
         if (sessionError) {
-          setError('Unable to verify reset link. Please request a new one.');
+          setError('Unable to verify reset session. Please request a new link.');
         } else if (session) {
           setIsRecoveryReady(true);
         } else {
-          // Check if hash has error_description
-          if (typeof window !== 'undefined' && window.location.hash.includes('error=')) {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            const desc = hashParams.get('error_description') || 'This password reset link is invalid or has expired.';
-            setError(desc);
-          }
+          // No session and no tokens found
+          setError('No valid reset token found in this link. Please request a new password reset email.');
         }
       } catch (err: any) {
         if (mounted) setError(err.message || 'Error verifying recovery session.');
@@ -55,7 +115,7 @@ export default function ResetPasswordPage() {
       }
     };
 
-    checkRecoverySession();
+    checkAndEstablishSession();
 
     return () => {
       mounted = false;
@@ -79,7 +139,7 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      const { data, error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
 
@@ -102,8 +162,8 @@ export default function ResetPasswordPage() {
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#1E56CC]/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#14337A]/30 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md bg-[#16233F] border border-[#24355A] rounded-3xl p-8 shadow-2xl relative z-10">
-        <div className="text-center mb-8">
+      <div className="w-full max-w-md bg-[#16233F] border border-[#24355A] rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10">
+        <div className="text-center mb-6">
           <div className="w-14 h-14 bg-gradient-to-tr from-[#14337A] to-[#1E70E0] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#1E70E0]/20 border border-white/10">
             <Lock className="w-7 h-7 text-white" />
           </div>
@@ -116,25 +176,36 @@ export default function ResetPasswordPage() {
         {sessionChecking ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3">
             <Loader2 className="w-8 h-8 text-[#1E70E0] animate-spin" />
-            <p className="text-xs text-[#8A94A6]">Verifying password reset link...</p>
+            <p className="text-xs text-[#8A94A6]">Verifying security tokens...</p>
           </div>
         ) : success ? (
           <div className="space-y-6 text-center py-4">
             <div className="w-16 h-16 bg-[#10B981]/15 text-[#10B981] rounded-full flex items-center justify-center mx-auto border border-[#10B981]/30">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-white">Password Updated!</h2>
+            <div className="space-y-1.5">
+              <h2 className="text-lg font-semibold text-white">Password Updated Successfully!</h2>
               <p className="text-sm text-[#8A94A6]">
-                Your password has been changed successfully. You can now sign in with your new password.
+                Your password has been changed. You can now sign in to both the Web Admin Panel and the Digital Solution Mobile App.
               </p>
             </div>
-            <Link
-              href="/login"
-              className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#14337A] via-[#1A4BB5] to-[#1E70E0] hover:from-[#102963] hover:to-[#195ec2] text-white font-bold py-3.5 px-4 rounded-xl text-sm transition-all shadow-lg shadow-[#1E70E0]/25"
-            >
-              Back to Login
-            </Link>
+            <div className="space-y-3 pt-2">
+              <Link
+                href="/login"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#14337A] via-[#1A4BB5] to-[#1E70E0] hover:from-[#102963] hover:to-[#195ec2] text-white font-bold py-3.5 px-4 rounded-xl text-sm transition-all shadow-lg shadow-[#1E70E0]/25"
+              >
+                Sign In to Web Admin
+              </Link>
+              {mobileAppUrl && (
+                <a
+                  href="repairshop://"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-[#1E293B] hover:bg-[#283548] text-[#93C5FD] font-semibold py-3 px-4 rounded-xl text-xs transition-all border border-[#3B82F6]/30"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  Open Mobile App
+                </a>
+              )}
+            </div>
           </div>
         ) : !isRecoveryReady && error ? (
           <div className="space-y-6 text-center py-4">
@@ -143,15 +214,23 @@ export default function ResetPasswordPage() {
             </div>
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-white">Link Expired or Invalid</h2>
-              <p className="text-sm text-[#8A94A6]">{error}</p>
+              <p className="text-sm text-[#8A94A6] leading-relaxed">{error}</p>
             </div>
-            <Link
-              href="/login"
-              className="w-full inline-flex items-center justify-center gap-2 bg-[#24355A] hover:bg-[#2e4270] text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Return to Login
-            </Link>
+            <div className="space-y-3 pt-2">
+              <Link
+                href="/login"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#14337A] to-[#1E56CC] hover:opacity-95 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md shadow-[#1E56CC]/20"
+              >
+                Request a New Reset Link
+              </Link>
+              <Link
+                href="/login"
+                className="w-full inline-flex items-center justify-center gap-1.5 text-xs text-[#8A94A6] hover:text-white transition-colors py-1"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Return to Login
+              </Link>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleResetPassword} className="space-y-5">
@@ -159,6 +238,22 @@ export default function ResetPasswordPage() {
               <div className="p-3.5 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/30 flex items-start gap-2.5 text-xs text-[#FCA5A5]">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {/* Mobile App shortcut bridge */}
+            {mobileAppUrl && (
+              <div className="p-3 rounded-xl bg-[#1E293B]/80 border border-[#334155] flex items-center justify-between text-xs text-[#94A3B8]">
+                <span className="flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-[#38BDF8]" />
+                  Using the phone app?
+                </span>
+                <a
+                  href={mobileAppUrl}
+                  className="text-[#38BDF8] hover:underline font-semibold"
+                >
+                  Open in App &rarr;
+                </a>
               </div>
             )}
 
@@ -179,7 +274,7 @@ export default function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A94A6] hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A94A6] hover:text-white transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -203,7 +298,7 @@ export default function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A94A6] hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A94A6] hover:text-white transition-colors cursor-pointer"
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -221,7 +316,10 @@ export default function ResetPasswordPage() {
                   <span>Updating Password...</span>
                 </>
               ) : (
-                <span>Update Password</span>
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Save New Password</span>
+                </>
               )}
             </button>
 
