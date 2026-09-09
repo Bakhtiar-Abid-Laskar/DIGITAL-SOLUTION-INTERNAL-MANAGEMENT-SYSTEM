@@ -2,7 +2,7 @@
  * Database Schema Invariant & Model Validation Tests
  */
 
-export const JOB_CODE_REGEX = /^RS-\d{4}-\d{4}$/;
+export const JOB_CODE_REGEX = /^(DS|RS)-\d{4}-\d{4}$/;
 export const SALE_CODE_REGEX = /^SALE-\d{4}-\d{4}$/;
 export const PURCHASE_CODE_REGEX = /^PO-\d{4}-\d{4}$/;
 
@@ -15,10 +15,11 @@ export const VALID_PAYMENT_TYPES = ['advance_salary', 'materials_purchase', 'dai
 
 describe('Database Schema Invariant & Model Validation', () => {
   describe('Identifier Code Formats', () => {
-    it('validates correct RS-YYYY-XXXX format for job codes', () => {
+    it('validates correct DS-YYYY-XXXX and RS-YYYY-XXXX format for job codes', () => {
+      expect(JOB_CODE_REGEX.test('DS-2026-0001')).toBe(true);
+      expect(JOB_CODE_REGEX.test('DS-2026-9999')).toBe(true);
       expect(JOB_CODE_REGEX.test('RS-2026-0001')).toBe(true);
-      expect(JOB_CODE_REGEX.test('RS-2026-9999')).toBe(true);
-      expect(JOB_CODE_REGEX.test('RS-2027-0142')).toBe(true);
+      expect(JOB_CODE_REGEX.test('DS-2027-0142')).toBe(true);
     });
 
     it('rejects malformed job codes', () => {
