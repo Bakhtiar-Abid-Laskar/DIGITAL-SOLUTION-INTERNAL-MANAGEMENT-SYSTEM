@@ -16,6 +16,8 @@ lint-baseline.txt
 *.zip
 temp_inventory.csv
 test_run_results.json
+test-*.ts
+test_*.ts
 
 # ─── SECRET FILES — NEVER COMMIT ───────────────────────────────────────────
 # Firebase service-account private keys (rotate immediately if already committed)

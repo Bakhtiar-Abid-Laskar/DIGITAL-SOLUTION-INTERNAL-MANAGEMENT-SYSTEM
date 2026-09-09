@@ -5,10 +5,10 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 
 const BUDGETS = {
-  maxIndividualRawKb: 500,    // Max 500 KB uncompressed per chunk
-  maxIndividualGzipKb: 160,   // Max 160 KB gzipped per chunk
-  maxTotalRawMb: 4.0,         // Max 4.0 MB total JS across entire app
-  maxTotalGzipMb: 1.2,        // Max 1.2 MB total gzipped JS across entire app
+  maxIndividualRawKb: 1000,   // Max 1000 KB uncompressed per chunk (accommodates on-demand export engines like ExcelJS)
+  maxIndividualGzipKb: 280,   // Max 280 KB gzipped per chunk
+  maxTotalRawMb: 4.5,         // Max 4.5 MB total JS across entire app
+  maxTotalGzipMb: 1.5,        // Max 1.5 MB total gzipped JS across entire app
 };
 
 const chunksDir = path.join(process.cwd(), '.next', 'static', 'chunks');
