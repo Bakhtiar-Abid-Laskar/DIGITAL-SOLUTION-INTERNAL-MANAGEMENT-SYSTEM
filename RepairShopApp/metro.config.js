@@ -2,19 +2,22 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+// Force project root to THIS directory, not the monorepo root.
+// Without this, npm workspaces causes Metro to resolve entry as
+// ./RepairShopApp/index.ts relative to the monorepo root.
+const projectRoot = __dirname;
+const config = getDefaultConfig(projectRoot);
 
 // Resolve @repairshop/shared to the inlined local copy.
-// EAS cloud builds only upload the RepairShopApp/ directory, so they cannot
-// access ../packages/shared. The inlined copy at src/lib/shared is self-contained.
 config.resolver.extraNodeModules = {
-  '@repairshop/shared': path.resolve(__dirname, 'src/lib/shared'),
+  '@repairshop/shared': path.resolve(projectRoot, 'src/lib/shared'),
 };
+
+config.watchFolders = [projectRoot];
 
 config.server = {
   ...config.server,
-  unstable_serverRoot: __dirname,
+  unstable_serverRoot: projectRoot,
 };
 
 module.exports = config;
-
