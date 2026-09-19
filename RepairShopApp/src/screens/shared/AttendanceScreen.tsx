@@ -2,7 +2,7 @@ import { AppPressable } from '../../components/common/AppPressable';
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, 
-  FlatList, Modal, RefreshControl, Alert, ActivityIndicator
+  FlatList, Modal, RefreshControl, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -296,6 +296,14 @@ export default function AttendanceScreen() {
       }
       const distance = getDistanceInMeters(lat, lng, shopLat, shopLng);
       if (distance > shopRadius) {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const proceed = window.confirm(
+            `You are not at the shop location (Current distance: ${Math.round(distance)} meters).\n\nDo you still want to mark attendance? This will mark your attendance as pending review.`
+          );
+          resolve({ proceed, atLocation: false });
+          return;
+        }
+
         Alert.alert(
           "You are not at the location",
           `Current distance: ${Math.round(distance)} meters. Do you still want to check in/out? This will mark your attendance as pending review.`,

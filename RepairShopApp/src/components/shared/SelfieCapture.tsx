@@ -1,6 +1,6 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, ActivityIndicator,  } from 'react-native';
+import { Platform, View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
 import { CameraView } from 'expo-camera';
 import * as Location from 'expo-location';
@@ -38,16 +38,50 @@ const uploadToDrive = async (
   for (const key of Object.keys(payload)) {
     form.append(key, payload[key]);
   }
-  form.append('image', {
-    uri: webpUri,
-    name: 'photo.webp',
-    type: 'image/webp',
-  } as any);
+
+  if (Platform.OS === 'web') {
+    let blob: Blob;
+    try {
+      const res = await fetch(webpUri);
+      blob = await res.blob();
+    } catch {
+      if (webpUri.startsWith('data:')) {
+        const parts = webpUri.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/webp';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        blob = new Blob([u8arr], { type: mime });
+      } else {
+        throw new Error('Failed to process image data on web.');
+      }
+    }
+    form.append('image', blob, 'photo.webp');
+  } else {
+    form.append('image', {
+      uri: webpUri,
+      name: 'photo.webp',
+      type: 'image/webp',
+    } as any);
+  }
 
   const supabaseUrl = (supabase as any).supabaseUrl as string;
+  const anonKey = (supabase as any).supabaseKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${session.access_token}`,
+  };
+  if (anonKey) {
+    headers['apikey'] = anonKey;
+  }
+
   const res = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${session.access_token}` },
+    headers,
     body: form,
   });
   
@@ -108,14 +142,23 @@ export default function SelfieCapture({
   };
 
   const uploadPhoto = async (uri: string): Promise<{ fileId: string; link: string }> => {
-    // Convert to WebP on-device before uploading
-    const webpResult = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: 1280 } }], // cap long edge at 1280px
-      { compress: 0.78, format: ImageManipulator.SaveFormat.WEBP }
-    );
+    let targetUri = uri;
+    try {
+      // Convert to WebP on-device before uploading
+      const webpResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1280 } }], // cap long edge at 1280px
+        { compress: 0.78, format: ImageManipulator.SaveFormat.WEBP }
+      );
+      if (webpResult?.uri) {
+        targetUri = webpResult.uri;
+      }
+    } catch (manipErr) {
+      console.warn('[SelfieCapture] ImageManipulator fallback to raw image:', manipErr);
+      targetUri = uri;
+    }
 
-    return await uploadToDrive(webpResult.uri, uploadEndpoint, uploadPayload);
+    return await uploadToDrive(targetUri, uploadEndpoint, uploadPayload);
   };
 
   const handleCapture = async () => {
@@ -124,7 +167,7 @@ export default function SelfieCapture({
     try {
       setLoadingState('camera');
       const photo = await cameraRef.current.takePictureAsync({ base64: false });
-      if (!photo) throw new Error('Capture failed');
+      if (!photo || !photo.uri) throw new Error('Capture failed');
       
       setIsCameraActive(false);
 
@@ -208,11 +251,16 @@ export default function SelfieCapture({
 
       // Compress photo
       setLoadingState('compressing');
-      const compressedUri = await compressImage(photo.uri);
+      let readyUri = photo.uri;
+      try {
+        readyUri = await compressImage(photo.uri);
+      } catch (compErr) {
+        console.warn('[SelfieCapture] compressImage fallback:', compErr);
+      }
 
       // Upload
       setLoadingState('uploading');
-      const { fileId, link } = await uploadPhoto(compressedUri);
+      const { fileId, link } = await uploadPhoto(readyUri);
 
       onCaptureComplete({
         uri: photo.uri,
@@ -264,6 +312,15 @@ export default function SelfieCapture({
               facing={facing} 
               ref={cameraRef}
               onCameraReady={() => setIsCameraReady(true)}
+              onMountError={(err) => {
+                console.error('[SelfieCapture] Camera mount error:', err);
+                showToast({
+                  title: 'Camera Unavailable',
+                  message: err.message || 'Could not open camera stream on this device.',
+                  type: 'error'
+                });
+                setIsCameraActive(false);
+              }}
             />
             <View style={styles.cameraControls}>
               <AppPressable 
@@ -336,7 +393,10 @@ const styles = StyleSheet.create({
   },
   cameraView: { 
     width: '100%', 
-    overflow: 'hidden' 
+    maxWidth: 500,
+    maxHeight: '75%',
+    overflow: 'hidden',
+    borderRadius: radius.lg,
   },
   cameraControls: { 
     position: 'absolute', 

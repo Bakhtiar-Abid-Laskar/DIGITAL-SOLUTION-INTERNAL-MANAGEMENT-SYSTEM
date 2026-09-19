@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
   const jobCode = formData.get('jobCode') as string;
   const timestamp = formData.get('timestamp') as string;
   const type = formData.get('type') as string;
-  const imageFile = formData.get('image') as File | null;
+  const imageFile = formData.get('image') as File | string | null;
 
   if (!staffName || !jobCode || !timestamp || !type || !imageFile) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -68,10 +68,17 @@ Deno.serve(async (req: Request) => {
 
   let imageBytes: Uint8Array;
   try {
-    const arrayBuffer = await imageFile.arrayBuffer();
-    imageBytes = new Uint8Array(arrayBuffer);
+    if (typeof (imageFile as any) === 'string') {
+      const str = imageFile as unknown as string;
+      const base64Data = str.includes('base64,') ? str.split('base64,')[1] : str;
+      const binString = atob(base64Data);
+      imageBytes = Uint8Array.from(binString, (c) => c.charCodeAt(0));
+    } else {
+      const arrayBuffer = await (imageFile as File).arrayBuffer();
+      imageBytes = new Uint8Array(arrayBuffer);
+    }
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: 'Failed to read image' }), {
+    return new Response(JSON.stringify({ error: 'Failed to read image: ' + e.message }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }

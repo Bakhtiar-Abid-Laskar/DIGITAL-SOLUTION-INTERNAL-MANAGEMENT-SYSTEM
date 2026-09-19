@@ -191,7 +191,7 @@ export default function OnsiteVisitScreen() {
               <SelfieCapture
                 label=""
                 uploadEndpoint="upload-job-photo"
-                uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'arrival' }}
+                uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: job?.job_code || jobId, timestamp: new Date().toISOString(), type: 'arrival' }}
                 onCaptureComplete={(data) => handleCaptureComplete('arrival', data)}
                 buttonLabel="Start Visit Selfie"
               />
@@ -229,7 +229,7 @@ export default function OnsiteVisitScreen() {
                   label=""
                   facing="back"
                   uploadEndpoint="upload-job-photo"
-                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'device' }}
+                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: job?.job_code || jobId, timestamp: new Date().toISOString(), type: 'device' }}
                   onCaptureComplete={(data) => handleCaptureComplete('device', data)}
                   buttonLabel="Take Device Photo"
                 />
@@ -264,7 +264,7 @@ export default function OnsiteVisitScreen() {
                 <SelfieCapture
                   label=""
                   uploadEndpoint="upload-job-photo"
-                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: visit?.jobs?.job_code || jobId, timestamp: new Date().toISOString(), type: 'departure' }}
+                  uploadPayload={{ staffName: displayName || user?.email || 'Unknown', jobCode: job?.job_code || jobId, timestamp: new Date().toISOString(), type: 'departure' }}
                   onCaptureComplete={(data) => handleCaptureComplete('departure', data)}
                   buttonLabel="Take Completion Selfie"
                 />
