@@ -1,4 +1,5 @@
-export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed';
+export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed' | 'Delivered' | 'Cancelled';
+
 export type JobPriority = 'Normal' | 'High' | 'Urgent';
 export type JobType = 'Inhouse' | 'Onsite';
 export type DeviceType = string;

@@ -5,7 +5,7 @@ import { SalaryBreakdown } from '@/types/salary';
 import { formatCurrency } from '@repairshop/shared';
 import { formatMonthLabel } from '@/utils/formatDate';
 import { generateSalarySlipHtml } from '@/utils/salarySlipHtml';
-import { BarChart2, Printer, CheckCircle2, Clock } from 'lucide-react';
+import { BarChart2, Printer, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import styles from '@/styles/salary.module.css';
 
@@ -50,6 +50,9 @@ export default function SalaryBreakdownCard({ breakdown, onRefresh }: Props) {
   };
 
   const baseSalary = breakdown.monthly_salary || breakdown.base_pay || 0;
+  const approvedLeaves = breakdown.approved_leaves ?? breakdown.approved_leave_count ?? 0;
+  const excessLeaves = breakdown.chargeable_leave_days ?? Math.max(0, approvedLeaves - (breakdown.allowed_leave_days || 0));
+  const unexcusedAbsences = breakdown.unexcused_absent_days ?? breakdown.chargeable_days ?? breakdown.absent_count ?? 0;
 
   return (
     <div className={styles.card}>
@@ -86,6 +89,30 @@ export default function SalaryBreakdownCard({ breakdown, onRefresh }: Props) {
         </div>
       </div>
 
+      {/* Missing Check-out Warning */}
+      {Number(breakdown.missing_checkout_count || 0) > 0 && (
+        <div style={{
+          margin: '12px 0 16px 0',
+          padding: '12px 16px',
+          backgroundColor: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          color: '#92400e',
+          fontSize: 13,
+        }}>
+          <AlertTriangle size={20} style={{ flexShrink: 0, color: '#d97706' }} />
+          <div>
+            <strong>Missing Check-Out Warning:</strong> {breakdown.missing_checkout_count} day(s) have check-in without check-out recorded
+            {breakdown.missing_checkout_dates && breakdown.missing_checkout_dates.length > 0 && (
+              <span> ({breakdown.missing_checkout_dates.join(', ')})</span>
+            )}. Please review shift records before finalizing.
+          </div>
+        </div>
+      )}
+
       {/* Employee & Base Salary Info */}
       <div className={styles.infoGrid}>
         <div className={styles.infoBox}>
@@ -114,9 +141,10 @@ export default function SalaryBreakdownCard({ breakdown, onRefresh }: Props) {
           { label: 'Company Holidays', value: breakdown.holidays_count || 0 },
           { label: 'Present Days', value: breakdown.present_days },
           { label: 'Half-Days', value: breakdown.halfday_count || breakdown.half_absent_days || 0 },
-          { label: 'Absent Days', value: breakdown.absent_count || breakdown.full_absent_days || 0 },
-          { label: 'Allowed Leave', value: `${breakdown.allowed_leave_days || 0} d` },
-          { label: 'Chargeable Absences', value: `${breakdown.chargeable_days || 0} d` },
+          { label: 'Approved Leaves', value: `${approvedLeaves} d` },
+          { label: 'Allowed Free Leave', value: `${breakdown.allowed_leave_days || 0} d` },
+          { label: 'Excess Leaves Deducted', value: `${excessLeaves} d` },
+          { label: 'Unexcused Absences', value: `${unexcusedAbsences} d` },
           { label: 'OT Hours', value: `${(breakdown.ot_hours || 0).toFixed(1)} hrs` },
         ].map(({ label, value }) => (
           <div key={label} className={styles.attBox}>
@@ -166,7 +194,7 @@ export default function SalaryBreakdownCard({ breakdown, onRefresh }: Props) {
           )}
           {Number(breakdown.leave_deduction || 0) > 0 && (
             <div className={styles.lineItem}>
-              <span>Leave Deduction ({Math.max(0, (breakdown.leave_count || 0) - (breakdown.allowed_leave_days || 0))} excess leaves)</span>
+              <span>Excess Leave Deduction ({excessLeaves} excess leaves)</span>
               <span className={styles.deductionAmt}>−{formatCurrency(breakdown.leave_deduction)}</span>
             </div>
           )}
@@ -178,7 +206,7 @@ export default function SalaryBreakdownCard({ breakdown, onRefresh }: Props) {
           )}
           {Number(breakdown.absence_deduction || 0) > 0 && (
             <div className={styles.lineItem}>
-              <span>Unexcused Absence ({breakdown.chargeable_days || 0} d × {formatCurrency(breakdown.absent_day_deduction || 0)})</span>
+              <span>Unexcused Absence ({unexcusedAbsences} d × {formatCurrency(breakdown.absent_day_deduction || 0)})</span>
               <span className={styles.deductionAmt}>−{formatCurrency(breakdown.absence_deduction)}</span>
             </div>
           )}

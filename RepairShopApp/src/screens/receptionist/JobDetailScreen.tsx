@@ -22,6 +22,7 @@ import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
+import { printJobCard } from '../../lib/jobCardService';
 
 export default function JobDetailScreen() {
   const route = useRoute<any>();
@@ -124,7 +125,7 @@ export default function JobDetailScreen() {
 
   const handleWhatsApp = async () => {
     if (!job) return;
-    const msg = `Hello ${job.customer_name}, your device for Job ${job.job_code} is ready for pickup. Please visit Digital Solution with your receipt. Thank you.`;
+    const msg = `Hello ${job.customer_name}, your device for Job ${job.job_code} is ready for pickup. Please visit RepairShop with your receipt. Thank you.`;
     const url = createWhatsAppUrl(job.customer_contact, msg);
     if (!url) { 
       showToast({ title: 'Invalid Number', message: 'Could not format the contact number for WhatsApp.', type: 'error' }); 
@@ -203,15 +204,19 @@ export default function JobDetailScreen() {
               style={styles.secondaryBtn}
               onPress={async () => {
                 if (!job) return;
-                await generatePdf({
-                  request: { docType: 'receipt', jobId: job.id },
-                  title: 'Generating Job Receipt',
-                  mode: 'print',
-                });
+                try {
+                  await printJobCard({
+                    jobId: job.id,
+                    preloadedJob: job,
+                    materials: materials,
+                  });
+                } catch (err: any) {
+                  showToast({ title: 'Print Failed', message: err.message || 'Failed to print Job Card', type: 'error' });
+                }
               }}
             >
               <Printer size={18} color={colors.textPrimary} />
-              <Text style={styles.secondaryBtnText}>Print</Text>
+              <Text style={styles.secondaryBtnText}>Job Card</Text>
             </AppPressable>
 
             <AppPressable style={styles.secondaryBtn} onPress={handleWhatsApp}>

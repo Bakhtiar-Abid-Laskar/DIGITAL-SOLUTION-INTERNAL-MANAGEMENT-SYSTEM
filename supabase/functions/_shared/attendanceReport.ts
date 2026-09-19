@@ -75,8 +75,8 @@ export async function buildStaffAttendanceWorkbook(
         early_in_minutes,
         late_out_minutes,
         status,
-        checkin_photo_drive_link,
-        checkout_photo_drive_link
+        check_in_drive_file_id,
+        check_out_drive_file_id
       `)
       .eq('user_id', userId)
       .gte('date', startDate)
@@ -107,6 +107,12 @@ export async function buildStaffAttendanceWorkbook(
       ? `${Number(r.check_out_gps_lat).toFixed(5)}, ${Number(r.check_out_gps_lng).toFixed(5)}`
       : '—';
 
+    const fmtDriveLink = (idOrUrl: string | null | undefined) => {
+      if (!idOrUrl) return '';
+      if (idOrUrl.startsWith('http')) return idOrUrl;
+      return `https://drive.google.com/file/d/${idOrUrl}/view`;
+    };
+
     return {
       'Date': fmtDate(r.date),
       'Status': r.status ?? '—',
@@ -120,8 +126,8 @@ export async function buildStaffAttendanceWorkbook(
       'Late In (mins)': r.late_in_minutes ?? 0,
       'Early In (mins)': r.early_in_minutes ?? 0,
       'Late Out (mins)': r.late_out_minutes ?? 0,
-      'Check-In Photo': r.checkin_photo_drive_link ?? '',
-      'Check-Out Photo': r.checkout_photo_drive_link ?? '',
+      'Check-In Photo': fmtDriveLink(r.check_in_drive_file_id),
+      'Check-Out Photo': fmtDriveLink(r.check_out_drive_file_id),
     };
   });
 

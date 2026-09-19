@@ -9,18 +9,22 @@ import { formatMonthLabel } from './formatDate';
 export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const baseSalary = breakdown.monthly_salary || breakdown.base_pay || 0;
+  const approvedLeaves = breakdown.approved_leaves ?? breakdown.approved_leave_count ?? 0;
+  const excessLeaves = breakdown.chargeable_leave_days ?? Math.max(0, approvedLeaves - (breakdown.allowed_leave_days || 0));
+  const unexcusedAbsences = breakdown.unexcused_absent_days ?? breakdown.chargeable_days ?? breakdown.absent_count ?? 0;
 
   const additionRows = [
     `<tr><td>Fixed Monthly Base Salary</td><td class="amount">${formatCurrency(baseSalary)}</td></tr>`,
     breakdown.ot_pay ? `<tr><td>Overtime Pay (${(breakdown.ot_hours || 0).toFixed(1)} hrs × ${formatCurrency(breakdown.ot_rate_per_hour || 0)})</td><td class="amount">${formatCurrency(breakdown.ot_pay)}</td></tr>` : '',
     breakdown.bonus_amount ? `<tr><td>Bonus Payments</td><td class="amount">${formatCurrency(breakdown.bonus_amount)}</td></tr>` : '',
+    breakdown.incentive_pay ? `<tr><td>Technician Incentives</td><td class="amount">${formatCurrency(breakdown.incentive_pay)}</td></tr>` : '',
   ].filter(Boolean).join('');
 
   const deductionRows = [
     (breakdown.late_deduction || breakdown.early_deduction) ? `<tr><td>Attendance Penalty (Late / Early)</td><td class="amount">${formatCurrency((breakdown.late_deduction || 0) + (breakdown.early_deduction || 0))}</td></tr>` : '',
-    breakdown.leave_deduction ? `<tr><td>Leave Deduction (${Math.max(0, (breakdown.leave_count || 0) - (breakdown.allowed_leave_days || 0))} excess)</td><td class="amount">${formatCurrency(breakdown.leave_deduction)}</td></tr>` : '',
+    breakdown.leave_deduction ? `<tr><td>Excess Leave Deduction (${excessLeaves} excess d)</td><td class="amount">${formatCurrency(breakdown.leave_deduction)}</td></tr>` : '',
     breakdown.halfday_deduction_total ? `<tr><td>Half-Day Deduction (${breakdown.halfday_count || 0} half-days)</td><td class="amount">${formatCurrency(breakdown.halfday_deduction_total)}</td></tr>` : '',
-    breakdown.absence_deduction ? `<tr><td>Unexcused Absence (${breakdown.chargeable_days || 0} d × ${formatCurrency(breakdown.absent_day_deduction || 0)})</td><td class="amount">${formatCurrency(breakdown.absence_deduction)}</td></tr>` : '',
+    breakdown.absence_deduction ? `<tr><td>Unexcused Absence (${unexcusedAbsences} d × ${formatCurrency(breakdown.absent_day_deduction || 0)})</td><td class="amount">${formatCurrency(breakdown.absence_deduction)}</td></tr>` : '',
     breakdown.advance_deducted ? `<tr><td>Advance Salary Deducted</td><td class="amount">${formatCurrency(breakdown.advance_deducted)}</td></tr>` : '',
   ].filter(Boolean).join('');
 
@@ -61,7 +65,7 @@ export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
 </head>
 <body>
   <div class="header">
-    <h1>Digital Solution</h1>
+    <h1>RepairShop</h1>
     <h2>Salary Slip</h2>
   </div>
 
@@ -85,10 +89,11 @@ export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
       <div class="info-row"><span class="info-label">Holidays:</span><span class="info-value">${breakdown.holidays_count || 0}</span></div>
       <div class="info-row"><span class="info-label">Present Days:</span><span class="info-value">${breakdown.present_days}</span></div>
       <div class="info-row"><span class="info-label">Half-Days:</span><span class="info-value">${breakdown.halfday_count || breakdown.half_absent_days || 0}</span></div>
-      <div class="info-row"><span class="info-label">Absent Days:</span><span class="info-value">${breakdown.absent_count || breakdown.full_absent_days || 0}</span></div>
-      <div class="info-row"><span class="info-label">Allowed Leave:</span><span class="info-value">${breakdown.allowed_leave_days || 0} days</span></div>
-      <div class="info-row"><span class="info-label">Chargeable Absences:</span><span class="info-value">${breakdown.chargeable_days || 0} days</span></div>
-      <div class="info-row"><span class="info-label">OT Hours:</span><span class="info-value">${(breakdown.ot_hours || 0).toFixed(1)}</span></div>
+      <div class="info-row"><span class="info-label">Approved Leaves:</span><span class="info-value">${approvedLeaves} d</span></div>
+      <div class="info-row"><span class="info-label">Allowed Free Leave:</span><span class="info-value">${breakdown.allowed_leave_days || 0} d</span></div>
+      <div class="info-row"><span class="info-label">Excess Leaves:</span><span class="info-value">${excessLeaves} d</span></div>
+      <div class="info-row"><span class="info-label">Unexcused Absences:</span><span class="info-value">${unexcusedAbsences} d</span></div>
+      <div class="info-row"><span class="info-label">OT Hours:</span><span class="info-value">${(breakdown.ot_hours || 0).toFixed(1)} hrs</span></div>
     </div>
   </div>
 
@@ -127,7 +132,7 @@ export function generateSalarySlipHtml(breakdown: SalaryBreakdown): string {
     <div class="sig-box">Manager / Admin Signature</div>
   </div>
 
-  <div class="footer">Digital Solution — This is a computer generated salary slip.</div>
+  <div class="footer">RepairShop — This is a computer generated salary slip.</div>
 </body>
 </html>`;
 }

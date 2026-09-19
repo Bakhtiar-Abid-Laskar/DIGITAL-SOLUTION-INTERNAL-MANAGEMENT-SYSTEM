@@ -1,5 +1,6 @@
 export type Role = 'admin' | 'receptionist' | 'technician';
-export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed';
+export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed' | 'Delivered' | 'Cancelled';
+
 export type JobPriority = 'Normal' | 'High' | 'Urgent';
 export type JobType = 'Inhouse' | 'Onsite';
 export type AttendanceStatus = 'Present' | 'Halfday' | 'Leave' | 'Absent';
@@ -23,7 +24,8 @@ export interface Job {
   customer_email?: string | null;
   customer_address?: string | null;
   serial_number?: string | null;
-  device_type: 'Laptop' | 'PC' | 'Other';
+  device_type_id?: string | null;
+  device_type?: string | null;
   reported_issue: string;
   remarks?: string | null;
   work_notes?: string | null;

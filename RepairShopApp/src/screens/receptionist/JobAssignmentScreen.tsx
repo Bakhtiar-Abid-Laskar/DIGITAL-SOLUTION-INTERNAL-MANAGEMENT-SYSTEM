@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal,  } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { CheckCircle2, Printer, ChevronRight, MessageCircle } from 'lucide-react-native';
+import { CheckCircle2, Printer, ChevronRight, MessageCircle, FileText } from 'lucide-react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Linking } from 'react-native';
@@ -22,6 +22,7 @@ import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
 import { createWhatsAppUrl } from '@repairshop/shared';
+import { printJobCard } from '../../lib/jobCardService';
 
 export default function JobAssignmentScreen() {
   const { user, role } = useAuth();
@@ -134,13 +135,21 @@ export default function JobAssignmentScreen() {
     }
   };
 
-  const printReceipt = async () => {
+  const handlePrintJobCard = async () => {
     if (!createdJob) return;
-    await generatePdf({
-      request: { docType: 'receipt', jobId: createdJob.id },
-      title: 'Generating Job Receipt',
-      mode: 'print',
-    });
+    try {
+      await printJobCard({
+        jobId: createdJob.id,
+        preloadedJob: createdJob,
+      });
+    } catch (err: any) {
+      showToast({ title: 'Print Failed', message: err.message || 'Failed to print Job Card', type: 'error' });
+    }
+  };
+
+  const handleGoToBilling = () => {
+    if (!createdJob) return;
+    navigation.navigate('Billing', { jobId: createdJob.id });
   };
 
   const resetFlow = () => {
@@ -194,10 +203,18 @@ export default function JobAssignmentScreen() {
             <View style={styles.successActionsGrid}>
               <AppPressable
                 style={styles.invoiceActionCard}
-                onPress={printReceipt}
+                onPress={handlePrintJobCard}
               >
                 <Printer size={20} color={colors.primary} />
-                <Text style={styles.invoiceActionText}>Print</Text>
+                <Text style={styles.invoiceActionText}>Job Card</Text>
+              </AppPressable>
+
+              <AppPressable
+                style={styles.invoiceActionCard}
+                onPress={handleGoToBilling}
+              >
+                <FileText size={20} color={colors.textPrimary} />
+                <Text style={styles.invoiceActionText}>Generate Bill</Text>
               </AppPressable>
 
               <AppPressable style={styles.invoiceActionCard} onPress={handleWhatsAppInvoice}>

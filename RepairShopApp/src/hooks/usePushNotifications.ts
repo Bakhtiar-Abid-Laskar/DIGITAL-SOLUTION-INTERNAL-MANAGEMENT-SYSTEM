@@ -52,7 +52,7 @@ export const usePushNotifications = (): PushNotificationState => {
 
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
-          name: 'Digital Solution',
+          name: 'RepairShop',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#2563EB',

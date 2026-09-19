@@ -98,7 +98,7 @@ export function OverviewTab({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-xs text-admin-text-muted block uppercase tracking-wider mb-1">Device</span>
-                <span className="font-semibold text-admin-text-primary text-sm bg-admin-bg-subtle px-2 py-1 rounded">{job.device_type}</span>
+                <span className="font-semibold text-admin-text-primary text-sm bg-admin-bg-subtle px-2 py-1 rounded">{job.device_type || (job as any).device_type_id || '—'}</span>
               </div>
               <div>
                 <span className="text-xs text-admin-text-muted block uppercase tracking-wider mb-1">Type</span>

@@ -221,10 +221,11 @@ export default function CreateJobPage() {
         job_type_ref_id: state.form.job_type_ref_id || null,
         snap_technician_incentive: state.form.snap_technician_incentive || 0,
         advance_amount: state.form.advance_amount ? Number(state.form.advance_amount) : 0
-      }).select('*, technician:users!jobs_technician_id_fkey(name)').single();
+      }).select('*, technician:users!jobs_technician_id_fkey(name), receptionist:users!jobs_receptionist_id_fkey(name)').single();
 
       if (insertError) throw new Error(insertError.message);
       
+      let allJobTechs: any[] = [];
       if (state.form.technician_ids && state.form.technician_ids.length > 1) {
         const additionalTechs = state.form.technician_ids.slice(1).map(id => ({
           job_id: job.id,
@@ -232,9 +233,31 @@ export default function CreateJobPage() {
         }));
         const { error: additionalError } = await supabase.from('job_technicians').insert(additionalTechs);
         if (additionalError) throw new Error(additionalError.message);
+
+        const { data: fetchedTechs } = await supabase
+          .from('job_technicians')
+          .select('*, technician:users!job_technicians_technician_id_fkey(name, phone)')
+          .eq('job_id', job.id)
+          .is('removed_at', null);
+        if (fetchedTechs) allJobTechs = fetchedTechs;
+      }
+
+      // Resolve actual intake staff name
+      let intakeStaffName = job.receptionist?.name;
+      if (!intakeStaffName) {
+        const { data: userProfile } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle();
+        intakeStaffName = userProfile?.name || user.user_metadata?.name || user.email || 'Staff';
       }
       
-      dispatch({ type: 'SET_CREATED_JOB', job: job as any });
+      const enrichedJob = {
+        ...job,
+        device_type: state.form.device_type.trim() || deviceTypeId,
+        device_type_id: deviceTypeId,
+        receptionist: { name: intakeStaffName },
+        job_technicians: allJobTechs,
+      };
+
+      dispatch({ type: 'SET_CREATED_JOB', job: enrichedJob as any });
       showToast('Job created successfully!', 'success');
     } catch (err: any) {
       console.error(err);

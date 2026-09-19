@@ -392,7 +392,7 @@ export default function OverviewPage() {
       ...waitingJobs.map((job) => ({
         id: `waiting-${job.id}`,
         label: `${job.job_code} waiting for materials`,
-        detail: `${job.customer_name} · ${job.device_type}`,
+        detail: `${job.customer_name} · ${job.device_type || (job as any).device_type_id || 'Device'}`,
         href: `/jobs/${job.id}`,
         tone: "warning" as const,
       })),
@@ -500,7 +500,7 @@ export default function OverviewPage() {
           job.job_code.toLowerCase().includes(query) ||
           job.customer_name.toLowerCase().includes(query) ||
           job.customer_contact.toLowerCase().includes(query) ||
-          job.device_type.toLowerCase().includes(query)
+          (job.device_type || (job as any).device_type_id || '').toLowerCase().includes(query)
         );
       })
       .slice(0, 10);
@@ -773,7 +773,7 @@ export default function OverviewPage() {
                       <div className="font-medium text-admin-text-primary">{job.customer_name}</div>
                       <div className="text-xs text-admin-text-muted">{job.customer_contact}</div>
                     </td>
-                    <td className="px-6 py-4 text-admin-text-secondary">{job.device_type}</td>
+                    <td className="px-6 py-4 text-admin-text-secondary">{job.device_type || (job as any).device_type_id || '—'}</td>
                     <td className="px-6 py-4 text-admin-text-secondary">
                       {(() => {
                         const techNames = [

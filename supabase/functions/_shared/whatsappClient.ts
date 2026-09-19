@@ -164,7 +164,7 @@ export async function sendCustomerWhatsApp(
       document: {
         link: documentUrl,
         filename: documentFilename || 'Invoice.pdf',
-        caption: messageText || 'Your Digital Solution Invoice',
+        caption: messageText || 'Your RepairShop Invoice',
       },
     };
   } else if (templateName) {

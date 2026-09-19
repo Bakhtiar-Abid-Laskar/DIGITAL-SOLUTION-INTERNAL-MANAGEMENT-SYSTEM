@@ -226,51 +226,46 @@ export function JobBillingCard({
         if (error) throw new Error(error.message);
         createdInvoiceId = data?.invoice_id || null;
       } else {
-        const { error } = await supabase.from('invoices').update({
-          customer_name: job?.customer_name || 'Walk-in',
-          customer_contact: job?.customer_contact || null,
-          customer_email: job?.customer_email || null,
-          customer_gstin: job?.customer_gstin || null,
-          subtotal: subtotal,
-          total_tax: totalTax,
-          discount: 0,
-          grand_total: grandTotalPreview,
-          status: billingForm.is_paid ? 'paid' : (billing.status || 'draft'),
-          paid_at: billingForm.is_paid ? new Date().toISOString() : billing.paid_at,
-        }).eq('id', billing.id);
-        if (error) throw new Error(error.message);
+        // FIXED (F-JOB-04 / F-BIL-03): Invoice edit now goes through the
+        // update_invoice() RPC, which atomically reverses old inventory
+        // deductions, deletes old items, inserts new items, re-applies
+        // inventory deductions, and updates the invoice header.
+        // Previously this was 3 raw client mutations that bypassed all
+        // inventory and ledger side-effects.
 
-        // Synchronize invoice items
-        await supabase.from('invoice_items').delete().eq('invoice_id', billing.id);
-        const newInvoiceItems = itemsToBill.map(it => {
-          const taxable = it.selling_amount;
-          const taxPct = it.tax_percent || 18;
-          const cgstRate = Math.round((taxPct / 2) * 100) / 100;
-          const sgstRate = Math.round((taxPct / 2) * 100) / 100;
-          const cgstAmt = Math.round((taxable * cgstRate / 100) * 100) / 100;
-          const sgstAmt = Math.round((taxable * sgstRate / 100) * 100) / 100;
-          return {
-            invoice_id: billing.id,
-            product_id: it.product_id,
-            item_name: it.item_name,
-            quantity: it.quantity,
-            selling_rate: it.selling_rate,
-            hsn_code: it.hsn_code,
-            tax_percent: taxPct,
-            cgst_rate: cgstRate,
-            sgst_rate: sgstRate,
-            igst_rate: 0,
-            taxable_amount: taxable,
-            cgst_amount: cgstAmt,
-            sgst_amount: sgstAmt,
-            igst_amount: 0,
-            line_total: taxable + cgstAmt + sgstAmt,
-            discount_amount: 0,
-            serial_number: it.serial_number,
-          };
+        // Resolve customer_id for the update call (same logic as create path)
+        let editCustomerId: string | null = job?.customer_id || null;
+        if (!editCustomerId && job?.customer_name) {
+          const { data: custData } = await supabase.rpc('find_or_create_customer', {
+            p_customer_id: null,
+            p_name: job.customer_name,
+            p_phone: job.customer_contact || null,
+            p_email: job.customer_email || null,
+            p_gstin: job.customer_gstin || null,
+            p_address: null,
+            p_created_via: 'job',
+            p_user_id: null,
+          });
+          if (custData?.id) editCustomerId = custData.id;
+        }
+        if (!editCustomerId) throw new Error('Could not resolve customer. Please ensure a customer record exists before saving billing.');
+
+        const { data: updateData, error: updateError } = await supabase.rpc('update_invoice', {
+          p_invoice_id:      billing.id,
+          p_customer_name:   job?.customer_name || 'Walk-in',
+          p_customer_id:     editCustomerId,
+          p_customer_contact: job?.customer_contact || null,
+          p_customer_email:   job?.customer_email   || null,
+          p_customer_gstin:   job?.customer_gstin   || null,
+          p_items:           itemsToBill,
+          p_discount:        0,
+          p_payment_method:  'Cash',
+          p_status:          billingForm.is_paid ? 'paid' : (billing.status || 'draft'),
         });
-        await supabase.from('invoice_items').insert(newInvoiceItems);
+        if (updateError) throw new Error(updateError.message);
+        void updateData; // grand_total / status returned but not used here; UI re-fetches below
       }
+
 
       // Claim serial numbers if any parts selected tracked units
       const serialClaims = lines
@@ -638,7 +633,7 @@ export function JobBillingCard({
             leftIcon={<Printer size={16} />}
             className="flex-1"
           >
-            Print
+            Print Tax Invoice
           </Button>
           <Button
             variant="outline"

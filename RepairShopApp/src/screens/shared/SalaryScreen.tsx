@@ -114,7 +114,7 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
   </style></head><body>
   <div class="slip-container">
     <div class="header">
-      <div class="brand"><h1>Digital Solution</h1><p>Internal Management System</p></div>
+      <div class="brand"><h1>RepairShop</h1><p>Service Management System</p></div>
       <div class="title-box"><h2>Payslip</h2><p>${monthLabel}</p></div>
     </div>
     <div class="emp-details">
@@ -257,7 +257,7 @@ export default function SalaryScreen() {
     try {
       const html = generateSlipHtml(r, displayName || 'Employee', role || '');
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-      const fileName = `DigitalSolution_Payslip_${r.month.substring(0, 7)}.pdf`;
+      const fileName = `RepairShop_Payslip_${r.month.substring(0, 7)}.pdf`;
       // @ts-ignore
       const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (permissions.granted) {

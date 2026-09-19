@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, use, useCallback, useReducer } from "react";
+import { useEffect, useState, use, useCallback, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Job } from '@repairshop/shared';
@@ -12,7 +12,9 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { useToast } from "@/components/common/ToastProvider";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
+import { openJobCardPrint } from "@/lib/jobCardClient";
+import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
 
 import { jobDetailReducer, initialState } from './reducer';
 import { JobInfoCard } from '@/components/jobs/detail/JobInfoCard';
@@ -29,12 +31,31 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const { showToast } = useToast();
 
   const [state, dispatch] = useReducer(jobDetailReducer, initialState);
+  const [jobCardPrintState, setJobCardPrintState] = useState<PrintProgressState | null>(null);
+
+  const handlePrintJobCard = async () => {
+    if (!state.job) return;
+    setJobCardPrintState({ isOpen: true, percent: 15, message: 'Preparing operational Job Card...' });
+    try {
+      await openJobCardPrint({
+        jobId: id,
+        preloadedJob: state.job,
+        materials: state.materials,
+        onProgress: (percent, message) => setJobCardPrintState({ isOpen: true, percent, message }),
+      });
+      setJobCardPrintState({ isOpen: true, percent: 100, message: 'Print dialog opened', isComplete: true });
+      setTimeout(() => setJobCardPrintState(null), 1200);
+    } catch (e: any) {
+      setJobCardPrintState(null);
+      showToast(e.message || 'Failed to print Job Card', 'error');
+    }
+  };
 
   const fetchData = useCallback(async (cancelled = false) => {
     if (!cancelled) dispatch({ type: 'FETCH_START' });
     try {
       const [jobRes, matRes, billRes, techRes, deviceTypesRes, onsiteVisitsRes] = await Promise.all([
-        supabase.from('jobs').select('*, technician:users!jobs_technician_id_fkey(name, phone), job_technicians(*, technician:users!job_technicians_technician_id_fkey(name, phone)), job_type_ref:job_types!jobs_job_type_ref_id_fkey(id, title, customer_charge_amount)').eq('id', id).single(),
+        supabase.from('jobs').select('*, technician:users!jobs_technician_id_fkey(name, phone), job_technicians(*, technician:users!job_technicians_technician_id_fkey(name, phone)), job_type_ref:job_types!jobs_job_type_ref_id_fkey(id, title, customer_charge_amount), receptionist:users!jobs_receptionist_id_fkey(name)').eq('id', id).single(),
         supabase.from('job_materials').select('*').eq('job_id', id),
         supabase.from('invoices').select('*, invoice_items(*)').eq('job_id', id).maybeSingle(),
         supabase.from('users').select('*').eq('role', 'technician').eq('is_active', true),
@@ -45,10 +66,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       if (cancelled) return;
       if (jobRes.error) throw jobRes.error;
       
+      const normalizedJob = jobRes.data ? {
+        ...jobRes.data,
+        device_type: jobRes.data.device_type || jobRes.data.device_type_id || '',
+        device_type_id: jobRes.data.device_type_id || jobRes.data.device_type || null,
+        remarks: jobRes.data.remarks || '',
+      } : jobRes.data;
+
       dispatch({ 
         type: 'FETCH_SUCCESS', 
         payload: { 
-          job: jobRes.data, 
+          job: normalizedJob, 
           materials: matRes.data || [], 
           technicians: techRes.data || [], 
           billing: billRes.data,
@@ -97,7 +125,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         customer_name: state.editForm.customer_name,
         customer_contact: state.editForm.customer_contact,
         customer_email: state.editForm.customer_email || null,
-        device_type: state.editForm.device_type,
+        device_type_id: state.editForm.device_type || (state.editForm as any).device_type_id,
         reported_issue: state.editForm.reported_issue,
         remarks: state.editForm.remarks || null,
         job_type: state.editForm.job_type,
@@ -127,9 +155,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         title={`Job ${state.job.job_code}`} 
         description="Manage customer job details, assignment, and billing."
         actions={
-          <Button variant="ghost" onClick={() => router.push('/jobs')} leftIcon={<ArrowLeft size={16} />}>
-            Back to Jobs
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handlePrintJobCard} leftIcon={<Printer size={16} />}>
+              Print Job Card
+            </Button>
+            <Button variant="ghost" onClick={() => router.push('/jobs')} leftIcon={<ArrowLeft size={16} />}>
+              Back to Jobs
+            </Button>
+          </div>
         }
       />
 
@@ -232,6 +265,9 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           }}
         />
       )}
+
+      {/* Modern Print Progress Modal for Job Card */}
+      <PrintProgressModal state={jobCardPrintState} onClose={() => setJobCardPrintState(null)} />
     </div>
   );
 }

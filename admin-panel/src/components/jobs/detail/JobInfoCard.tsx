@@ -31,8 +31,22 @@ export function JobInfoCard({
   materials = [], onUpdateMaterials
 }: JobInfoCardProps) {
   const { showToast } = useToast();
-  const [editForm, setEditForm] = useState<Partial<Job>>(job);
+  const [editForm, setEditForm] = useState<Partial<Job>>({
+    ...job,
+    device_type: job?.device_type || (job as any)?.device_type_id || '',
+    remarks: job?.remarks || '',
+  });
   const [showReconcileModal, setShowReconcileModal] = useState(false);
+
+  React.useEffect(() => {
+    if (job) {
+      setEditForm({
+        ...job,
+        device_type: job.device_type || (job as any).device_type_id || '',
+        remarks: job.remarks || '',
+      });
+    }
+  }, [job]);
 
   const handleSaveJob = async () => {
     try {
@@ -48,13 +62,14 @@ export function JobInfoCard({
         return;
       }
 
+      const deviceVal = editForm.device_type?.trim() || null;
       const updateData: any = {
         customer_name: editForm.customer_name,
         customer_contact: editForm.customer_contact,
         customer_email: editForm.customer_email || null,
-        device_type: editForm.device_type,
+        device_type_id: deviceVal,
         reported_issue: editForm.reported_issue,
-        remarks: editForm.remarks || null,
+        remarks: editForm.remarks?.trim() || null,
         job_type: editForm.job_type,
         priority: editForm.priority,
         status: editForm.status
@@ -69,7 +84,7 @@ export function JobInfoCard({
       
       setIsEditing(false);
       showToast("Job updated successfully", "success");
-      onJobUpdated({ ...job, ...updateData });
+      onJobUpdated({ ...job, ...updateData, device_type: deviceVal });
     } catch (err: any) {
       showToast(err.message, "error");
     }
@@ -80,7 +95,7 @@ export function JobInfoCard({
     const phone = job.customer_contact.replace(/\D/g, '');
     const number = phone.length === 10 ? `91${phone}` : phone;
     
-    let text = `Hello ${job.customer_name}, this is regarding your job ${job.job_code} at Digital Solution. `;
+    let text = `Hello ${job.customer_name}, this is regarding your job ${job.job_code} at RepairShop. `;
     if (billing) {
       text += `Your total bill is ₹${billing.grand_total.toFixed(2)}. Status: ${billing.is_paid ? 'Paid' : 'Unpaid'}.`;
     }
@@ -110,7 +125,7 @@ export function JobInfoCard({
               <h4 className="font-medium text-admin-text-primary border-b border-admin-border pb-2">Device & Issue</h4>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-admin-text-secondary">Device Type</label>
-                <Input list="edit-device-types" value={editForm.device_type || ''} onChange={(e) => setEditForm({ ...editForm, device_type: e.target.value as any })} />
+                <Input list="edit-device-types" value={editForm.device_type || ''} onChange={(e) => setEditForm({ ...editForm, device_type: e.target.value as any })} placeholder="e.g. Laptop, PC..." />
                 <datalist id="edit-device-types">
                   {deviceTypes?.map(dt => <option key={dt} value={dt} />)}
                 </datalist>
@@ -139,7 +154,15 @@ export function JobInfoCard({
                 <option value="Inspection">Inspection</option>
               </Select></div>
             </div>
-            <div className="flex flex-col gap-1.5"><label className="text-sm font-medium text-admin-text-secondary">Internal Remarks</label><Textarea  rows={2} value={editForm.remarks || ''} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} /></div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-admin-text-secondary">Remarks & Physical Condition</label>
+              <Textarea 
+                rows={2} 
+                value={editForm.remarks || ''} 
+                onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} 
+                placeholder="Scratches, physical condition, accessories received..."
+              />
+            </div>
           </div>
         </div>
       </Card>
@@ -149,8 +172,17 @@ export function JobInfoCard({
   return (
     <>
       <Card>
-        <div className="p-6 border-b border-admin-border">
+        <div className="p-6 border-b border-admin-border flex justify-between items-center">
           <h3 className="text-lg font-semibold leading-none tracking-tight">Customer & Device Info</h3>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setIsEditing(true)} 
+            leftIcon={<Edit size={15} />}
+            className="text-admin-text-secondary hover:text-admin-text-primary"
+          >
+            Edit
+          </Button>
         </div>
         <div className="p-6 pt-0 space-y-4 text-sm mt-4">
           <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
@@ -169,7 +201,7 @@ export function JobInfoCard({
             <div className="col-span-2">
               <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Email</div>
               <div className="font-medium text-admin-text-primary">
-                {job.customer_email || '-'}
+                {job.customer_email || '—'}
               </div>
             </div>
           </div>
@@ -177,15 +209,23 @@ export function JobInfoCard({
           <div className="grid grid-cols-2 gap-4 bg-admin-bg-subtle p-4 rounded-lg">
             <div>
               <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Device Type</div>
-              <div className="font-medium text-admin-text-primary">{job.device_type}</div>
+              <div className="font-medium text-admin-text-primary">
+                {job.device_type || (job as any).device_type_id || '—'}
+              </div>
             </div>
             <div>
               <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Reported Issue</div>
-              <div className="font-medium text-admin-text-primary">{job.reported_issue}</div>
+              <div className="font-medium text-admin-text-primary">{job.reported_issue || '—'}</div>
             </div>
             <div className="col-span-2">
-              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Remarks</div>
-              <div className="font-medium text-admin-text-primary">{job.remarks || '-'}</div>
+              <div className="text-admin-text-muted mb-1 text-xs uppercase tracking-wider">Remarks & Physical Condition</div>
+              <div className="font-medium text-admin-text-primary">
+                {job.remarks?.trim() ? (
+                  job.remarks
+                ) : (
+                  <span className="text-admin-text-muted italic text-xs font-normal">No remarks or physical condition recorded</span>
+                )}
+              </div>
             </div>
           </div>
         </div>

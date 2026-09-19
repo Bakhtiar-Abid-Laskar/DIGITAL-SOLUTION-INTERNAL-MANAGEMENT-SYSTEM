@@ -52,7 +52,7 @@ export function generateAdvanceReceiptHtml(
 </head>
 <body>
   <div class="header">
-    <h1>Digital Solution</h1>
+    <h1>RepairShop</h1>
     <h2>Advance Salary Receipt</h2>
   </div>
 

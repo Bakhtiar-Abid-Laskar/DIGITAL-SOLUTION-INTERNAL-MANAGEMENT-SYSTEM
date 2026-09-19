@@ -148,13 +148,13 @@ serve(async (req: Request) => {
       // 4. Send Automated WhatsApp Intake Confirmation to Customer
       if (job.customer_contact) {
         const intakeMsg = `Hello ${job.customer_name || 'Customer'},\n\n` +
-          `Your device repair has been registered successfully at *Digital Solution*.\n\n` +
+          `Your device repair has been registered successfully at *RepairShop*.\n\n` +
           `📋 *Job Code:* ${job.job_code}\n` +
           `📱 *Device:* ${job.device_type || 'Device'}\n` +
           `⚠️ *Reported Issue:* ${job.reported_issue || 'Repair & Diagnostics'}\n` +
           (job.advance_amount && Number(job.advance_amount) > 0 ? `💰 *Advance Paid:* ₹${Number(job.advance_amount).toFixed(2)}\n` : '') +
           `\nOur technician is reviewing your device. We will update you via WhatsApp as work progresses.\n\n` +
-          `Thank you for choosing Digital Solution!`;
+          `Thank you for choosing RepairShop!`;
 
         await sendCustomerWhatsApp(supabase, {
           phone: job.customer_contact,

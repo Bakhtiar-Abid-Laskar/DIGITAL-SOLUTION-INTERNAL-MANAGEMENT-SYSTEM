@@ -554,7 +554,7 @@ export default function ReportsPage() {
                               <div className="font-semibold text-admin-text-primary">{job.customer_name}</div>
                               <div className="text-xs text-admin-text-muted">{job.customer_contact}</div>
                             </td>
-                            <td className="px-6 py-4 text-admin-text-secondary">{job.device_type}</td>
+                            <td className="px-6 py-4 text-admin-text-secondary">{job.device_type || (job as any).device_type_id || '—'}</td>
                             <td className="px-6 py-4">
                               <StatusBadge status={job.status} />
                             </td>

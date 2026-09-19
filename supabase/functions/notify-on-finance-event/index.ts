@@ -171,7 +171,7 @@ serve(async (req: Request) => {
           } catch (_) {}
 
           const saleMsg = `Hello ${record.customer_name || 'Customer'},\n\n` +
-            `Thank you for your purchase at *Digital Solution*!\n\n` +
+            `Thank you for your purchase at *RepairShop*!\n\n` +
             `🧾 *Sale Code:* ${saleCode}\n` +
             `💰 *Grand Total:* ${amountStr}\n` +
             (record.payment_mode ? `💳 *Payment Mode:* ${record.payment_mode}\n` : '') +
@@ -206,7 +206,7 @@ serve(async (req: Request) => {
         });
       }
 
-      const caption = `Hello ${customerName || 'Customer'}, here is your official invoice ${invoiceCode || ''} from Digital Solution.\n\n` +
+      const caption = `Hello ${customerName || 'Customer'}, here is your official invoice ${invoiceCode || ''} from RepairShop.\n\n` +
         (grandTotal ? `Total: ₹${Number(grandTotal).toFixed(2)}\n\n` : '') +
         `Thank you for your business!`;
 
@@ -239,13 +239,13 @@ serve(async (req: Request) => {
       }
 
       const reminderMsg = `Hello ${customerName || 'Customer'},\n\n` +
-        `This is a friendly payment reminder from *Digital Solution*.\n\n` +
+        `This is a friendly payment reminder from *RepairShop*.\n\n` +
         `📋 *Reference:* ${reference || 'Repair Service'}\n` +
         (totalAmount ? `💰 *Total Bill:* ₹${Number(totalAmount).toFixed(2)}\n` : '') +
         `⚠️ *Outstanding Balance Due:* *₹${Number(balanceDue || 0).toFixed(2)}*\n` +
         (dueDate ? `📅 *Due Date:* ${dueDate}\n` : '') +
         `\nPlease arrange the payment at your earliest convenience via Cash, Card, or UPI.\n\n` +
-        `For questions or assistance, please contact Digital Solution. Thank you!`;
+        `For questions or assistance, please contact RepairShop. Thank you!`;
 
       const result = await sendCustomerWhatsApp(supabase, {
         phone,

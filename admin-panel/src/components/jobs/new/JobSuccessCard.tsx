@@ -3,10 +3,10 @@ import React, { useState } from 'react';
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
-import { CheckCircle2, Printer, Eye } from "lucide-react";
+import { CheckCircle2, Printer, Eye, FileText } from "lucide-react";
 import { Job } from '@repairshop/shared';
 import { formatCurrency } from '@repairshop/shared';
-import { openInvoicePrint } from '@/lib/invoiceClient';
+import { openJobCardPrint } from '@/lib/jobCardClient';
 import { useToast } from "@/components/common/ToastProvider";
 import { CreateJobFormState } from '@/app/(admin)/jobs/new/reducer';
 import { PrintProgressModal, PrintProgressState } from "@/components/common/PrintProgressModal";
@@ -22,22 +22,20 @@ export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccess
   const { showToast } = useToast();
   const [printState, setPrintState] = useState<PrintProgressState | null>(null);
 
-  const handlePrintReceipt = async () => {
+  const handlePrintJobCard = async () => {
     if (!createdJob) return;
-    setPrintState({ isOpen: true, percent: 15, message: 'Preparing customer intake receipt...' });
+    setPrintState({ isOpen: true, percent: 15, message: 'Preparing operational Job Card...' });
     try {
-      await openInvoicePrint(
-        {
-          docType: 'receipt',
-          jobId: createdJob.id,
-        },
-        (percent, message) => setPrintState({ isOpen: true, percent, message })
-      );
+      await openJobCardPrint({
+        jobId: createdJob.id,
+        preloadedJob: createdJob,
+        onProgress: (percent, message) => setPrintState({ isOpen: true, percent, message })
+      });
       setPrintState({ isOpen: true, percent: 100, message: 'Print dialog opened', isComplete: true });
       setTimeout(() => setPrintState(null), 1200);
     } catch (e: any) {
       setPrintState(null);
-      showToast(e.message || 'Failed to open receipt', 'error');
+      showToast(e.message || 'Failed to print Job Card', 'error');
     }
   };
 
@@ -62,18 +60,25 @@ export function JobSuccessCard({ createdJob, form, onCreateAnother }: JobSuccess
             </div>
           ) : null}
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
             <Button
-              onClick={handlePrintReceipt}
+              onClick={handlePrintJobCard}
               leftIcon={<Printer size={18} />}
             >
-              Print Receipt
+              Print Job Card
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/jobs/${createdJob.id}`)} leftIcon={<Eye size={18} />}>
-              View Job Details
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/jobs/${createdJob.id}`)}
+              leftIcon={<FileText size={18} />}
+            >
+              Generate Bill
+            </Button>
+            <Button variant="ghost" onClick={() => router.push(`/jobs/${createdJob.id}`)} leftIcon={<Eye size={18} />}>
+              View Details
             </Button>
             <Button variant="ghost" onClick={onCreateAnother}>
-              Create Another Job
+              Create Another
             </Button>
           </div>
         </div>

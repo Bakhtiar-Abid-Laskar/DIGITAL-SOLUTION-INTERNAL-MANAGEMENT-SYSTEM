@@ -407,13 +407,13 @@ export default function BillingScreen() {
     if (invoice?.id) {
       await generatePdf({
         request: { docType: 'final', invoiceId: invoice.id },
-        title: 'Generating Invoice',
+        title: 'Generating Tax Invoice',
         mode: 'print',
       });
     } else {
       await generatePdf({
         request: { docType: 'receipt', jobId: job.id },
-        title: 'Generating Receipt',
+        title: 'Generating Tax Invoice',
         mode: 'print',
       });
     }

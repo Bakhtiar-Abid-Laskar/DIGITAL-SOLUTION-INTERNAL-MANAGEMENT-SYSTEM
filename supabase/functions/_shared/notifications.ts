@@ -36,12 +36,14 @@ export async function sendPushNotification(
 ) {
   const now = new Date().toISOString();
 
+  const resolvedTitle = title || 'RepairShop';
+
   // 1. Always record in notifications table (in-app audit trail)
   const { data: notifRecord, error: dbError } = await supabase
     .from('notifications')
     .insert({
       recipient_user_id: userId,
-      title: title || 'Digital Solution',
+      title: resolvedTitle,
       message: body,
       job_id: jobId || null,
       channel: 'push',
@@ -62,7 +64,7 @@ export async function sendPushNotification(
   }
 
   const cleanToken = pushToken!.trim();
-  console.log(`[Push Notification] Dispatching to Expo for user ${userId} [${cleanToken.slice(0, 18)}...]: "${title}"`);
+  console.log(`[Push Notification] Dispatching to Expo for user ${userId} [${cleanToken.slice(0, 18)}...]: "${resolvedTitle}"`);
 
   // 3. Dispatch to Expo Push API
   try {
@@ -77,7 +79,7 @@ export async function sendPushNotification(
         to: cleanToken,
         sound: 'default',
         priority: 'high',
-        title,
+        title: resolvedTitle,
         body,
         data: data || {},
         channelId: 'default',

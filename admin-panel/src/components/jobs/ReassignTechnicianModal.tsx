@@ -88,7 +88,7 @@ export default function ReassignTechnicianModal({
         
         <div className="p-6 overflow-y-auto">
           <p className="text-sm text-admin-text-muted mb-4">
-            Assigning to Job <strong>{job.job_code}</strong> ({job.device_type})
+            Assigning to Job <strong>{job.job_code}</strong> ({job.device_type || (job as any).device_type_id || 'Device'})
           </p>
           
           {error && (

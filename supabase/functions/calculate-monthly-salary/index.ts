@@ -56,63 +56,41 @@ async function insertAuditLog(
 }
 
 // ---------------------------------------------------------------------------
-// Threshold-breach deduction logic (single source of truth)
+// Normal excess leave deduction & dynamic absence calculation
 //
 // Rule (confirmed by business owner):
-//   total_leave_absent = attendance_leave_days + absent_days (combined)
-//   if total_leave_absent > max_leave_allowed:
-//     threshold is BREACHED — every leave/absent day charged at absent_day_deduction
-//     (no free days at all)
-//   else:
-//     normal — (total_leave_absent - allowed_leave_days) days charged,
-//     floor at 0 (i.e. free days absorb the rest)
+//   First allowed_leave_days (default 2) are 100% paid/free leaves.
+//   Only excess approved leaves beyond allowed_leave_days are deducted:
+//     chargeable_leave_days = Math.max(0, leave_count - allowed_leave_days)
+//     leave_deduction = chargeable_leave_days * absent_day_deduction
+//   Unexcused absences (dynamic difference between working days and accounted days):
+//     absence_deduction = absent_count * absent_day_deduction
 // ---------------------------------------------------------------------------
-function computeLeaveDeductions(params: {
+function computeLeaveAndAbsenceDeductions(params: {
   leave_count: number;
   absent_count: number;
   allowed_leave_days: number;
-  max_leave_allowed: number;
   absent_day_deduction: number;
 }): {
-  threshold_breached: boolean;
-  total_leave_absent: number;
-  chargeable_days: number;
-  absence_deduction: number;
+  chargeable_leave_days: number;
   leave_deduction: number;
+  absence_deduction: number;
 } {
   const {
     leave_count,
     absent_count,
     allowed_leave_days,
-    max_leave_allowed,
     absent_day_deduction,
   } = params;
 
-  const total_leave_absent = leave_count + absent_count;
-  const threshold_breached = total_leave_absent > max_leave_allowed;
-
-  let chargeable_days: number;
-  let absence_deduction: number;
-  let leave_deduction: number;
-
-  if (threshold_breached) {
-    // ALL leave + absent days are charged — no free allowance
-    chargeable_days   = total_leave_absent;
-    absence_deduction = Math.round(chargeable_days * absent_day_deduction * 100) / 100;
-    leave_deduction   = 0; // rolled into absence_deduction
-  } else {
-    // Normal: subtract free days
-    chargeable_days   = Math.max(0, total_leave_absent - allowed_leave_days);
-    absence_deduction = Math.round(chargeable_days * absent_day_deduction * 100) / 100;
-    leave_deduction   = 0;
-  }
+  const chargeable_leave_days = Math.max(0, leave_count - allowed_leave_days);
+  const leave_deduction = Math.round(chargeable_leave_days * absent_day_deduction * 100) / 100;
+  const absence_deduction = Math.round(absent_count * absent_day_deduction * 100) / 100;
 
   return {
-    threshold_breached,
-    total_leave_absent,
-    chargeable_days,
-    absence_deduction,
+    chargeable_leave_days,
     leave_deduction,
+    absence_deduction,
   };
 }
 
@@ -213,18 +191,34 @@ serve(async (req: Request) => {
     const preferred_checkin_mins  = 10 * 60 + 30; // 10:30 IST
     const preferred_checkout_mins = 19 * 60;       // 19:00 IST
 
-    // ── 7. Fetch holidays ────────────────────────────────────────────────────
+    // ── 7. Fetch holidays & approved leaves ──────────────────────────────────
     const { data: holidaysRows } = await adminClient
       .from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd);
     const holidayDates   = new Set<string>((holidaysRows || []).map((h: { date: string }) => h.date));
     const holidays_count = holidayDates.size;
     const working_days   = getWorkingDaysInMonth(year, monthNum, holidayDates);
 
+    // Fetch approved leaves from employee_leave
+    const { data: leaveRows } = await adminClient
+      .from('employee_leave')
+      .select('leave_date')
+      .eq('user_id', user_id)
+      .eq('status', 'approved')
+      .gte('leave_date', dateStart)
+      .lte('leave_date', dateEnd);
+
+    const approvedLeaveDates = new Set<string>((leaveRows || []).map((l: { leave_date: string }) => l.leave_date));
+
     // ── 8. Fetch attendance & compute per-day penalties ─────────────────────
+    // SECURITY FIX (F-ATT-01): Only count attendance rows that have been
+    // explicitly approved by an admin (review_status = 'approved').
+    // Rows with review_status = 'pending' or 'rejected' are excluded from
+    // all pay calculations. Business decision confirmed: Option A.
     const { data: attendanceRows, error: attErr } = await adminClient
       .from('attendance')
-      .select('date, status, check_in_time, check_out_time, ot_hours')
+      .select('date, status, check_in_time, check_out_time, ot_hours, review_status')
       .eq('user_id', user_id)
+      .eq('review_status', 'approved')
       .gte('date', dateStart)
       .lte('date', dateEnd);
     if (attErr) return json({ error: 'Failed to fetch attendance: ' + attErr.message }, 500, corsHeaders);
@@ -233,20 +227,33 @@ serve(async (req: Request) => {
 
     let present_days          = 0;
     let halfday_count         = 0;
-    let leave_count           = 0;  // attendance rows with status = 'Leave'
-    let absent_count          = 0;  // attendance rows with status = 'Absent' (non-holiday)
     let ot_hours              = 0;
     let total_late_deduction  = 0;
     let total_early_deduction = 0;
+    const missingCheckouts: string[] = [];
+    const workedDates = new Set<string>();
 
     for (const r of records) {
-      const isHoliday = holidayDates.has(r.date);
-      const status    = (r.status || '').toLowerCase();
+      const status = (r.status || '').toLowerCase();
 
-      if      (status === 'present')               { present_days++; }
-      else if (status === 'halfday')               { halfday_count++; }
-      else if (status === 'leave')                 { leave_count++; }
-      else if (status === 'absent' && !isHoliday) { absent_count++; }
+      // Defence-in-depth: skip any row that is not approved, even if the DB
+      // filter above already excludes them (guards against future query changes).
+      if ((r.review_status || '').toLowerCase() !== 'approved') continue;
+
+      if (status === 'present') {
+        present_days++;
+        workedDates.add(r.date);
+      } else if (status === 'halfday') {
+        halfday_count++;
+        workedDates.add(r.date);
+      } else if (status === 'leave') {
+        approvedLeaveDates.add(r.date);
+      }
+
+      // Track check-ins with missing check-outs
+      if ((status === 'present' || status === 'halfday') && r.check_in_time && !r.check_out_time) {
+        missingCheckouts.push(r.date);
+      }
 
       // Per-day penalty calculation
       let late_penalty_today  = 0;
@@ -298,20 +305,32 @@ serve(async (req: Request) => {
     total_late_deduction  = Math.round(total_late_deduction  * 100) / 100;
     total_early_deduction = Math.round(total_early_deduction * 100) / 100;
 
-    // ── 9. Leave deduction — threshold-breach rule ───────────────────────────
-    // Combines BOTH attendance-sourced leave_count + absent_count against
-    // max_leave_allowed (confirmed by business owner Q1 answer).
+    // Remove any date where employee actually worked from approved leave dates
+    for (const d of Array.from(workedDates)) {
+      approvedLeaveDates.delete(d);
+    }
+    // Remove leaves falling on Sundays or Holidays (they don't consume leave allowance)
+    for (const d of Array.from(approvedLeaveDates)) {
+      const [y, m, dayNum] = d.split('-').map(Number);
+      const dow = new Date(y, m - 1, dayNum).getDay();
+      if (dow === 0 || holidayDates.has(d)) {
+        approvedLeaveDates.delete(d);
+      }
+    }
+
+    const leave_count = approvedLeaveDates.size;
+    const accounted_days = present_days + halfday_count + leave_count;
+    const absent_count = Math.max(0, working_days - accounted_days);
+
+    // ── 9. Leave deduction — normal excess rule & dynamic absence ─────────────
     const {
-      threshold_breached,
-      total_leave_absent,
-      chargeable_days,
-      absence_deduction,
+      chargeable_leave_days,
       leave_deduction,
-    } = computeLeaveDeductions({
+      absence_deduction,
+    } = computeLeaveAndAbsenceDeductions({
       leave_count,
       absent_count,
       allowed_leave_days,
-      max_leave_allowed,
       absent_day_deduction,
     });
 
@@ -402,10 +421,11 @@ serve(async (req: Request) => {
       early_deduction:           total_early_deduction,
       status:                    existingSalary?.status === 'paid' ? 'paid' : 'draft',
       generated_by:              callerUser.id,
-      // Snapshot columns (schema-fixed in migration 20260821000000)
+      // Snapshot columns
       allowed_leave_days_snap:   allowed_leave_days,
       max_leave_allowed_snap:    max_leave_allowed,
-      threshold_breached,
+      threshold_breached:        chargeable_leave_days > 0,
+      missing_checkout_count:    missingCheckouts.length,
     };
 
     let salary_id = existingSalary?.id ?? null;
@@ -428,9 +448,10 @@ serve(async (req: Request) => {
           gross_salary,
           net_salary,
           salary_id,
-          threshold_breached,
-          total_leave_absent,
-          chargeable_days,
+          leave_count,
+          chargeable_leave_days,
+          absent_count,
+          missing_checkout_count: missingCheckouts.length,
         },
         callerUser.id
       );
@@ -457,16 +478,18 @@ serve(async (req: Request) => {
       present_days,
       halfday_count,
       leave_count,
+      approved_leaves:     leave_count,
       absent_count,
       full_absent_days:    absent_count,
       half_absent_days:    halfday_count,
-      total_leave_absent,
+      total_leave_absent:  leave_count + absent_count,
 
-      // Leave threshold
+      // Leave allowance & missing punches
       allowed_leave_days,
-      max_leave_allowed,
-      threshold_breached,
-      chargeable_days,
+      chargeable_leave_days,
+      chargeable_days:        absent_count + chargeable_leave_days,
+      missing_checkout_count: missingCheckouts.length,
+      missing_checkout_dates: missingCheckouts,
 
       // Additions
       ot_hours,

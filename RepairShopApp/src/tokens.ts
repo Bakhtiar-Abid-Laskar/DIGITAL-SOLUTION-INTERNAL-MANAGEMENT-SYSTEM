@@ -214,7 +214,8 @@ const ANIM = {
 // ---------------------------------------------------------------------------
 // STATUS / PRIORITY CARD HELPER
 // ---------------------------------------------------------------------------
-export type JobStatusKey = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed' | 'Assigned';
+export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed' | 'Assigned' | 'Delivered' | 'Cancelled';
+export type JobStatusKey = JobStatus;
 
 export const STATUS_CARD: Record<JobStatusKey, { fill: string; ink: string }> = {
   'Received':              { fill: colors.statusReceivedBg,   ink: colors.statusReceivedFg   },
@@ -222,6 +223,9 @@ export const STATUS_CARD: Record<JobStatusKey, { fill: string; ink: string }> = 
   'Waiting for Materials': { fill: colors.statusWaitingBg,    ink: colors.statusWaitingFg    },
   'Completed':             { fill: colors.statusCompletedBg,  ink: colors.statusCompletedFg  },
   'Assigned':              { fill: colors.statusAssignedBg,   ink: colors.statusAssignedFg   },
+  // Added to match DB schema — these were missing (F-JOB-05)
+  'Delivered':             { fill: '#E0F2FE',                 ink: '#0369A1'                 },
+  'Cancelled':             { fill: '#FEE2E2',                 ink: '#DC2626'                 },
 };
 
 export function getStatusCard(status: string): { fill: string; ink: string } {

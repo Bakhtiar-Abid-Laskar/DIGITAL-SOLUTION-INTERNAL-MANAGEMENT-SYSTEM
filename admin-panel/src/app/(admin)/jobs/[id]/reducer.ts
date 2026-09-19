@@ -84,12 +84,16 @@ export function jobDetailReducer(state: JobDetailState, action: JobDetailAction)
   switch (action.type) {
     case 'FETCH_START':
       return { ...state, loading: true, error: null };
-    case 'FETCH_SUCCESS':
+    case 'FETCH_SUCCESS': {
+      const normalizedJob = action.payload.job ? {
+        ...action.payload.job,
+        device_type: action.payload.job.device_type || (action.payload.job as any).device_type_id,
+      } : action.payload.job;
       return {
         ...state,
         loading: false,
-        job: action.payload.job,
-        editForm: action.payload.job,
+        job: normalizedJob,
+        editForm: normalizedJob,
         materials: action.payload.materials,
         technicians: action.payload.technicians,
         billing: action.payload.billing,
@@ -107,6 +111,7 @@ export function jobDetailReducer(state: JobDetailState, action: JobDetailAction)
           is_paid: action.payload.billing?.status === 'paid',
         }
       };
+    }
     case 'FETCH_ERROR':
       return { ...state, loading: false, error: action.error };
     case 'SET_EDITING':

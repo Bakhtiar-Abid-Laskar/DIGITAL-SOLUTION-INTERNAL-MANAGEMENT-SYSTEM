@@ -111,6 +111,7 @@ export interface SalaryRecord {
   leave_deduction?: number;
   late_deduction?: number;
   early_deduction?: number;
+  missing_checkout_count?: number;
   status?: 'draft' | 'paid';
 }
 
@@ -140,7 +141,12 @@ export interface SalaryBreakdown {
   half_absent_days: number;
   allowed_leave_days: number;
   chargeable_days: number;
+  approved_leaves?: number;
   approved_leave_count?: number;
+  chargeable_leave_days?: number;
+  unexcused_absent_days?: number;
+  missing_checkout_count?: number;
+  missing_checkout_dates?: string[];
 
   // Additions
   ot_hours: number;
