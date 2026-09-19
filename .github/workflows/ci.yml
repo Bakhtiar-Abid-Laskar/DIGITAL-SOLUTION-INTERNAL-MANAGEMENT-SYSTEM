@@ -7,8 +7,9 @@ on:
     branches: [ master, main ]
 
 jobs:
-  test-and-typecheck:
-    name: Full-Stack Test & Typecheck
+  # ─── Web / shared typecheck + tests ───────────────────────────────────────
+  web-check:
+    name: Web Admin & Shared Typecheck + Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -21,20 +22,38 @@ jobs:
           node-version: 22.x
           cache: 'npm'
 
-      - name: Install Monorepo Dependencies
+      - name: Install Workspace Dependencies
         run: npm install --no-audit --prefer-offline
 
-      - name: Typecheck Mobile App (RepairShopApp)
-        run: |
-          cd RepairShopApp
-          npx tsc --noEmit
-
-      - name: Typecheck Web Admin Panel (admin-panel)
+      - name: Typecheck Web Admin Panel
         run: |
           cd admin-panel
           npx tsc --noEmit
 
-      - name: Run Full Jest Test Suite with Coverage
+      - name: Run Jest Test Suite with Coverage
         run: |
           cd admin-panel
           npx jest --rootDir .. --coverage --coverageThreshold='{"packages/shared/src/": {"statements": 90, "branches": 80, "functions": 85, "lines": 90}}'
+
+  # ─── Mobile (Expo React Native) typecheck ─────────────────────────────────
+  mobile-check:
+    name: Mobile App Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install Mobile App Dependencies
+        working-directory: RepairShopApp
+        run: npm install --no-audit --prefer-offline
+
+      - name: Typecheck Mobile App
+        working-directory: RepairShopApp
+        run: npx tsc --noEmit
