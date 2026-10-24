@@ -16,7 +16,7 @@ const GeofenceMap = dynamic(() => import('@/components/settings/GeofenceMap'), {
 export default function GeofenceSettingsPage() {
   const [setting, setSetting] = useState<GeofenceSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [radius, setRadius] = useState(100);
+  const [radius, setRadius] = useState(40);
   const [savingRadius, setSavingRadius] = useState(false);
   const { showToast } = useToast();
 
@@ -36,7 +36,7 @@ export default function GeofenceSettingsPage() {
       if (data) {
         const centerLat = Number(data.center_lat ?? (data as any).lat ?? 0);
         const centerLng = Number(data.center_lng ?? (data as any).lng ?? 0);
-        const radiusMeters = Number(data.radius_meters ?? (data as any).radius ?? 100);
+        const radiusMeters = Number(data.radius_meters ?? (data as any).radius ?? 40);
 
         const mappedSetting: GeofenceSettings = {
           id: data.id,
@@ -116,7 +116,7 @@ export default function GeofenceSettingsPage() {
 
   const savedLat = setting ? (setting.center_lat ?? setting.lat ?? 0) : 0;
   const savedLng = setting ? (setting.center_lng ?? setting.lng ?? 0) : 0;
-  const savedRadius = setting ? (setting.radius_meters ?? setting.radius ?? 100) : 100;
+  const savedRadius = setting ? (setting.radius_meters ?? setting.radius ?? 40) : 40;
 
   return (
     <div className="space-y-6 max-w-5xl">

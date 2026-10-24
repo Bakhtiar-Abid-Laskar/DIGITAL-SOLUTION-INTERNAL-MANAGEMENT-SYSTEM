@@ -228,7 +228,27 @@ export default function AttendanceScreen() {
         .eq('date', todayStr)
         .maybeSingle();
 
-      setTodayRecord(todayData as AttendanceRecord | null);
+      let activeRecord = todayData as AttendanceRecord | null;
+      // ATT-005: If no check-in today, check for an unclosed shift within the past 18 hours (midnight-crossing shift)
+      if (!activeRecord || !activeRecord.check_in_time) {
+        const eighteenHoursAgo = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
+        const { data: openShift } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('user_id', user.id)
+          .not('check_in_time', 'is', null)
+          .is('check_out_time', null)
+          .gte('check_in_time', eighteenHoursAgo)
+          .order('check_in_time', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (openShift) {
+          activeRecord = openShift as AttendanceRecord;
+        }
+      }
+
+      setTodayRecord(activeRecord);
 
       const { data: historyData } = await supabase
         .from('attendance')
@@ -243,7 +263,7 @@ export default function AttendanceScreen() {
       if (geofenceData) {
         const centerLat = Number(geofenceData.center_lat ?? (geofenceData as any).lat ?? 0);
         const centerLng = Number(geofenceData.center_lng ?? (geofenceData as any).lng ?? 0);
-        const radiusMeters = Number(geofenceData.radius_meters ?? (geofenceData as any).radius ?? 100);
+        const radiusMeters = Number(geofenceData.radius_meters ?? (geofenceData as any).radius ?? 40);
 
         setGeofenceSetting({
           ...geofenceData,
@@ -289,7 +309,7 @@ export default function AttendanceScreen() {
       }
       const shopLat = geofenceSetting.center_lat ?? geofenceSetting.lat;
       const shopLng = geofenceSetting.center_lng ?? geofenceSetting.lng;
-      const shopRadius = geofenceSetting.radius_meters ?? geofenceSetting.radius ?? 100;
+      const shopRadius = geofenceSetting.radius_meters ?? geofenceSetting.radius ?? 40;
       if (shopLat == null || shopLng == null) {
         resolve({ proceed: true, atLocation: true });
         return;
@@ -343,6 +363,7 @@ export default function AttendanceScreen() {
         }, { onConflict: 'user_id, date' });
         if (error) throw new Error(error.message);
       } else {
+        const targetDate = todayRecord?.date || todayStr;
         const { error } = await supabase.from('attendance')
           .update({
             check_out_time: new Date().toISOString(),
@@ -354,7 +375,7 @@ export default function AttendanceScreen() {
             review_status: reviewStatus
           })
           .eq('user_id', user.id)
-          .eq('date', todayStr);
+          .eq('date', targetDate);
         if (error) throw new Error(error.message);
       }
       await fetchAttendance();
@@ -778,14 +799,51 @@ export default function AttendanceScreen() {
               if (!confirmAction || !user) return;
               setConfirmModalVisible(false);
               setProcessing(true);
-              const { error } = await supabase.from('attendance').upsert({
-                user_id: user.id,
-                date: todayStr,
-                status: confirmAction.status
-              }, { onConflict: 'user_id, date' });
+              if (confirmAction.status === 'Leave') {
+                const { error: leaveErr } = await supabase.from('employee_leave').upsert({
+                  user_id: user.id,
+                  leave_date: todayStr,
+                  status: 'pending',
+                  reason: 'Marked via mobile attendance',
+                }, { onConflict: 'user_id, leave_date' });
 
-              if (error) showToast({ title: 'Error', message: error.message, type: 'error' });
-              else await fetchAttendance();
+                if (leaveErr) {
+                  showToast({ title: 'Leave Request Failed', message: leaveErr.message, type: 'error' });
+                  setProcessing(false);
+                  return;
+                }
+
+                await supabase.from('attendance').upsert({
+                  user_id: user.id,
+                  date: todayStr,
+                  status: 'Leave',
+                  review_status: 'pending',
+                }, { onConflict: 'user_id, date' });
+
+                showToast({
+                  title: 'Leave Request Submitted',
+                  message: 'Your leave request for today has been submitted for admin approval.',
+                  type: 'info',
+                });
+              } else {
+                const { error } = await supabase.from('attendance').upsert({
+                  user_id: user.id,
+                  date: todayStr,
+                  status: 'Halfday',
+                  review_status: 'pending',
+                }, { onConflict: 'user_id, date' });
+
+                if (error) {
+                  showToast({ title: 'Error', message: error.message, type: 'error' });
+                } else {
+                  showToast({
+                    title: 'Half Day Recorded',
+                    message: 'Half day attendance submitted and is pending admin approval.',
+                    type: 'info',
+                  });
+                }
+              }
+              await fetchAttendance();
               
               setProcessing(false);
             }}

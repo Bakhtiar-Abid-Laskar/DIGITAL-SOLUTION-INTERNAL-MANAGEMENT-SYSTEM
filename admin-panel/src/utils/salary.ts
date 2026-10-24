@@ -1,3 +1,5 @@
+import { calculateStaffSalary, roundCurrency, PayrollCalculationInputs } from '@repairshop/shared';
+
 export interface SalaryInputs {
   monthly_salary: number;
   
@@ -104,3 +106,5 @@ export function calculateNetSalary(inputs: SalaryInputs) {
     net_salary,
   };
 }
+
+export * from '@repairshop/shared';
