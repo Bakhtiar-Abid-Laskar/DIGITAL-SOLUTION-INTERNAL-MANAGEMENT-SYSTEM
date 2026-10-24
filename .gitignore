@@ -1,4 +1,4 @@
-node_modules/
+1node_modules/
 .next/
 dist/
 build/
@@ -44,3 +44,4 @@ ref/twilio_2FA_recovery_code.txt
 *firebase-adminsdk*.json
 digitalsolution-76a79-firebase-adminsdk-fbsvc-772fd6fd3f.json
 /google-services.json
+node_modules

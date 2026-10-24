@@ -118,9 +118,9 @@ serve(async (req: Request) => {
     
     const htmlBody = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2>RepairShop Invoice</h2>
+        <h2>Digital Solution Invoice</h2>
         <p>Hi ${job.customer_name},</p>
-        <p>Thank you for choosing RepairShop for your ${job.device_type_id || 'device'} repair (Job: <strong>${job.job_code}</strong>).</p>
+        <p>Thank you for choosing Digital Solution for your ${job.device_type_id || 'device'} repair (Job: <strong>${job.job_code}</strong>).</p>
         <hr style="border-top: 1px solid #ccc; margin: 20px 0;" />
         <p><strong>Subtotal:</strong> ₹${invoice?.subtotal || invoice?.parts_total || 0}</p>
         <p><strong>Tax:</strong> ₹${invoice?.total_tax || 0}</p>
@@ -128,7 +128,7 @@ serve(async (req: Request) => {
         <h3 style="color: #2E9E52;"><strong>Grand Total:</strong> ₹${invoice?.grand_total || 0}</h3>
         <hr style="border-top: 1px solid #ccc; margin: 20px 0;" />
         <p>If you have any questions, please reply to this email.</p>
-        <p>Best regards,<br/>RepairShop Team</p>
+        <p>Best regards,<br/>Digital Solution Team</p>
       </div>
     `
 
@@ -139,7 +139,7 @@ serve(async (req: Request) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'RepairShop <billing@yourdomain.com>',
+        from: 'Digital Solution <billing@yourdomain.com>',
         to: [targetEmail],
         subject: `Invoice for Repair Job ${job.job_code}`,
         html: htmlBody

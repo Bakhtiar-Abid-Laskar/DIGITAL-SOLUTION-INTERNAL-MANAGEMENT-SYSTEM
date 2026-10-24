@@ -81,8 +81,13 @@ describe('Job Card HTML Generation Engine (@repairshop/shared/jobCardTemplate.ts
 
     expect(html).toContain('Customer Intake Acknowledgement & Terms');
     expect(html).toContain('Customer Signature');
-    expect(html).toContain('Authorized Workshop Signature');
+    expect(html).toContain('Authorised Signatory');
+    expect(html).toContain('(Digital Solution)');
     expect(html).toContain('Data Backup');
+    expect(html).toContain('Intake By');
+    expect(html).toContain('Service Assignment');
+    expect(html).toContain('GODOWN');
+
   });
 
   it('properly escapes HTML to prevent tag injection', () => {
