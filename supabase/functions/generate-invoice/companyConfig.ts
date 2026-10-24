@@ -3,11 +3,11 @@
 // No DB query needed — these are stable business identity fields.
 
 export const COMPANY = {
-  name: 'RepairShop',
+  name: 'Digital Solution',
   tagline: 'YOUR TRUSTED TECHNOLOGY PARTNER',
   address: 'Rangirkhari, Tarani Road, Silchar-788005, Cachar, Assam',
   phone: '7002204047 / 7002611748',
-  email: 'contact@repairshop.local',
+  email: 'digitalsolutionsilchar@gmail.com',
 };
 
 export const BANK = {

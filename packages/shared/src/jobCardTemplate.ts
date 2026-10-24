@@ -71,19 +71,21 @@ function formatDate(isoString: string | null | undefined): string {
   }
 }
 
+const BUSINESS_NAME = 'Digital Solution';
+
 const DEFAULT_COMPANY: JobCardCompanyInfo = {
-  name: 'RepairShop',
+  name: BUSINESS_NAME,
   tagline: 'SERVICE & REPAIR MANAGEMENT',
   address: 'Rangirkhari, Tarani Road, Silchar-788005, Cachar, Assam',
   phone: '+91 7002204047 / 7002611748',
-  email: 'contact@repairshop.local',
+  email: 'digitalsolutionsilchar@gmail.com',
 };
 
 const DEFAULT_TERMS: string[] = [
-  'Data Backup: Customer is strictly advised to back up all data. RepairShop is not responsible for any data loss during diagnosis or repair.',
+  'Data Backup: Customer is strictly advised to back up all data. Digital Solution is not responsible for any data loss during diagnosis or repair.',
   'Inspection & Authorization: Initial estimates provided during intake are indicative. Any hidden or secondary faults detected upon internal hardware diagnosis will be notified for customer approval.',
-  'Storage & Disposal: Devices not claimed or collected within 30 days of completion notice are subject to storage charges or disposal in accordance with workshop policy.',
-  'Warranty Terms: Limited warranty applies solely to replaced hardware parts as per manufacturer or workshop warranty policy. No warranty on physical, burn, or liquid damages.',
+  'After 07 Days of INFORMATION if the customer did not get any RESPONSE then we send material to GODOWN & Godown CHARGES of Rs. 50/- will be charged PER DAY from CUSTOMER.',
+  'Warranty Terms: Limited warranty applies solely to replaced hardware parts as per manufacturer or Digital Solution warranty policy. No warranty on physical, burn, or liquid damages.',
 ];
 
 /**
@@ -115,7 +117,7 @@ export function generateJobCardHtml(data: JobCardData): string {
   <style>
     @page {
       size: A4 portrait;
-      margin: 10mm 12mm;
+      margin: 0;
     }
     * {
       box-sizing: border-box;
@@ -413,7 +415,7 @@ export function generateJobCardHtml(data: JobCardData): string {
         <span class="val">${escapeHtml(data.status || 'Received')}</span>
       </div>
       <div class="jc-meta-item">
-        <span class="lbl">Intake Staff</span>
+        <span class="lbl">Intake By</span>
         <span class="val">${escapeHtml(data.intakeStaffName || '—')}</span>
       </div>
     </div>
@@ -450,10 +452,10 @@ export function generateJobCardHtml(data: JobCardData): string {
         </table>
       </div>
 
-      <!-- Workshop Assignment & Service -->
+      <!-- Service Assignment -->
       <div class="jc-section">
         <div class="jc-sec-header">
-          <span>Workshop Assignment</span>
+          <span>Service Assignment</span>
         </div>
         <table class="jc-data-table">
           <tr>
@@ -535,8 +537,8 @@ export function generateJobCardHtml(data: JobCardData): string {
       </div>
       <div class="jc-sig-block">
         <div class="jc-sig-line"></div>
-        <div class="jc-sig-title">Authorized Workshop Signature</div>
-        <div class="jc-sig-sub">${escapeHtml(company.name)}</div>
+        <div class="jc-sig-title">Authorised Signatory</div>
+        <div class="jc-sig-sub">(${escapeHtml(company.name)})</div>
       </div>
     </div>
 

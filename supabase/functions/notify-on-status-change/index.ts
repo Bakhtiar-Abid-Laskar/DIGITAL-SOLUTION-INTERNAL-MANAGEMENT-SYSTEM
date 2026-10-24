@@ -179,8 +179,8 @@ serve(async (req: Request) => {
             const readyMsg = `Hello ${customerName},\n\n` +
               `🎉 Great news! Your device for Job *${newJob.job_code}* has been successfully repaired and is *READY FOR PICKUP*.\n` +
               totalNotice +
-              `\nPlease visit *RepairShop* during shop hours with your intake receipt to collect your device.\n\n` +
-              `Thank you for trusting RepairShop!`;
+              `\nPlease visit *Digital Solution* during shop hours with your intake receipt to collect your device.\n\n` +
+              `Thank you for trusting Digital Solution!`;
 
             await sendCustomerWhatsApp(supabase, {
               phone: newJob.customer_contact,
@@ -207,7 +207,7 @@ serve(async (req: Request) => {
             } catch (_) {}
 
             const reviewMsg = `Hello ${customerName},\n\n` +
-              `Thank you for collecting your device for Job *${newJob.job_code}* from *RepairShop*!\n\n` +
+              `Thank you for collecting your device for Job *${newJob.job_code}* from *Digital Solution*!\n\n` +
               `We hope you are delighted with the service. We would greatly appreciate 30 seconds of your time to share your feedback on our Google Form:\n\n` +
               `⭐ *Google Review Link:* ${reviewUrl}\n\n` +
               `Your feedback helps us continuously improve. Have a wonderful day!`;
@@ -224,7 +224,7 @@ serve(async (req: Request) => {
             const partsMsg = `Hello ${customerName},\n\n` +
               `Update on your repair Job *${newJob.job_code}*:\n` +
               `Our technician has inspected your device and ordered required replacement parts. Work will resume immediately upon their arrival.\n\n` +
-              `We will keep you updated. RepairShop.`;
+              `We will keep you updated. Digital Solution.`;
 
             await sendCustomerWhatsApp(supabase, {
               phone: newJob.customer_contact,
@@ -238,7 +238,7 @@ serve(async (req: Request) => {
             const progressMsg = `Hello ${customerName},\n\n` +
               `Update on your repair Job *${newJob.job_code}*:\n` +
               `Our technician has begun active repair work on your device. We will notify you as soon as testing and repairs are complete.\n\n` +
-              `Thank you for your patience! RepairShop.`;
+              `Thank you for your patience! Digital Solution.`;
 
             await sendCustomerWhatsApp(supabase, {
               phone: newJob.customer_contact,
