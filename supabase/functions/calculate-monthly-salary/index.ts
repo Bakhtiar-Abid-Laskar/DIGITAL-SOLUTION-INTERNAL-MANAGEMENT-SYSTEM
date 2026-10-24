@@ -21,12 +21,25 @@ function json(body: unknown, status: number, headers: Record<string, string> = {
   });
 }
 
-/** Working days in a calendar month (Mon–Sat) excluding Sunday & holidays */
-function getWorkingDaysInMonth(year: number, month: number, holidayDates: Set<string>): number {
+/** Working days in a calendar month (Mon–Sat) excluding Sunday & holidays, with optional hire/termination bounds (SAL-008) */
+function getWorkingDaysInMonth(
+  year: number,
+  month: number,
+  holidayDates: Set<string>,
+  startDate?: string,
+  endDate?: string
+): number {
   const daysInMonth = new Date(year, month, 0).getDate();
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+
+  const effectiveStart = startDate && startDate > monthStart ? startDate : monthStart;
+  const effectiveEnd = endDate && endDate < monthEnd ? endDate : monthEnd;
+
   let count = 0;
   for (let d = 1; d <= daysInMonth; d++) {
     const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (dStr < effectiveStart || dStr > effectiveEnd) continue;
     const dow = new Date(year, month - 1, d).getDay();
     if (dow !== 0 && !holidayDates.has(dStr)) count++;
   }
@@ -164,7 +177,7 @@ serve(async (req: Request) => {
 
     // ── 5. Fetch target employee ─────────────────────────────────────────────
     const { data: employee, error: empErr } = await adminClient
-      .from('users').select('id, name, role').eq('id', user_id).single();
+      .from('users').select('id, name, role, hire_date, termination_date').eq('id', user_id).single();
     if (empErr || !employee) return json({ error: 'Employee not found' }, 404, corsHeaders);
 
     // ── 6. Fetch payroll profile ─────────────────────────────────────────────
@@ -196,7 +209,13 @@ serve(async (req: Request) => {
       .from('holidays').select('date').gte('date', dateStart).lte('date', dateEnd);
     const holidayDates   = new Set<string>((holidaysRows || []).map((h: { date: string }) => h.date));
     const holidays_count = holidayDates.size;
-    const working_days   = getWorkingDaysInMonth(year, monthNum, holidayDates);
+    const working_days   = getWorkingDaysInMonth(
+      year,
+      monthNum,
+      holidayDates,
+      employee?.hire_date || undefined,
+      employee?.termination_date || undefined
+    );
 
     // Fetch approved leaves from employee_leave
     const { data: leaveRows } = await adminClient
@@ -384,6 +403,13 @@ serve(async (req: Request) => {
     // ── 17. Existing salary record ───────────────────────────────────────────
     const { data: existingSalary } = await adminClient
       .from('salary').select('id, status').eq('user_id', user_id).eq('month', `${month}-01`).maybeSingle();
+
+    // SAL-002: Immutability lock for closed / paid payroll records
+    if (existingSalary?.status === 'paid' && action !== 'preview' && !body.force_recalculate) {
+      return json({
+        error: 'PAYROLL_LOCKED: This payroll period has been marked as paid and cannot be regenerated without explicit admin override.'
+      }, 400, corsHeaders);
+    }
 
     // ── 18. Persist (if not preview) ─────────────────────────────────────────
     const salaryPayload = {

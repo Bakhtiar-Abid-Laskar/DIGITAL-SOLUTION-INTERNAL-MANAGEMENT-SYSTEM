@@ -41,8 +41,11 @@ export type Database = {
     Tables: {
       attendance: {
         Row: {
+          approval_note: string | null
+          approved_at: string | null
           approved_by: string | null
           at_location: boolean | null
+          auto_closed: boolean | null
           check_in_drive_file_id: string | null
           check_in_time: string | null
           check_out_drive_file_id: string | null
@@ -50,6 +53,7 @@ export type Database = {
           check_out_gps_lng: number | null
           check_out_time: string | null
           date: string
+          distance_meters: number | null
           early_hours: number | null
           early_in_minutes: number | null
           gps_lat: number | null
@@ -64,8 +68,11 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          approval_note?: string | null
+          approved_at?: string | null
           approved_by?: string | null
           at_location?: boolean | null
+          auto_closed?: boolean | null
           check_in_drive_file_id?: string | null
           check_in_time?: string | null
           check_out_drive_file_id?: string | null
@@ -73,6 +80,7 @@ export type Database = {
           check_out_gps_lng?: number | null
           check_out_time?: string | null
           date: string
+          distance_meters?: number | null
           early_hours?: number | null
           early_in_minutes?: number | null
           gps_lat?: number | null
@@ -87,8 +95,11 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          approval_note?: string | null
+          approved_at?: string | null
           approved_by?: string | null
           at_location?: boolean | null
+          auto_closed?: boolean | null
           check_in_drive_file_id?: string | null
           check_in_time?: string | null
           check_out_drive_file_id?: string | null
@@ -96,6 +107,7 @@ export type Database = {
           check_out_gps_lng?: number | null
           check_out_time?: string | null
           date?: string
+          distance_meters?: number | null
           early_hours?: number | null
           early_in_minutes?: number | null
           gps_lat?: number | null
@@ -1993,33 +2005,39 @@ export type Database = {
           created_at: string | null
           email: string
           expo_push_token: string | null
+          hire_date: string | null
           id: string
           is_active: boolean | null
           name: string
           phone: string | null
           role: string
+          termination_date: string | null
         }
         Insert: {
           avatar_drive_file_id?: string | null
           created_at?: string | null
           email: string
           expo_push_token?: string | null
+          hire_date?: string | null
           id?: string
           is_active?: boolean | null
           name: string
           phone?: string | null
           role: string
+          termination_date?: string | null
         }
         Update: {
           avatar_drive_file_id?: string | null
           created_at?: string | null
           email?: string
           expo_push_token?: string | null
+          hire_date?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
           phone?: string | null
           role?: string
+          termination_date?: string | null
         }
         Relationships: []
       }

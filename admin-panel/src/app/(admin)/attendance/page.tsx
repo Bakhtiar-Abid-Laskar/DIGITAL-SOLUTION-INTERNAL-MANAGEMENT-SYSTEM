@@ -140,14 +140,20 @@ export default function AttendancePage() {
 
   const handleReviewAction = async (id: string, newStatus: 'approved' | 'rejected' | 'pending') => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const nowIso = new Date().toISOString();
       const { error } = await supabase
         .from('attendance')
-        .update({ review_status: newStatus })
+        .update({
+          review_status: newStatus,
+          approved_by: user?.id,
+          approved_at: nowIso,
+        })
         .eq('id', id);
       if (error) throw error;
       
       showToast(`Record marked as ${newStatus}`, 'success');
-      setRecords(prev => prev.map(r => r.id === id ? { ...r, review_status: newStatus } : r));
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, review_status: newStatus, approved_by: user?.id, approved_at: nowIso } : r));
     } catch (err: any) {
       showToast(`Failed to update review status: ${err.message}`, 'error');
     }

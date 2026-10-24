@@ -4,18 +4,19 @@ export function formatDate(dateStr: string | null | undefined): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Kolkata',
   });
 }
 
 export const formatDateShort = (isoString: string | null | undefined) => {
   if (!isoString) return '—';
   const date = new Date(isoString);
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
 };
 
 export function formatMonthLabel(monthStr: string): string {
   const d = new Date(monthStr + (monthStr.length === 7 ? '-01' : ''));
-  return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
 }
 
 export function getCurrentMonth(): string {
@@ -59,7 +60,12 @@ export function getDateIST(date: Date): string {
 export const formatTime = (isoString: string | null) => {
   if (!isoString) return '--:--';
   const date = new Date(isoString);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  });
 };
 
 /**

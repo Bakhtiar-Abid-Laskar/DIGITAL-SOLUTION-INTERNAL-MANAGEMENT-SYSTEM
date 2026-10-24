@@ -13,6 +13,8 @@ export interface User {
   role: Role;
   is_active: boolean;
   expo_push_token?: string | null;
+  hire_date?: string | null;
+  termination_date?: string | null;
   created_at: string;
 }
 
@@ -123,12 +125,21 @@ export interface Attendance {
   check_in_time?: string | null;
   check_out_time?: string | null;
   selfie_url?: string | null;
+  check_in_drive_file_id?: string | null;
+  check_out_drive_file_id?: string | null;
   gps_lat?: number | null;
   gps_lng?: number | null;
+  distance_meters?: number | null;
   ot_hours: number;
   early_hours: number;
   status: AttendanceStatus;
   approved_by?: string | null;
+  approved_at?: string | null;
+  approval_note?: string | null;
+  at_location?: boolean | null;
+  review_status?: 'pending' | 'approved' | 'rejected' | null;
+  auto_closed?: boolean | null;
+  low_accuracy?: boolean | null;
 }
 
 /** @deprecated Legacy flat-table type. Use InventoryWithProduct for new code. */

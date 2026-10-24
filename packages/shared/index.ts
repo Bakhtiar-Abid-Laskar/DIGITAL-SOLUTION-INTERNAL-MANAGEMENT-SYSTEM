@@ -10,3 +10,4 @@ export * from './src/badgeConfig';
 export * from './src/imageUtils';
 export * from './src/incentive';
 export * from './src/jobCardTemplate';
+export * from './src/payrollEngine';

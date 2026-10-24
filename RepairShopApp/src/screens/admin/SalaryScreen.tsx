@@ -137,47 +137,46 @@ export default function SalaryScreen() {
     if (!breakdown || !selectedUser) return;
     setSaving(true);
     try {
-      if (breakdown.salary_id) {
-        // Update existing record
-        const { error } = await supabase
-          .from('salary')
-          .update({
-            gross_salary: breakdown.gross_salary,
-            net_salary: breakdown.net_salary,
-            advance_deducted: breakdown.advance_deducted,
-            present_days: breakdown.present_days,
-            halfday_count: breakdown.halfday_count,
-            ot_hours: breakdown.ot_hours,
-            incentive_amount: breakdown.incentive_pay,
-          })
-          .eq('id', breakdown.salary_id);
-        if (error) throw error;
-      } else {
-        // Insert new record
-        const { error } = await supabase.from('salary').insert({
-          user_id: breakdown.user_id,
-          month: `${month}-01`,
-          monthly_salary_base: breakdown.base_pay,
-          incentive_amount: breakdown.incentive_pay,
-          working_days: breakdown.working_days,
-          present_days: breakdown.present_days,
-          halfday_count: breakdown.halfday_count,
-          leave_count: breakdown.leave_count,
-          allowed_leave_days: 0,
-          ot_hours: breakdown.ot_hours,
-          ot_rate_per_hour: breakdown.ot_rate_per_hour,
-          absence_deduction_total: breakdown.absence_deduction,
-          advance_deducted: breakdown.advance_deducted,
-          gross_salary: breakdown.gross_salary,
-          net_salary: breakdown.net_salary,
+      let targetSalaryId = breakdown.salary_id;
+
+      // If salary record does not exist yet (was in preview mode), generate it first
+      if (!targetSalaryId) {
+        const { data: calcData, error: calcErr } = await supabase.functions.invoke('calculate-monthly-salary', {
+          body: {
+            user_id: breakdown.user_id,
+            month: month,
+            action: 'calculate',
+          },
         });
-        if (error) throw error;
+        if (calcErr) throw calcErr;
+        if (calcData?.error) throw new Error(calcData.error);
+        targetSalaryId = calcData?.salary_id;
       }
 
-      showToast({ title: 'Salary Recorded', message: `${breakdown.employee_name}'s salary for ${getMonthLabel(month)} has been saved.`, type: 'success' });
+      if (!targetSalaryId) {
+        throw new Error('Failed to obtain salary record ID.');
+      }
+
+      // Mark as paid via Edge Function (handles status = 'paid', paid_at, and payroll_audit_log)
+      const { data: paidData, error: paidErr } = await supabase.functions.invoke('calculate-monthly-salary', {
+        body: {
+          action: 'mark_paid',
+          salary_id: targetSalaryId,
+          user_id: breakdown.user_id,
+        },
+      });
+      if (paidErr) throw paidErr;
+      if (paidData?.error) throw new Error(paidData.error);
+
+      showToast({
+        title: 'Salary Marked as Paid',
+        message: `${breakdown.employee_name}'s salary for ${getMonthLabel(month)} has been marked as paid.`,
+        type: 'success',
+      });
       setDetailVisible(false);
+      await fetchStaff();
     } catch (err: any) {
-      showToast({ title: 'Save Failed', message: err.message, type: 'error' });
+      showToast({ title: 'Payment Update Failed', message: err.message, type: 'error' });
     } finally {
       setSaving(false);
     }

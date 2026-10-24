@@ -53,7 +53,7 @@ function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) =
   return null;
 }
 
-export default function GeofenceMap({ initialSetting, onSave, radius = 100 }: GeofenceMapProps) {
+export default function GeofenceMap({ initialSetting, onSave, radius = 40 }: GeofenceMapProps) {
   const initialLat = initialSetting ? (initialSetting.center_lat ?? initialSetting.lat ?? null) : null;
   const initialLng = initialSetting ? (initialSetting.center_lng ?? initialSetting.lng ?? null) : null;
 

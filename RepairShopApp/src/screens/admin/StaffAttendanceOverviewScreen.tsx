@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,9 @@ interface StaffAttendanceItem {
   checkInSelfieId: string | null;
   checkInLat?: number | null;
   checkInLng?: number | null;
+  atLocation?: boolean | null;
+  reviewStatus?: 'approved' | 'pending' | 'rejected' | null;
+  distanceMeters?: number | null;
 }
 
 type TabType = 'All' | 'Present' | 'Late' | 'Absent';
@@ -184,10 +188,10 @@ export default function StaffAttendanceOverviewScreen() {
         let isLate = false;
         if (att.check_in_time) {
           const checkInDate = new Date(att.check_in_time);
-          const hours = checkInDate.getHours();
-          const minutes = checkInDate.getMinutes();
-          // Cut-off at 10:30 AM IST
-          if (hours > 10 || (hours === 10 && minutes > 30) || att.status === 'Halfday' || att.status === 'Late') {
+          const checkInMins = checkInDate.getUTCHours() * 60 + checkInDate.getUTCMinutes();
+          const checkInMinsIST = (checkInMins + 330) % (24 * 60);
+          // Cut-off at 10:30 AM IST (630 minutes from midnight)
+          if (checkInMinsIST > 630 || att.status === 'Halfday' || att.status === 'Late') {
             isLate = true;
           }
         }
@@ -205,6 +209,9 @@ export default function StaffAttendanceOverviewScreen() {
           checkInSelfieId: att.check_in_drive_file_id || null,
           checkInLat: att.check_in_gps_lat ?? att.gps_lat ?? null,
           checkInLng: att.check_in_gps_lng ?? att.gps_lng ?? null,
+          atLocation: att.at_location,
+          reviewStatus: att.review_status,
+          distanceMeters: att.distance_meters,
         };
       });
 
@@ -266,6 +273,26 @@ export default function StaffAttendanceOverviewScreen() {
     setModalVisible(true);
   };
 
+  const handleReviewAttendance = async (attendanceId: string, decision: 'approved' | 'rejected') => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('attendance')
+        .update({
+          review_status: decision,
+          approved_by: currentUser?.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', attendanceId);
+
+      if (error) throw error;
+      Alert.alert('Attendance Updated', `Attendance has been marked as ${decision}.`);
+      await loadData();
+    } catch (err: any) {
+      Alert.alert('Review Error', err.message);
+    }
+  };
+
   const renderStaffRow = ({ item }: { item: StaffAttendanceItem }) => {
     const roleStyle = getRoleBadgeStyle(item.user.role);
     const statusStyle = getStatusBadgeStyle(item.status);
@@ -313,6 +340,31 @@ export default function StaffAttendanceOverviewScreen() {
                   <Text style={[styles.timeValue, !item.checkOutTime && styles.timeValueDim]}>
                     {item.checkOutTime ? formatTime(item.checkOutTime) : 'Active / On Duty'}
                   </Text>
+                </View>
+              )}
+              {item.checkInTime && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
+                  <MapPin size={12} color={item.atLocation ? colors.success : colors.accentOrange} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: item.atLocation ? colors.success : colors.accentOrange }}>
+                    {item.atLocation ? 'At Location (< 40m)' : `Not At Location (${item.distanceMeters ? Math.round(item.distanceMeters) + 'm' : 'Outside Geofence'})`}
+                  </Text>
+                </View>
+              )}
+              {item.reviewStatus === 'pending' && item.attendanceId && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
+                  <Text style={{ fontSize: 11, color: colors.accentOrange, fontWeight: 'bold' }}>Needs Review:</Text>
+                  <AppPressable
+                    onPress={() => handleReviewAttendance(item.attendanceId!, 'approved')}
+                    style={{ backgroundColor: colors.success + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.success + '40' }}
+                  >
+                    <Text style={{ fontSize: 11, color: colors.success, fontWeight: 'bold' }}>Allow</Text>
+                  </AppPressable>
+                  <AppPressable
+                    onPress={() => handleReviewAttendance(item.attendanceId!, 'rejected')}
+                    style={{ backgroundColor: colors.error + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.error + '40' }}
+                  >
+                    <Text style={{ fontSize: 11, color: colors.error, fontWeight: 'bold' }}>Deny</Text>
+                  </AppPressable>
                 </View>
               )}
             </View>
