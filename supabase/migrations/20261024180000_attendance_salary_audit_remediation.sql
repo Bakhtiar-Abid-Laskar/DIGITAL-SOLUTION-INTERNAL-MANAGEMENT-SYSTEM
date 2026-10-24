@@ -48,6 +48,7 @@ SET radius_meters = 40
 WHERE radius_meters IN (100, 200);
 
 -- Mathematical Haversine function in meters (Earth radius = 6,371,000 m)
+DROP FUNCTION IF EXISTS public.calculate_distance_meters(numeric, numeric, numeric, numeric);
 CREATE OR REPLACE FUNCTION public.calculate_distance_meters(
   lat1 numeric, lng1 numeric, lat2 numeric, lng2 numeric
 )
@@ -240,10 +241,12 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.assign_job_technicians(uuid, uuid[], uuid);
+
 CREATE OR REPLACE FUNCTION public.assign_job_technicians(
   p_job_id uuid,
   p_technician_ids uuid[],
-  p_assigned_by uuid DEFAULT NULL
+  p_caller_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -259,9 +262,16 @@ DECLARE
   v_remainder     numeric := 0;
   v_idx           int := 0;
   v_payroll_paid  boolean := false;
+  v_user_id       uuid;
+  v_is_authorized boolean := false;
 BEGIN
-  IF NOT (SELECT public.is_admin() OR public.is_receptionist()) THEN
-    RAISE EXCEPTION 'UNAUTHORIZED: Only admins and receptionists can assign technicians.';
+  v_user_id := COALESCE(p_caller_id, auth.uid());
+
+  SELECT (role = 'admin' OR role = 'receptionist') INTO v_is_authorized
+  FROM public.users WHERE id = v_user_id;
+
+  IF NOT COALESCE(v_is_authorized, false) THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Only Admin and Receptionist can assign technicians.';
   END IF;
 
   SELECT * INTO v_job FROM public.jobs WHERE id = p_job_id;
@@ -353,6 +363,8 @@ BEGIN
   );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.assign_job_technicians(uuid, uuid[], uuid) TO authenticated;
 
 
 -- ============================================================================
