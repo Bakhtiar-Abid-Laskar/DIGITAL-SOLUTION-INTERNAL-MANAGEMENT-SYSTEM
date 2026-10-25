@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { supabase } from '@/lib/supabase';
 import { GeofenceSettings } from '@repairshop/shared';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Lock } from 'lucide-react';
+import { EmptyState } from '@/components/common/EmptyState';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/components/common/ToastProvider';
 
@@ -14,18 +16,17 @@ const GeofenceMap = dynamic(() => import('@/components/settings/GeofenceMap'), {
 });
 
 export default function GeofenceSettingsPage() {
+  const { role, isLoading: authLoading } = useAuth();
   const [setting, setSetting] = useState<GeofenceSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [radius, setRadius] = useState(40);
   const [savingRadius, setSavingRadius] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    fetchSetting();
-  }, []);
-
-  const fetchSetting = async () => {
+  const fetchSetting = useCallback(async () => {
+    if (role !== 'admin') return;
     try {
+
       const { data, error } = await supabase
         .from('geofence_settings')
         .select('*')
@@ -59,9 +60,16 @@ export default function GeofenceSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [role, showToast]);
+
+  useEffect(() => {
+    if (role === 'admin') {
+      fetchSetting();
+    }
+  }, [role, fetchSetting]);
 
   const handleSave = async (lat: number, lng: number) => {
+
     try {
       const payload = { 
         center_lat: lat, 
@@ -117,6 +125,20 @@ export default function GeofenceSettingsPage() {
   const savedLat = setting ? (setting.center_lat ?? setting.lat ?? 0) : 0;
   const savedLng = setting ? (setting.center_lng ?? setting.lng ?? 0) : 0;
   const savedRadius = setting ? (setting.radius_meters ?? setting.radius ?? 40) : 40;
+
+  if (authLoading) return <div className="h-[500px] w-full bg-admin-bg-subtle rounded-xl animate-pulse" />;
+
+  if (role !== 'admin') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState 
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
+          heading="Access Denied"
+          subtext="Geofence configuration is restricted to administrators only."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl">

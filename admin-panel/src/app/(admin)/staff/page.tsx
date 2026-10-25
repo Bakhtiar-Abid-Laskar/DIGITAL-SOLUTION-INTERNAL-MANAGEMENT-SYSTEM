@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { User, useDebounceValue } from '@repairshop/shared';
-import { Check, Ban, CalendarDays, Users, Plus, Trash2 } from "lucide-react";
+import { Check, Ban, CalendarDays, Users, Plus, Trash2, Lock } from "lucide-react";
+
 import Link from 'next/link';
 import { AddStaffModal } from "@/components/staff/AddStaffModal";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -22,6 +24,7 @@ import { formatDate } from "@/utils/formatDate";
 import { parseEdgeFunctionError } from "@/lib/edgeFunctions";
 
 export default function StaffPage() {
+  const { role, isLoading: authLoading } = useAuth();
   const [staff, setStaff] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const { config } = useAppConfig();
@@ -39,7 +42,9 @@ export default function StaffPage() {
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
 
   const fetchStaff = useCallback(async (cancelled = false) => {
+    if (role !== 'admin') return;
     if (!cancelled) setLoading(true);
+
     try {
       let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
 
@@ -182,8 +187,23 @@ export default function StaffPage() {
     });
   };
 
+  if (authLoading) return <DataTableSkeleton rows={6} cols={4} />;
+
+  if (role !== 'admin') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState 
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
+          heading="Access Denied"
+          subtext="Staff management is restricted to administrators only."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 h-full flex flex-col">
+
       <PageHeader 
         title="Staff Management" 
         description="Manage your team, their roles, and approve access."

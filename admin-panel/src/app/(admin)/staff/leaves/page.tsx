@@ -1,22 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/common/DataTable";
 import { useToast } from "@/components/common/ToastProvider";
 import { Badge } from "@/components/common/Badge";
 import { EmptyState } from "@/components/common/EmptyState";
-import { CalendarX, Check, X } from "lucide-react";
+import { CalendarX, Check, X, Lock } from "lucide-react";
 import { ConfirmationModal } from "@/components/common/ConfirmationModal";
 import { formatDate } from "@/utils/formatDate";
 
 export default function LeavesPage() {
+  const { role, isLoading: authLoading } = useAuth();
   const [leaves, setLeaves] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
 
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
+    if (role !== 'admin') return;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -35,11 +38,14 @@ export default function LeavesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [role, showToast]);
 
   useEffect(() => {
-    fetchLeaves();
-  }, []);
+    if (role === 'admin') {
+      fetchLeaves();
+    }
+  }, [role, fetchLeaves]);
+
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -73,6 +79,20 @@ export default function LeavesPage() {
       }
     });
   };
+
+  if (authLoading) return <DataTable isLoading={true} skeletonRows={5} skeletonCols={5}>{null}</DataTable>;
+
+  if (role !== 'admin') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState 
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
+          heading="Access Denied"
+          subtext="Leave request management is restricted to administrators only."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col">

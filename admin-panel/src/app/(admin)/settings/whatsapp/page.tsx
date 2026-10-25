@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { useToast } from "@/components/common/ToastProvider";
 import { supabase } from "@/lib/supabase";
-import { MessageCircle, Settings, Send, History } from "lucide-react";
+import { MessageCircle, Settings, Send, History, Lock } from "lucide-react";
 import { Badge } from "@/components/common/Badge";
+import { EmptyState } from "@/components/common/EmptyState";
 
 export default function WhatsAppSettingsPage() {
+  const { role, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -34,12 +38,8 @@ export default function WhatsAppSettingsPage() {
 
   const [logs, setLogs] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchSettings();
-    fetchLogs();
-  }, []);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
+    if (role !== 'admin') return;
     const { data, error } = await supabase.from('whatsapp_settings').select('*').limit(1).maybeSingle();
     if (error) {
       console.error("Failed to fetch whatsapp settings:", error);
@@ -51,14 +51,23 @@ export default function WhatsAppSettingsPage() {
       }));
     }
     setLoading(false);
-  };
+  }, [role]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
+    if (role !== 'admin') return;
     const { data, error } = await supabase.from('whatsapp_logs').select('*').order('created_at', { ascending: false }).limit(25);
     if (!error && data) {
       setLogs(data);
     }
-  };
+  }, [role]);
+
+  useEffect(() => {
+    if (role === 'admin') {
+      fetchSettings();
+      fetchLogs();
+    }
+  }, [role, fetchSettings, fetchLogs]);
+
 
   const toggleSetting = (key: keyof typeof settings) => {
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -124,7 +133,7 @@ export default function WhatsAppSettingsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="space-y-6 h-full flex flex-col">
         <PageHeader 
@@ -138,6 +147,19 @@ export default function WhatsAppSettingsPage() {
       </div>
     );
   }
+
+  if (role !== 'admin') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState 
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
+          heading="Access Denied"
+          subtext="WhatsApp integration settings are restricted to administrators only."
+        />
+      </div>
+    );
+  }
+
 
   const renderToggle = (label: string, description: string, key: keyof typeof settings) => (
     <label className="flex items-center justify-between cursor-pointer py-3 border-b border-admin-border last:border-0">
