@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Search, History, DollarSign, Cloud, ExternalLink, Users, Download, Wrench, Package, TrendingUp, X } from "lucide-react";
+import { Search, History, DollarSign, Cloud, ExternalLink, Users, Download, Wrench, Package, TrendingUp, X, Lock } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const TechPerformanceChart = dynamic(() => import('@/components/dashboard/TechPerformanceChart'), {
@@ -31,6 +32,7 @@ import { useRouter } from "next/navigation";
 
 export default function ReportsPage() {
   const router = useRouter();
+  const { role, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("tech"); 
   const [exporting, setExporting] = useState(false);
   const { showToast } = useToast();
@@ -284,11 +286,12 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (role !== 'admin') return;
     if (activeTab === "tech") fetchTechPerformance(cancelled);
     if (activeTab === "revenue") fetchRevenueData(cancelled);
     if (activeTab === "export") fetchExportJobs(cancelled);
     return () => { cancelled = true; };
-  }, [activeTab, fetchTechPerformance, fetchRevenueData, fetchExportJobs]);
+  }, [role, activeTab, fetchTechPerformance, fetchRevenueData, fetchExportJobs]);
 
   // Reset page to 1 when debounced query changes
   useEffect(() => {
@@ -297,11 +300,13 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (role !== 'admin') return;
     if (activeTab === "customer") {
       fetchCustomerJobs(debouncedCustomerSearch, customerPage, cancelled);
     }
     return () => { cancelled = true; };
-  }, [activeTab, debouncedCustomerSearch, customerPage, fetchCustomerJobs]);
+  }, [role, activeTab, debouncedCustomerSearch, customerPage, fetchCustomerJobs]);
+
 
   const handleClearCustomerSearch = () => {
     setCustomerSearch("");
@@ -403,6 +408,20 @@ export default function ReportsPage() {
     { id: "revenue", label: "Revenue", icon: <DollarSign size={16} /> },
     { id: "export", label: "Drive Exports", icon: <Cloud size={16} /> },
   ];
+
+  if (authLoading) return <DataTableSkeleton rows={6} cols={4} />;
+
+  if (role !== 'admin') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <EmptyState 
+          icon={<Lock className="w-12 h-12 text-admin-urgent-fg" />}
+          heading="Access Denied"
+          subtext="Reports and analytics are restricted to administrators only."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 min-h-full flex flex-col">
