@@ -3,6 +3,7 @@ import {
   calculatePartsTotal, 
   calculateGrandTotal,
   validatePaymentAmount,
+  validateDiscount,
   derivePaymentStatus,
   calculateItemizedSubtotal,
   calculateItemizedTaxAmount,
@@ -14,6 +15,7 @@ import {
   recalcBill,
   reverseCalcBillFromGrandTotal,
 } from './billing';
+
 
 describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
   describe('calculateGrandTotal', () => {
@@ -437,6 +439,47 @@ describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
       });
     });
   });
+
+  describe('validateDiscount (BIL-001)', () => {
+    it('accepts zero discount', () => {
+      const res = validateDiscount(0, 1000);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('accepts valid partial discount', () => {
+      const res = validateDiscount(250, 1000);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('accepts discount equal to gross total (100% discount, grand total 0 allowed)', () => {
+      const res = validateDiscount(1000, 1000);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('rejects discount exceeding gross total (prevents negative invoice totals)', () => {
+      const res = validateDiscount(1050, 1000);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('cannot exceed');
+    });
+
+    it('rejects negative discount amounts', () => {
+      const res = validateDiscount(-50, 1000);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('cannot be negative');
+    });
+
+    it('handles floating point decimals cleanly with roundMoney', () => {
+      const res = validateDiscount(99.99, 100);
+      expect(res.isValid).toBe(true);
+
+      const resExceed = validateDiscount(100.01, 100);
+      expect(resExceed.isValid).toBe(false);
+    });
+  });
 });
+
 
 
