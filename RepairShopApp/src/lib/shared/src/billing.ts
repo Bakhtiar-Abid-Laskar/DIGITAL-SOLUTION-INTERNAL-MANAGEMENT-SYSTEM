@@ -73,6 +73,27 @@ export function validatePaymentAmount(amount: number, grandTotal: number): { isV
 }
 
 /**
+ * Validates the discount amount against pre-discount total (subtotal + tax).
+ * Enforces non-negative and <= subtotalWithTax constraints.
+ */
+export function validateDiscount(discount: number, subtotalWithTax: number): { isValid: boolean; error?: string } {
+  const d = Number(discount);
+  const total = roundMoney(Number(subtotalWithTax) || 0);
+
+  if (isNaN(d) || d < 0) {
+    return { isValid: false, error: 'Discount cannot be negative.' };
+  }
+  if (roundMoney(d) > total) {
+    return {
+      isValid: false,
+      error: `Discount cannot exceed total amount of ₹${total.toFixed(2)}`
+    };
+  }
+  return { isValid: true };
+}
+
+
+/**
  * Derives the UI payment status label and badge type from amount_paid and grand_total.
  */
 export function derivePaymentStatus(amountPaid: number, grandTotal: number): 'paid' | 'partial' | 'draft' {

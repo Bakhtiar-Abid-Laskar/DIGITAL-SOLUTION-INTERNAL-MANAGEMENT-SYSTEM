@@ -56,8 +56,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint src && tsc --noEmit",
-    "lint:fix": "eslint src --fix",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --config ../admin-panel/jest.config.js --roots \"<rootDir>/../RepairShopApp/src/lib/shared/src\""
   },
   "private": true
 }
+
+
