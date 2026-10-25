@@ -46,14 +46,22 @@ Deno.serve(async (req: Request) => {
 
   const staffName = formData.get('staffName') as string;
   const timestamp = formData.get('timestamp') as string;
-  const type = formData.get('type') as string;
+  const rawType = ((formData.get('type') as string) || '').toLowerCase().trim();
   const imageFile = formData.get('image') as File | string | null;
 
-  if (!staffName || !timestamp || !type || !imageFile) {
+  if (!staffName || !timestamp || !rawType || !imageFile) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
+
+  const validTypes = ['checkin', 'checkout'];
+  if (!validTypes.includes(rawType)) {
+    return new Response(JSON.stringify({ error: `Invalid action type: '${rawType}'. Must be 'checkin' or 'checkout'` }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+  const type = rawType;
 
   const ts = new Date(timestamp);
   const yearStr = String(ts.getUTCFullYear());
@@ -61,7 +69,7 @@ Deno.serve(async (req: Request) => {
   
   const dd = String(ts.getUTCDate()).padStart(2, '0');
   const yy = String(ts.getUTCFullYear()).slice(-2);
-  const filename = `${sanitizeFilenameSegment(staffName)}_${dd}${monthStr}${yy}.webp`;
+  const filename = `${sanitizeFilenameSegment(staffName)}_${type}_${dd}${monthStr}${yy}.webp`;
 
   let imageBytes: Uint8Array;
   try {

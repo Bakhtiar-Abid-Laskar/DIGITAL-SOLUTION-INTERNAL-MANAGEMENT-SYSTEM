@@ -21,6 +21,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { getAccessToken } from '../_shared/googleAuth.ts';
 import { ensureFolderPath } from '../_shared/driveFolders.ts';
 import { uploadFileToDrive, sanitizeFilenameSegment, monthName } from '../_shared/driveUpload.ts';
+import { authorizeEdgeRequest } from '../_shared/notifications.ts';
 
 declare const Deno: any;
 
@@ -271,6 +272,14 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const authResult = await authorizeEdgeRequest(req, ['admin', 'receptionist']);
+  if (!authResult.isAuthorized) {
+    return new Response(JSON.stringify({ error: authResult.error || 'Forbidden: Admin or receptionist role required' }), {
+      status: authResult.status || 403,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }

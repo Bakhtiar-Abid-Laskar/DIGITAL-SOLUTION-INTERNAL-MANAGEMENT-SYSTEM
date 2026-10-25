@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { getAccessToken } from '../_shared/googleAuth.ts';
 import { ensureFolderPath } from '../_shared/driveFolders.ts';
 import { uploadFileToDrive, sanitizeFilenameSegment, monthName } from '../_shared/driveUpload.ts';
+import { authorizeEdgeRequest } from '../_shared/notifications.ts';
 
 /**
  * process-pending-uploads — Supabase Edge Function
@@ -36,6 +37,14 @@ const BATCH_SIZE = 20;
 // @ts-ignore
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+
+  const authResult = await authorizeEdgeRequest(req, ['admin']);
+  if (!authResult.isAuthorized) {
+    return new Response(JSON.stringify({ error: authResult.error || 'Forbidden: Admin or webhook credentials required' }), {
+      status: authResult.status || 403,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,

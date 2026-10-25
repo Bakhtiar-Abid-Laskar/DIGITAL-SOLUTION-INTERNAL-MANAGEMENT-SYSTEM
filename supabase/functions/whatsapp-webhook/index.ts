@@ -18,18 +18,43 @@ const CORS_HEADERS = {
 };
 
 /**
+ * Constant-time string comparison to prevent timing attacks.
+ */
+function timingSafeCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
+  if (bufA.byteLength !== bufB.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < bufA.byteLength; i++) {
+    diff |= bufA[i] ^ bufB[i];
+  }
+  return diff === 0;
+}
+
+/**
  * Validates Meta's HMAC-SHA256 signature against raw payload.
+ * Fails closed if signatureHeader or appSecret is missing (SEC-002).
  */
 async function verifyMetaSignature(
   rawBody: string,
   signatureHeader: string | null,
-  appSecret: string
+  appSecret: string | null | undefined
 ): Promise<boolean> {
-  if (!signatureHeader || !appSecret) return true; // If secret not set yet, proceed in dev mode
+  if (!signatureHeader || !appSecret) {
+    console.error('[WhatsApp Webhook] Signature verification rejected: missing signature header or app secret');
+    return false;
+  }
   try {
     const cleanSig = signatureHeader.startsWith('sha256=')
-      ? signatureHeader.slice(7)
-      : signatureHeader;
+      ? signatureHeader.slice(7).trim()
+      : signatureHeader.trim();
+
+    if (!cleanSig || cleanSig.length !== 64) {
+      console.error('[WhatsApp Webhook] Signature verification rejected: signature must be a 64-char hex string');
+      return false;
+    }
 
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
@@ -37,21 +62,22 @@ async function verifyMetaSignature(
       encoder.encode(appSecret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
-      ['verify']
+      ['sign']
     );
 
-    const sigBuf = new Uint8Array(
-      cleanSig.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
-    );
-
-    return await crypto.subtle.verify(
+    const computedSignature = await crypto.subtle.sign(
       'HMAC',
       key,
-      sigBuf,
       encoder.encode(rawBody)
     );
+
+    const computedHex = Array.from(new Uint8Array(computedSignature))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return timingSafeCompare(cleanSig.toLowerCase(), computedHex.toLowerCase());
   } catch (err) {
-    console.error('[WhatsApp Webhook] Signature verification failed:', err);
+    console.error('[WhatsApp Webhook] Signature verification exception:', err);
     return false;
   }
 }
@@ -80,22 +106,29 @@ serve(async (req: Request) => {
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    // Fetch verify_token from DB settings or Deno env
-    let expectedToken = Deno.env.get('WEBHOOK_VERIFY_TOKEN') || Deno.env.get('WHATSAPP_VERIFY_TOKEN') || 'repairshop_webhook_secret';
-    try {
-      const { data: ws } = await supabase
-        .from('whatsapp_settings')
-        .select('verify_token')
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
+    // Fetch verify_token from Deno env or DB settings
+    let expectedToken = Deno.env.get('WHATSAPP_VERIFY_TOKEN') || Deno.env.get('WEBHOOK_VERIFY_TOKEN');
+    if (!expectedToken) {
+      try {
+        const { data: ws } = await supabase
+          .from('whatsapp_settings')
+          .select('verify_token')
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
 
-      if (ws?.verify_token?.trim()) {
-        expectedToken = ws.verify_token.trim();
-      }
-    } catch (_) {}
+        if (ws?.verify_token?.trim()) {
+          expectedToken = ws.verify_token.trim();
+        }
+      } catch (_) {}
+    }
 
-    if (mode === 'subscribe' && token === expectedToken) {
+    if (!expectedToken) {
+      console.error('[WhatsApp Webhook] Verification failed: No verify token configured on server');
+      return new Response('Forbidden: Verify token not configured', { status: 403 });
+    }
+
+    if (mode === 'subscribe' && token && timingSafeCompare(token, expectedToken)) {
       console.log('[WhatsApp Webhook] Verification successful. Returning challenge.');
       return new Response(challenge || '', { status: 200 });
     }
@@ -111,29 +144,37 @@ serve(async (req: Request) => {
       const signatureHeader = req.headers.get('x-hub-signature-256');
 
       // Check app secret for verification
-      let appSecret = Deno.env.get('META_APP_SECRET');
-      try {
-        const { data: ws } = await supabase
-          .from('whatsapp_settings')
-          .select('app_secret')
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle();
+      let appSecret = Deno.env.get('WHATSAPP_APP_SECRET') || Deno.env.get('META_APP_SECRET');
+      if (!appSecret) {
+        try {
+          const { data: ws } = await supabase
+            .from('whatsapp_settings')
+            .select('app_secret')
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle();
 
-        if (ws?.app_secret?.trim()) {
-          appSecret = ws.app_secret.trim();
-        }
-      } catch (_) {}
+          if (ws?.app_secret?.trim()) {
+            appSecret = ws.app_secret.trim();
+          }
+        } catch (_) {}
+      }
 
-      if (appSecret) {
-        const isValid = await verifyMetaSignature(rawBody, signatureHeader, appSecret);
-        if (!isValid) {
-          console.error('[WhatsApp Webhook] Invalid X-Hub-Signature-256');
-          return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-            headers: { 'Content-Type': 'application/json' },
-            status: 401,
-          });
-        }
+      if (!appSecret) {
+        console.error('[WhatsApp Webhook] Configuration error: WHATSAPP_APP_SECRET is not configured');
+        return new Response(JSON.stringify({ error: 'Server misconfigured: missing webhook secret' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 500,
+        });
+      }
+
+      const isValid = await verifyMetaSignature(rawBody, signatureHeader, appSecret);
+      if (!isValid) {
+        console.error('[WhatsApp Webhook] Invalid or missing X-Hub-Signature-256');
+        return new Response(JSON.stringify({ error: 'Invalid or missing signature' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 401,
+        });
       }
 
       const body = JSON.parse(rawBody);

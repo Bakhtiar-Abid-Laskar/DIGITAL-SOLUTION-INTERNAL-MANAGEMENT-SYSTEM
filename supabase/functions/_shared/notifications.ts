@@ -140,3 +140,119 @@ export async function sendPushNotification(
     return { success: false, error: err.message };
   }
 }
+
+declare const Deno: any;
+
+/**
+ * Constant-time string comparison to prevent timing attacks
+ */
+export function timingSafeCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
+  if (bufA.byteLength !== bufB.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < bufA.byteLength; i++) {
+    diff |= bufA[i] ^ bufB[i];
+  }
+  return diff === 0;
+}
+
+export interface EdgeAuthResult {
+  isAuthorized: boolean;
+  callerType?: 'webhook' | 'service_role' | 'user';
+  user?: any;
+  error?: string;
+  status: number;
+}
+
+/**
+ * Shared authorization helper for Supabase Edge Functions.
+ * Rejects public anon key callers (SEC-001).
+ * Authenticates either:
+ * 1. Server-to-server webhook secret (header: x-webhook-secret or webhook-signature)
+ * 2. Service role key (Authorization: Bearer <service_role_key>)
+ * 3. Authenticated active user JWT with valid role in allowedRoles (if specified)
+ */
+export async function authorizeEdgeRequest(
+  req: Request,
+  allowedRoles?: string[]
+): Promise<EdgeAuthResult> {
+  const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+  const signature = req.headers.get('x-webhook-secret') || req.headers.get('webhook-signature');
+  const authHeader = req.headers.get('Authorization');
+
+  // 1. Verify webhook secret if present
+  if (webhookSecret && signature && timingSafeCompare(signature, webhookSecret)) {
+    return { isAuthorized: true, callerType: 'webhook', status: 200 };
+  }
+
+  // 2. Verify Authorization header
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+
+    // SEC-001: Explicitly reject public anon key callers
+    if (anonKey && token === anonKey) {
+      return {
+        isAuthorized: false,
+        error: 'Unauthorized: Public anon key is not permitted to trigger this function',
+        status: 401,
+      };
+    }
+
+    // Check service role key
+    if (serviceRoleKey && timingSafeCompare(token, serviceRoleKey)) {
+      return { isAuthorized: true, callerType: 'service_role', status: 200 };
+    }
+
+    // Check authenticated user JWT
+    if (token && token.length > 20) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      if (!supabaseUrl || !serviceRoleKey) {
+        return { isAuthorized: false, error: 'Server configuration error', status: 500 };
+      }
+
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
+      const { data: authData, error: authErr } = await adminClient.auth.getUser(token);
+
+      if (authErr || !authData?.user) {
+        return { isAuthorized: false, error: 'Unauthorized: Invalid user session', status: 401 };
+      }
+
+      // Query public.users to check active status and role
+      const { data: userData, error: userErr } = await adminClient
+        .from('users')
+        .select('id, role, is_active, name')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (userErr || !userData) {
+        return { isAuthorized: false, error: 'Unauthorized: User record not found', status: 403 };
+      }
+
+      if (!userData.is_active) {
+        return { isAuthorized: false, error: 'Unauthorized: User account is inactive', status: 403 };
+      }
+
+      if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userData.role)) {
+        return {
+          isAuthorized: false,
+          error: `Forbidden: Role '${userData.role}' is not authorized for this action`,
+          status: 403,
+        };
+      }
+
+      return { isAuthorized: true, callerType: 'user', user: userData, status: 200 };
+    }
+  }
+
+  return {
+    isAuthorized: false,
+    error: 'Unauthorized: Missing or invalid authentication credentials',
+    status: 401,
+  };
+}
