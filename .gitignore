@@ -1,4 +1,4 @@
-1node_modules/
+node_modules/
 .next/
 dist/
 build/
@@ -14,10 +14,13 @@ lint-baseline.txt
 *.apk
 *.exe
 *.zip
-temp_inventory.csv
+temp_*.csv
 test_run_results.json
 test-*.ts
 test_*.ts
+*_queries*.txt
+*_tree.txt
+extract_*.js
 
 # ─── SECRET FILES — NEVER COMMIT ───────────────────────────────────────────
 # Firebase service-account private keys (rotate immediately if already committed)
