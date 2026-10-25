@@ -31,7 +31,39 @@ const RPC_PERMISSIONS: RpcPermissionRule[] = [
   { rpcName: 'use_material_allotment', allowedRoles: ['admin', 'technician'] },
   { rpcName: 'return_material_allotment', allowedRoles: ['admin', 'technician'] },
   { rpcName: 'is_admin', allowedRoles: ['admin', 'receptionist', 'technician'] },
+  { rpcName: 'log_inventory_purchase', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'log_multi_item_purchase', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'search_suppliers', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'find_or_create_supplier', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'search_products_catalog', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'claim_invoice_serials', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'release_invoice_serials', allowedRoles: ['admin', 'receptionist'] },
+  { rpcName: 'record_advance_salary', allowedRoles: ['admin'] },
+  { rpcName: 'record_bonus', allowedRoles: ['admin'] },
 ];
+
+interface RoutePermissionRule {
+  path: string;
+  allowedRoles: UserRole[];
+}
+
+const PAGE_ROUTE_PERMISSIONS: RoutePermissionRule[] = [
+  { path: '/reports', allowedRoles: ['admin'] },
+  { path: '/salary', allowedRoles: ['admin'] },
+  { path: '/expenditure', allowedRoles: ['admin'] },
+  { path: '/staff', allowedRoles: ['admin'] },
+  { path: '/staff/leaves', allowedRoles: ['admin'] },
+  { path: '/settings/geofence', allowedRoles: ['admin'] },
+  { path: '/settings/whatsapp', allowedRoles: ['admin'] },
+  { path: '/jobs', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/customers', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/sales', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/pending-payments', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/materials', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/inventory', allowedRoles: ['admin', 'receptionist'] },
+  { path: '/attendance', allowedRoles: ['admin', 'receptionist'] },
+];
+
 
 const EDGE_FUNCTION_PERMISSIONS: EdgeFunctionRule[] = [
   { functionName: 'admin-create-user', allowedRoles: ['admin'], authMethod: 'jwt' },
@@ -61,7 +93,14 @@ function evaluateEdgeFunctionAccess(functionName: string, callerRole: UserRole):
   return rule.allowedRoles.includes(callerRole);
 }
 
-describe('Role Permission Matrix across RPCs and Edge Functions (permissionMatrix.test.ts)', () => {
+function evaluateRouteAccess(path: string, callerRole: UserRole): boolean {
+  const rule = PAGE_ROUTE_PERMISSIONS.find(r => r.path === path);
+  if (!rule) throw new Error(`Unknown Route: ${path}`);
+  return rule.allowedRoles.includes(callerRole);
+}
+
+describe('Role Permission Matrix across RPCs, Routes, and Edge Functions (permissionMatrix.test.ts)', () => {
+
   describe('RPC Permission Matrix Verification', () => {
     it('verifies that administrative mutating RPCs (add_stock, create_product) are strictly Admin-only', () => {
       expect(evaluateRpcAccess('add_stock', 'admin')).toBe(true);
@@ -127,4 +166,78 @@ describe('Role Permission Matrix across RPCs and Edge Functions (permissionMatri
       expect(evaluateEdgeFunctionAccess('upload-job-photo', 'receptionist')).toBe(false);
     });
   });
+
+  describe('Purchase & Supplier RPC Permissions (NEW-01, NEW-05)', () => {
+    it('verifies purchase intake and supplier mutations are restricted to Admin & Receptionist, never Anon', () => {
+      const purchaseRpcs = [
+        'log_inventory_purchase',
+        'log_multi_item_purchase',
+        'search_suppliers',
+        'find_or_create_supplier',
+        'search_products_catalog',
+        'claim_invoice_serials',
+        'release_invoice_serials',
+      ];
+
+      purchaseRpcs.forEach((rpc) => {
+        expect(evaluateRpcAccess(rpc, 'admin')).toBe(true);
+        expect(evaluateRpcAccess(rpc, 'receptionist')).toBe(true);
+        expect(evaluateRpcAccess(rpc, 'technician')).toBe(false);
+        expect(evaluateRpcAccess(rpc, 'anon')).toBe(false);
+      });
+    });
+
+    it('verifies salary payment and bonus RPCs are strictly Admin-only', () => {
+      expect(evaluateRpcAccess('record_advance_salary', 'admin')).toBe(true);
+      expect(evaluateRpcAccess('record_advance_salary', 'receptionist')).toBe(false);
+      expect(evaluateRpcAccess('record_advance_salary', 'technician')).toBe(false);
+      expect(evaluateRpcAccess('record_advance_salary', 'anon')).toBe(false);
+
+      expect(evaluateRpcAccess('record_bonus', 'admin')).toBe(true);
+      expect(evaluateRpcAccess('record_bonus', 'receptionist')).toBe(false);
+      expect(evaluateRpcAccess('record_bonus', 'technician')).toBe(false);
+      expect(evaluateRpcAccess('record_bonus', 'anon')).toBe(false);
+    });
+  });
+
+  describe('Web Admin Page Route Access Matrix (SEC-004, NEW-09)', () => {
+    it('verifies admin-only pages are inaccessible to Receptionists', () => {
+      const adminOnlyRoutes = [
+        '/reports',
+        '/salary',
+        '/expenditure',
+        '/staff',
+        '/staff/leaves',
+        '/settings/geofence',
+        '/settings/whatsapp',
+      ];
+
+      adminOnlyRoutes.forEach((path) => {
+        expect(evaluateRouteAccess(path, 'admin')).toBe(true);
+        expect(evaluateRouteAccess(path, 'receptionist')).toBe(false);
+        expect(evaluateRouteAccess(path, 'technician')).toBe(false);
+        expect(evaluateRouteAccess(path, 'anon')).toBe(false);
+      });
+    });
+
+    it('verifies shared operational pages are accessible to both Admin and Receptionist', () => {
+      const sharedRoutes = [
+        '/jobs',
+        '/customers',
+        '/sales',
+        '/pending-payments',
+        '/materials',
+        '/inventory',
+        '/attendance',
+      ];
+
+      sharedRoutes.forEach((path) => {
+        expect(evaluateRouteAccess(path, 'admin')).toBe(true);
+        expect(evaluateRouteAccess(path, 'receptionist')).toBe(true);
+        expect(evaluateRouteAccess(path, 'technician')).toBe(false);
+        expect(evaluateRouteAccess(path, 'anon')).toBe(false);
+      });
+    });
+  });
 });
+
