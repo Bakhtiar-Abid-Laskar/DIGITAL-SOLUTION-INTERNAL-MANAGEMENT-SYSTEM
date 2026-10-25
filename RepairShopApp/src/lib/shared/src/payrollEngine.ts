@@ -111,6 +111,7 @@ export function calculateStaffSalary(inputs: PayrollCalculationInputs): PayrollC
   const rawMonthlySalary = inputs.monthly_salary ?? inputs.base_pay ?? 0;
   const baseMonthly = Math.max(0, rawMonthlySalary);
 
+  // Proration check for mid-month joiner / leaver (SAL-008)
   let isProrated = false;
   let effectiveWorkingDays = Math.max(0, inputs.working_days || 0);
 
@@ -123,6 +124,7 @@ export function calculateStaffSalary(inputs: PayrollCalculationInputs): PayrollC
   const absent_count = Math.max(0, effectiveWorkingDays - accounted_days);
   const chargeable_leave_days = Math.max(0, leave_count - allowed_leave_days);
 
+  // absent_day_deduction rate
   const absent_day_deduction = inputs.absent_day_deduction != null && inputs.absent_day_deduction > 0
     ? roundCurrency(inputs.absent_day_deduction)
     : (effectiveWorkingDays > 0 ? roundCurrency(baseMonthly / effectiveWorkingDays) : 0);
@@ -135,10 +137,12 @@ export function calculateStaffSalary(inputs: PayrollCalculationInputs): PayrollC
     : roundCurrency(absent_day_deduction / 2);
   const halfday_deduction_total = roundCurrency(halfday_count * halfday_rate);
 
+  // Overtime
   const ot_hours = Math.max(0, inputs.ot_hours || 0);
   const ot_rate_per_hour = Math.max(0, inputs.ot_rate_per_hour || 0);
   const ot_pay = roundCurrency(ot_hours * ot_rate_per_hour);
 
+  // Additions
   const incentive_pay = Math.max(0, roundCurrency(inputs.incentive_pay || 0));
   const bonus_amount = Math.max(0, roundCurrency(inputs.bonus_amount || 0));
   const early_in_bonus_total = Math.max(0, roundCurrency(inputs.early_in_bonus_total || 0));
@@ -156,6 +160,7 @@ export function calculateStaffSalary(inputs: PayrollCalculationInputs): PayrollC
     job_completion_bonus
   );
 
+  // Deductions
   const total_late_deduction = Math.max(0, roundCurrency(inputs.total_late_deduction || 0));
   const total_early_deduction = Math.max(0, roundCurrency(inputs.total_early_deduction || 0));
   const customer_review_deduction = Math.max(0, roundCurrency(inputs.customer_review_deduction || 0));
@@ -171,6 +176,7 @@ export function calculateStaffSalary(inputs: PayrollCalculationInputs): PayrollC
 
   const gross_salary = Math.max(0, roundCurrency(baseMonthly + total_additions - total_deductions));
 
+  // Advance salary & carry-forward (SAL-007)
   const currentMonthAdvance = Math.max(0, roundCurrency(inputs.advance_deducted || 0));
   const priorAdvanceCarried = Math.max(0, roundCurrency(inputs.advance_balance_carried || 0));
   const totalAdvanceDue = roundCurrency(currentMonthAdvance + priorAdvanceCarried);
