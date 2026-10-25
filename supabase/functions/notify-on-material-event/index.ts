@@ -2,28 +2,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { sendPushNotification } from '../_shared/notifications.ts'
+import { sendPushNotification, authorizeEdgeRequest } from '../_shared/notifications.ts'
 
 declare const Deno: any;
 
 serve(async (req: Request) => {
   try {
-    const signature = req.headers.get('webhook-signature')
-    const authHeader = req.headers.get('Authorization')
-    const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET')
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    const isAuthorized =
-      !webhookSecret ||
-      (signature && signature === webhookSecret) ||
-      (authHeader && serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) ||
-      (authHeader && authHeader.startsWith('Bearer '));
-
-    if (!isAuthorized) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid credentials' }), {
+    const authResult = await authorizeEdgeRequest(req, ['admin', 'receptionist', 'technician']);
+    if (!authResult.isAuthorized) {
+      return new Response(JSON.stringify({ error: authResult.error || 'Unauthorized: Invalid credentials' }), {
         headers: { 'Content-Type': 'application/json' },
-        status: 401,
-      })
+        status: authResult.status || 401,
+      });
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')

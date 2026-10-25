@@ -75,6 +75,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Role check: Only active admin or receptionist can export customer ledgers
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile || !profile.is_active || !['admin', 'receptionist'].includes(profile.role)) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Admin or receptionist role required' }), {
+        status: 403,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const customerId = body.customer_id;
 

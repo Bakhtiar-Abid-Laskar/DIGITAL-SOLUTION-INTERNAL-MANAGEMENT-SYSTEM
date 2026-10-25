@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
-import { sendPushNotification } from '../_shared/notifications.ts'
+import { sendPushNotification, authorizeEdgeRequest } from '../_shared/notifications.ts'
 import { sendCustomerWhatsApp } from '../_shared/whatsappClient.ts'
 
 declare const Deno: any;
@@ -10,39 +10,12 @@ declare const Deno: any;
 serve(async (req: Request) => {
 
   try {
-    const signature = req.headers.get('webhook-signature') || req.headers.get('x-webhook-secret')
-    const authHeader = req.headers.get('Authorization')
-    const webhookSecret = Deno.env.get('APP_WEBHOOK_SECRET')
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
-    
-    let isAuthorized = false
-
-    if (webhookSecret && signature && signature === webhookSecret) {
-      isAuthorized = true
-    } else if (serviceRoleKey && authHeader && authHeader === `Bearer ${serviceRoleKey}`) {
-      isAuthorized = true
-    } else if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim()
-      if (token && anonKey && token === anonKey) {
-        isAuthorized = true
-      } else if (token && token.length > 20) {
-        const supabaseAuthCheck = createClient(
-          Deno.env.get('SUPABASE_URL') || '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-        )
-        const { data: authData, error: authErr } = await supabaseAuthCheck.auth.getUser(token)
-        if (!authErr && authData?.user) {
-          isAuthorized = true
-        }
-      }
-    }
-
-    if (!isAuthorized) {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or missing webhook credentials' }), {
+    const authResult = await authorizeEdgeRequest(req, ['admin', 'receptionist', 'technician']);
+    if (!authResult.isAuthorized) {
+      return new Response(JSON.stringify({ error: authResult.error || 'Unauthorized' }), {
         headers: { 'Content-Type': 'application/json' },
-        status: 401,
-      })
+        status: authResult.status || 401,
+      });
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')

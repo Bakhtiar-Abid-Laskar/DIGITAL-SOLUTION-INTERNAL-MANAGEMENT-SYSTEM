@@ -1,7 +1,7 @@
-// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
+import { authorizeEdgeRequest } from '../_shared/notifications.ts'
 
 declare const Deno: any;
 
@@ -18,6 +18,13 @@ serve(async (req: Request) => {
   }
 
   try {
+    const authResult = await authorizeEdgeRequest(req, ['admin', 'receptionist']);
+    if (!authResult.isAuthorized) {
+      return new Response(JSON.stringify({ error: authResult.error || 'Forbidden: Admin or receptionist role required' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: authResult.status || 403,
+      });
+    }
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
