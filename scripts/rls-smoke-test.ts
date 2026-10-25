@@ -219,9 +219,88 @@ async function testRole(email: string, password: string, expectedRole: string) {
     }
   }
 
+  // ── whatsapp_settings: Admin-only SELECT (NEW-03) ──
+  const { data: waSettings, error: waError } = await supabase.from('whatsapp_settings').select('*');
+  if (expectedRole === 'admin') {
+    if (waError) {
+      fail('whatsapp_settings: admin read', waError.message);
+    } else {
+      pass(`whatsapp_settings: admin read (${(waSettings || []).length} rows)`);
+    }
+  } else {
+    if (!waError && waSettings && waSettings.length > 0) {
+      fail('whatsapp_settings: non-admin blocked', `Got ${waSettings.length} rows - should be blocked`);
+    } else {
+      pass('whatsapp_settings: non-admin blocked');
+    }
+  }
+
+  // ── Purchase RPC Role Isolation (NEW-01) ──
+  const { data: suppData, error: suppError } = await supabase.rpc('search_suppliers', { p_query: 'test', p_limit: 1 });
+  if (expectedRole === 'admin' || expectedRole === 'receptionist') {
+    if (suppError && suppError.message.includes('UNAUTHORIZED')) {
+      fail(`search_suppliers: ${expectedRole} allowed`, suppError.message);
+    } else {
+      pass(`search_suppliers: ${expectedRole} allowed`);
+    }
+  } else {
+    if (suppError && (suppError.message.includes('UNAUTHORIZED') || suppError.code === '42501')) {
+      pass(`search_suppliers: ${expectedRole} blocked`);
+    } else if (suppData && suppData.length > 0) {
+      fail(`search_suppliers: ${expectedRole} blocked`, 'Caller was unexpectedly allowed');
+    } else {
+      pass(`search_suppliers: ${expectedRole} blocked or empty`);
+    }
+  }
+
   // Sign out
   await supabase.auth.signOut();
 }
+
+async function testAnonAccess() {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('Testing Unauthenticated / Anonymous Access (Anon Key Only)');
+  console.log('='.repeat(60));
+
+  const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // 1. Anon calling search_suppliers (NEW-01)
+  const { error: suppErr } = await anonClient.rpc('search_suppliers', { p_query: 'test' });
+  if (suppErr) {
+    pass('Anon blocked from search_suppliers RPC');
+  } else {
+    fail('Anon blocked from search_suppliers RPC', 'Call succeeded unexpectedly');
+  }
+
+  // 2. Anon calling log_inventory_purchase (NEW-01)
+  const { error: purErr } = await anonClient.rpc('log_inventory_purchase', { p_product_name: 'Test' });
+  if (purErr) {
+    pass('Anon blocked from log_inventory_purchase RPC');
+  } else {
+    fail('Anon blocked from log_inventory_purchase RPC', 'Call succeeded unexpectedly');
+  }
+
+  // 3. Anon inserting into notifications (NEW-02)
+  const { error: notifErr } = await anonClient.from('notifications').insert({
+    message: 'Spam test',
+    channel: 'push',
+    status: 'pending'
+  });
+  if (notifErr) {
+    pass('Anon blocked from inserting into notifications table');
+  } else {
+    fail('Anon blocked from inserting into notifications table', 'Insert succeeded unexpectedly');
+  }
+
+  // 4. Anon reading whatsapp_settings (NEW-03)
+  const { data: waData, error: waErr } = await anonClient.from('whatsapp_settings').select('*');
+  if (waErr || !waData || waData.length === 0) {
+    pass('Anon blocked from reading whatsapp_settings');
+  } else {
+    fail('Anon blocked from reading whatsapp_settings', `Got ${waData.length} rows`);
+  }
+}
+
 
 async function main() {
   console.log('RepairShop RLS Smoke Test');
@@ -259,8 +338,12 @@ async function main() {
     await testRole(tech2Email, tech2Pass, 'technician');
   }
 
+  // Anonymous / Public Access Test
+  await testAnonAccess();
+
   // Summary
   console.log(`\n${'='.repeat(60)}`);
+
   console.log('SUMMARY');
   console.log('='.repeat(60));
   console.log(`✅ Passed: ${passed}`);
