@@ -2,23 +2,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getAccessToken, verifyAuth } from '../_shared/googleAuth.ts';
 import { ensureFolderPath, clearFolderCache } from '../_shared/driveFolders.ts';
+import { authorizeEdgeRequest } from '../_shared/notifications.ts';
 
 /**
  * test-drive-auth — Edge Function
  *
  * Verifies that Google Drive authentication is working correctly.
- * Call this once after setting GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
- * and GOOGLE_REFRESH_TOKEN in Supabase secrets.
- *
- * Should only be deployed temporarily during setup. Remove after verification.
- *
- * Expected response:
- * {
- *   "ok": true,
- *   "authenticatedAs": { "email": "...", "displayName": "..." },
- *   "testFolderPath": "RepairShop Test / Auth Verification",
- *   "testFolderId": "..."
- * }
+ * Restricted strictly to administrators.
  */
 
 declare const Deno: any;
@@ -31,9 +21,18 @@ const CORS = {
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
+  const auth = await authorizeEdgeRequest(req, ['admin']);
+  if (!auth.authorized) {
+    return new Response(JSON.stringify({ error: auth.error || 'UNAUTHORIZED' }), {
+      status: auth.status,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     // 1. Get access token (tests token exchange)
     const token = await getAccessToken();
+
 
     // 2. Verify identity (tests Drive API connectivity)
     const identity = await verifyAuth();
