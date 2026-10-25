@@ -2157,11 +2157,70 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_manage_staff_status: {
+        Args: {
+          p_action: string
+          p_notes?: string
+          p_target_user_id: string
+        }
+        Returns: Json
+      }
+      assign_job_technicians: {
+        Args: {
+          p_job_id: string
+          p_technician_ids: string[]
+        }
+        Returns: undefined
+      }
+      check_leave_conflict: {
+        Args: {
+          p_date: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      claim_invoice_serials: {
+        Args: {
+          p_invoice_id: string
+          p_serial_ids: string[]
+        }
+        Returns: undefined
+      }
+      complete_job_materials: {
+        Args: {
+          p_job_id: string
+          p_materials: Json
+        }
+        Returns: Json
+      }
+      count_customers_v2: {
+        Args: {
+          p_search?: string
+        }
+        Returns: number
+      }
       create_invoice: {
         Args: {
           p_customer_contact?: string
           p_customer_email?: string
           p_customer_gstin?: string
+          p_customer_name: string
+          p_discount?: number
+          p_items?: Json
+          p_job_id?: string
+          p_notes?: string
+          p_payment_method?: string
+          p_status?: string
+          p_tax_regime?: string
+        }
+        Returns: Json
+      }
+      create_invoice_v2: {
+        Args: {
+          p_customer_contact?: string
+          p_customer_email?: string
+          p_customer_gstin?: string
+          p_customer_id?: string
           p_customer_name: string
           p_discount?: number
           p_items?: Json
@@ -2193,16 +2252,391 @@ export type Database = {
         }
         Returns: string
       }
+      deposit_customer_advance: {
+        Args: {
+          p_amount: number
+          p_customer_id: string
+          p_notes?: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
+      find_or_create_customer: {
+        Args: {
+          p_address?: string
+          p_caller_id?: string
+          p_email?: string
+          p_gstin?: string
+          p_name: string
+          p_phone: string
+        }
+        Returns: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          opening_balance: number | null
+          phone: string
+          phone_clean: string | null
+          updated_at: string | null
+        }
+      }
+      find_or_create_device_type: {
+        Args: {
+          p_name: string
+        }
+        Returns: string
+      }
+      find_or_create_supplier: {
+        Args: {
+          p_address?: string
+          p_email?: string
+          p_gstin?: string
+          p_name?: string
+          p_phone?: string
+          p_supplier_id?: string
+          p_user_id?: string
+        }
+        Returns: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          phone_clean: string | null
+          updated_at: string | null
+        }
+      }
       generate_invoice_code: { Args: never; Returns: string }
       generate_job_code: { Args: never; Returns: string }
+      generate_purchase_code: { Args: never; Returns: string }
       generate_sale_code: { Args: never; Returns: string }
+      get_job_status_counts: {
+        Args: {
+          p_technician_id?: string
+        }
+        Returns: Json
+      }
+      get_pending_invoices: {
+        Args: never
+        Returns: Json
+      }
+      get_purchase_history: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_offset?: number
+          p_product_id?: string
+          p_search?: string
+          p_start_date?: string
+          p_supplier_id?: string
+        }
+        Returns: {
+          created_at: string
+          invoice_image_url: string | null
+          logged_by_id: string | null
+          logged_by_name: string
+          notes: string | null
+          product_id: string
+          product_name: string
+          product_sku: string | null
+          product_unit: string
+          purchase_code: string
+          purchase_date: string
+          purchase_id: string
+          purchase_rate: number
+          quantity: number
+          selling_rate: number
+          subtotal: number
+          supplier_address: string | null
+          supplier_gstin: string | null
+          supplier_id: string | null
+          supplier_invoice_number: string | null
+          supplier_name: string
+          supplier_phone: string | null
+          tax_amount: number
+          total_amount: number
+        }[]
+      }
+      get_purchase_order_details: {
+        Args: {
+          p_purchase_id: string
+        }
+        Returns: Json
+      }
+      get_unique_device_types: {
+        Args: never
+        Returns: string[]
+      }
       get_user_role: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
       is_receptionist: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       is_technician: { Args: never; Returns: boolean }
+      log_inventory_purchase: {
+        Args: {
+          p_cgst_rate?: number
+          p_hsn_sac?: string
+          p_igst_rate?: number
+          p_invoice_image_url?: string
+          p_location?: string
+          p_low_stock_threshold?: number
+          p_minimum_stock_level?: number
+          p_notes?: string
+          p_product_id?: string
+          p_product_name?: string
+          p_purchase_date?: string
+          p_purchase_rate?: number
+          p_quantity?: number
+          p_selling_rate?: number
+          p_sgst_rate?: number
+          p_sku?: string
+          p_supplier_address?: string
+          p_supplier_email?: string
+          p_supplier_gstin?: string
+          p_supplier_id?: string
+          p_supplier_invoice_id?: string
+          p_supplier_name?: string
+          p_supplier_phone?: string
+          p_tax_mode?: string
+          p_unit?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      log_multi_item_purchase: {
+        Args: {
+          p_items: Json
+          p_notes?: string
+          p_purchase_date?: string
+          p_supplier_address?: string
+          p_supplier_email?: string
+          p_supplier_gstin?: string
+          p_supplier_id?: string
+          p_supplier_invoice_number?: string
+          p_supplier_name?: string
+          p_supplier_phone?: string
+          p_invoice_image_url?: string
+        }
+        Returns: Json
+      }
+      notify_technician_allocated_material: {
+        Args: {
+          p_allotment_id: string
+        }
+        Returns: Json
+      }
       preview_invoice: {
         Args: { p_discount?: number; p_items?: Json; p_tax_regime?: string }
+        Returns: Json
+      }
+      record_advance_salary: {
+        Args: {
+          p_amount: number
+          p_date?: string
+          p_description?: string
+          p_user_id: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          type: string
+          user_id: string
+        }
+      }
+      record_bonus: {
+        Args: {
+          p_amount: number
+          p_month: number
+          p_reason: string
+          p_user_id: string
+          p_year: number
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          created_by: string
+          id: string
+          month: number
+          reason: string
+          user_id: string
+          year: number
+        }
+      }
+      record_installment_payment: {
+        Args: {
+          p_amount: number
+          p_invoice_id: string
+          p_notes?: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
+      record_onsite_arrival_checkin: {
+        Args: {
+          p_job_id: string
+          p_latitude: number
+          p_longitude: number
+          p_selfie_url: string
+        }
+        Returns: Json
+      }
+      record_user_login: {
+        Args: never
+        Returns: undefined
+      }
+      release_invoice_serials: {
+        Args: {
+          p_invoice_id: string
+        }
+        Returns: undefined
+      }
+      return_allocated_material: {
+        Args: {
+          p_allotment_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      search_available_serials: {
+        Args: {
+          p_inventory_id?: string
+          p_limit?: number
+          p_product_id?: string
+          p_query?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          inventory_id: string
+          product_id: string
+          serial_number: string
+          status: string
+        }[]
+      }
+      search_customers_v2: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          opening_balance: number | null
+          phone: string
+          phone_clean: string | null
+          total_due: number | null
+          total_invoiced: number | null
+          total_paid: number | null
+          updated_at: string | null
+          wallet_balance: number | null
+        }[]
+      }
+      search_products_catalog: {
+        Args: {
+          p_limit?: number
+          p_query?: string
+        }
+        Returns: {
+          cgst_rate: number
+          current_quantity: number
+          hsn_sac: string | null
+          igst_rate: number
+          inventory_id: string | null
+          location: string | null
+          low_stock_threshold: number
+          minimum_stock_level: number
+          name: string
+          product_id: string
+          purchase_rate: number
+          selling_rate: number
+          sgst_rate: number
+          sku: string | null
+          tax_mode: string
+          unit: string
+        }[]
+      }
+      search_suppliers: {
+        Args: {
+          p_limit?: number
+          p_query?: string
+        }
+        Returns: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          phone_clean: string | null
+          updated_at: string | null
+        }[]
+      }
+      set_job_service_type: {
+        Args: {
+          p_job_id: string
+          p_service_type: string
+        }
+        Returns: undefined
+      }
+      update_customer_profile: {
+        Args: {
+          p_address?: string
+          p_customer_id: string
+          p_email?: string
+          p_gstin?: string
+          p_name: string
+          p_notes?: string
+          p_phone: string
+        }
+        Returns: Json
+      }
+      update_invoice: {
+        Args: {
+          p_customer_contact?: string
+          p_customer_email?: string
+          p_customer_gstin?: string
+          p_customer_id?: string
+          p_customer_name: string
+          p_discount?: number
+          p_invoice_id: string
+          p_items?: Json
+          p_notes?: string
+          p_payment_method?: string
+          p_status?: string
+          p_tax_regime?: string
+        }
+        Returns: Json
+      }
+      use_material_allotment: {
+        Args: {
+          p_allotment_id: string
+          p_job_id: string
+          p_quantity: number
+        }
         Returns: Json
       }
     }
