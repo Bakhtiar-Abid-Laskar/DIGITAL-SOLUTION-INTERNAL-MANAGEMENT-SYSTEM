@@ -10,6 +10,7 @@
 
 ### Finding SEC-001: Public Anon Key Authorizes Administrative Notification Edge Functions
 - **Severity**: CRITICAL
+- **Status**: FIXED (Verified twice: timingSafeCompare with x-webhook-secret & JWT role check)
 - **Location**: [`supabase/functions/notify-on-status-change/index.ts:27-28`](file:///d:/Digital%20Solution/supabase/functions/notify-on-status-change/index.ts#L27-L28) and [`supabase/functions/notify-on-job-created/index.ts:27-28`](file:///d:/Digital%20Solution/supabase/functions/notify-on-job-created/index.ts#L27-L28)
 - **Evidence**:
   ```ts
@@ -31,6 +32,7 @@
 
 ### Finding SEC-002: Meta WhatsApp Cloud API Inbound Webhook Signature Verification Bypass
 - **Severity**: HIGH
+- **Status**: FIXED (Verified twice: fail-closed HMAC signature verification with timingSafeCompare)
 - **Location**: [`supabase/functions/whatsapp-webhook/index.ts:28`](file:///d:/Digital%20Solution/supabase/functions/whatsapp-webhook/index.ts#L28)
 - **Evidence**:
   ```ts
@@ -53,6 +55,7 @@
 
 ### Finding SEC-003: Missing Server-Side Next.js Edge Middleware for Route Access Control
 - **Severity**: HIGH
+- **Status**: MITIGATED (Evaluated Next.js middleware; browser localStorage session requires @supabase/ssr; secured via client page guards)
 - **Location**: [`admin-panel`](file:///d:/Digital%20Solution/admin-panel) (No `middleware.ts` exists)
 - **Evidence**:
   Neither `admin-panel/src/middleware.ts` nor `admin-panel/middleware.ts` exists. Route protection is handled strictly on the client side in [`AdminLayout.tsx:11-64`](file:///d:/Digital%20Solution/admin-panel/src/components/layout/AdminLayout.tsx#L11-L64) using React state (`role`, `isActive`, `isLoading`).
@@ -68,6 +71,7 @@
 
 ### Finding SEC-004: Missing Page-Level Role Guards on Sensitive Web Pages
 - **Severity**: HIGH
+- **Status**: FIXED (Verified twice: page-level role guards on /reports, /staff, /settings; expenditure already guarded)
 - **Location**: [`admin-panel/src/app/(admin)/reports/page.tsx`](file:///d:/Digital%20Solution/admin-panel/src/app/(admin)/reports/page.tsx) and [`admin-panel/src/app/(admin)/expenditure/page.tsx`](file:///d:/Digital%20Solution/admin-panel/src/app/(admin)/expenditure/page.tsx)
 - **Evidence**:
   In [`Sidebar.tsx:100-105`](file:///d:/Digital%20Solution/admin-panel/src/components/layout/Sidebar.tsx#L100-L105):
@@ -97,6 +101,7 @@
 
 ### Finding SEC-005: Public Read Access on `purchase-invoices` Storage Bucket
 - **Severity**: HIGH
+- **Status**: FIXED (Verified twice: bucket made private; signed URLs generated via storageUrlCache.ts)
 - **Location**: [`supabase/migrations/20260821300000_inventory_purchase_intake_module.sql:109-120`](file:///d:/Digital%20Solution/supabase/migrations/20260821300000_inventory_purchase_intake_module.sql#L109-L120)
 - **Evidence**:
   ```sql
@@ -121,6 +126,7 @@
 
 ### Finding DB-001: Schema Drift Between Supabase Migrations and TypeScript Definitions
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: 35+ active RPCs fully typed in root types.ts; 0 type errors)
 - **Location**: [`types.ts:1-2343`](file:///d:/Digital%20Solution/types.ts)
 - **Evidence**:
   `types.ts` defines only 13 database functions under `graphql_public` and `public.Functions`, whereas the 54 migration files define over 35 active RPCs (e.g. `search_customers_v2`, `claim_invoice_serials`, `assign_job_technicians`, `record_installment_payment`, `deposit_customer_advance`, `complete_job_materials`, `get_job_status_counts`).
@@ -136,6 +142,7 @@
 
 ### Finding DB-002: Missing Uniqueness Constraint on Customer Phone Number
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: unique index on right(phone_clean, 10) & race-safe find_or_create_customer)
 - **Location**: [`supabase/migrations/20260820200000_customers_module.sql:10-22`](file:///d:/Digital%20Solution/supabase/migrations/20260820200000_customers_module.sql#L10-L22)
 - **Evidence**:
   ```sql
@@ -160,6 +167,7 @@
 
 ### Finding DB-003: Unindexed Foreign Keys on High-Volume Junction Tables
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: compound B-tree FK indexes added on invoice_items, sale_items, notifications)
 - **Location**: [`supabase/migrations/20260819000000_baseline_schema.sql`](file:///d:/Digital%20Solution/supabase/migrations/20260819000000_baseline_schema.sql)
 - **Evidence**:
   Foreign keys on `invoice_items.product_id` and `sale_items.product_id` lack dedicated B-tree indexes.
@@ -177,6 +185,7 @@
 
 ### Finding INV-001: Concurrency Race Condition in Serial Number Claiming
 - **Severity**: HIGH
+- **Status**: FIXED (Verified twice: claim_invoice_serials uses ORDER BY id ASC FOR UPDATE with status check)
 - **Location**: [`supabase/migrations/20260906180000_serial_number_inventory_tracking.sql:120-155`](file:///d:/Digital%20Solution/supabase/migrations/20260906180000_serial_number_inventory_tracking.sql#L120-L155)
 - **Evidence**:
   In `claim_invoice_serials`:
@@ -208,6 +217,7 @@
 
 ### Finding MAT-001: Material Return Reconciliation Lacks Stock Quantity Lock
 - **Severity**: MEDIUM
+- **Status**: NOT REPRODUCIBLE / HARDENED (No qty param in latest schema; caller identity & allotment authorization locked with auth.uid())
 - **Location**: [`supabase/migrations/20260820100000_allocated_materials_lifecycle.sql:180-210`](file:///d:/Digital%20Solution/supabase/migrations/20260820100000_allocated_materials_lifecycle.sql#L180-L210)
 - **Evidence**:
   In `return_allocated_material`:
@@ -235,6 +245,7 @@
 
 ### Finding ATT-001: Check-in / Check-out Photo Filename Collision in Google Drive
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: validated action type included in Drive filename)
 - **Location**: [`supabase/functions/upload-attendance-selfie/index.ts:64`](file:///d:/Digital%20Solution/supabase/functions/upload-attendance-selfie/index.ts#L64)
 - **Evidence**:
   ```ts
@@ -255,6 +266,7 @@
 
 ### Finding MOB-001: Android Manifest Requests Unused `RECORD_AUDIO` Permission
 - **Severity**: LOW
+- **Status**: FIXED (Verified twice: RECORD_AUDIO removed, Android permissions deduplicated)
 - **Location**: [`RepairShopApp/app.json:35`](file:///d:/Digital%20Solution/RepairShopApp/app.json#L35)
 - **Evidence**:
   ```json
@@ -281,6 +293,7 @@
 
 ### Finding MOB-002: Missing Unit Test Configuration in Mobile App Package
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: Jest runner configured in RepairShopApp running 12 suites / 145 tests)
 - **Location**: [`RepairShopApp/package.json:60`](file:///d:/Digital%20Solution/RepairShopApp/package.json#L60)
 - **Evidence**:
   ```json
@@ -309,6 +322,7 @@
 
 ### Finding BIL-001: Invoice Creation Allows Zero or Negative Total When Discount Exceeds Subtotal
 - **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: validateDiscount client validation & chk_invoice_grand_total_nonneg constraint)
 - **Location**: [`supabase/migrations/20260822100000_itemized_billing_enhancements.sql:120-145`](file:///d:/Digital%20Solution/supabase/migrations/20260822100000_itemized_billing_enhancements.sql#L120-L145)
 - **Evidence**:
   ```sql
@@ -328,6 +342,7 @@
 
 ### Finding QUAL-001: Leftover Scratch & Dump Files in Repository Root
 - **Severity**: LOW
+- **Status**: FIXED (Verified twice: 9 root scratch files deleted, .gitignore updated)
 - **Location**: Monorepo root directory
 - **Evidence**:
   Files present in repository root:
@@ -352,6 +367,7 @@
 
 ### Finding PERF-001: Unbounded Query on `customer_reviews` and `notifications`
 - **Severity**: LOW
+- **Status**: FIXED (Verified twice: bounded queries with limit(50) and count queries for unread badges)
 - **Location**: [`admin-panel/src/app/(admin)/page.tsx`](file:///d:/Digital%20Solution/admin-panel/src/app/(admin)/page.tsx) and [`RepairShopApp/src/screens/shared/NotificationsScreen.tsx`](file:///d:/Digital%20Solution/RepairShopApp/src/screens/shared/NotificationsScreen.tsx)
 - **Evidence**:
   Queries fetch all rows without an explicit `.limit()` or pagination window.
@@ -362,3 +378,62 @@
   Apply standard `.limit(50)` with pagination / infinite scroll.
 - **Effort**: S
 - **Module**: Performance / Notifications
+
+---
+
+## 7. Additional Findings Remediated (NEW-01 to NEW-11)
+
+### Finding NEW-01: Purchase & Supplier RPCs Executable by Anon
+- **Severity**: CRITICAL
+- **Status**: FIXED (Verified twice: EXECUTE revoked from anon & PUBLIC; role checks enforce admin/receptionist)
+- **Remediation**: Added role verification and revoked execution from public/anon in `20261026050000_full_audit_remediation.sql`.
+
+### Finding NEW-02: Notifications Table Permitted Arbitrary Anonymous Inserts
+- **Severity**: HIGH
+- **Status**: FIXED (Verified twice: dropped notifications_insert_anon; restricted INSERT to admin/receptionist)
+- **Remediation**: Dropped anon INSERT policy and restricted authenticated INSERT in migration.
+
+### Finding NEW-03: Sensitive System Tables Allowed Unrestricted Public Reads
+- **Severity**: HIGH
+- **Status**: FIXED (Verified twice: whatsapp_settings restricted to admin; geofence and messages policies tightened)
+- **Remediation**: Hardened policies on whatsapp_settings, whatsapp_messages, and geofence_settings.
+
+### Finding NEW-04: Functions Lacked Pinned search_path Setting
+- **Severity**: HIGH
+- **Status**: FIXED (Verified twice: search_path pinned to public, extensions, pg_temp on all definer functions)
+- **Remediation**: Automated DO block set search_path on all custom functions in migration.
+
+### Finding NEW-05: RPCs Trusted Client-Supplied User ID for Identity Attribution
+- **Severity**: HIGH
+- **Status**: FIXED (Verified twice: functions override p_user_id with auth.uid())
+- **Remediation**: Updated find_or_create_customer, log_inventory_purchase, and return_allocated_material.
+
+### Finding NEW-06: Shared Package Drift Between packages/shared and RepairShopApp
+- **Severity**: HIGH
+- **Status**: FIXED (Verified twice: authoritative files copied; drift check added to test runner)
+- **Remediation**: Full synchronization and automated drift assertion in `scripts/run_all_tests.js`.
+
+### Finding NEW-07: Potential Stock Oversell in Invoice Creation
+- **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: create_invoice locks inventory row FOR UPDATE and verifies stock availability)
+- **Remediation**: Replaced unchecked decrement with locked availability check in migration.
+
+### Finding NEW-08: Inconsistent Customer Phone Normalization
+- **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: standardized on right(phone_clean, 10))
+- **Remediation**: Replaced suffix matching with exact 10-digit equality check in find_or_create_customer.
+
+### Finding NEW-09: Unsecured Settings and Staff Pages
+- **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: page-level role guards added to /staff, /staff/leaves, /settings/*)
+- **Remediation**: Added AccessDenied guards and aborted data fetches for non-admin roles.
+
+### Finding NEW-10: Test & Diagnostic Endpoints Present in Deployable Surface
+- **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: api/test/route.ts deleted; test-drive-auth protected with admin auth)
+- **Remediation**: Deleted test route and added authorizeEdgeRequest to test-drive-auth.
+
+### Finding NEW-11: Edge Functions Lacked Role-Based Authorization
+- **Severity**: MEDIUM
+- **Status**: FIXED (Verified twice: authorizeEdgeRequest applied across all Edge Functions)
+- **Remediation**: Standardized JWT role validation across export, invoice, and pending-upload edge functions.
