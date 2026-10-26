@@ -42,11 +42,8 @@ export const usePushNotifications = (): PushNotificationState => {
     let token: Notifications.ExpoPushToken | undefined;
     try {
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-          if (Notification.permission === 'default') {
-            await Notification.requestPermission().catch(() => {});
-          }
-        }
+        // Web sessions rely on Supabase Realtime in-app notifications while open.
+        // Web sessions must NEVER register a native Expo token or overwrite users.expo_push_token.
         return undefined;
       }
 
@@ -202,6 +199,19 @@ export const usePushNotifications = (): PushNotificationState => {
       )
       .subscribe();
 
+    // Reconnect Realtime channel when mobile web tab returns to foreground
+    let handleVisibilityChange: (() => void) | null = null;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && mounted) {
+          if (realtimeChannel.state === 'closed' || realtimeChannel.state === 'errored') {
+            realtimeChannel.subscribe();
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
     // C. OS Notification Listeners
     try {
       notificationListener.current = Notifications.addNotificationReceivedListener((received) => {
@@ -311,6 +321,9 @@ export const usePushNotifications = (): PushNotificationState => {
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
+      if (handleVisibilityChange && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
       supabase.removeChannel(realtimeChannel);
       if (notificationListener.current) {
         notificationListener.current.remove();

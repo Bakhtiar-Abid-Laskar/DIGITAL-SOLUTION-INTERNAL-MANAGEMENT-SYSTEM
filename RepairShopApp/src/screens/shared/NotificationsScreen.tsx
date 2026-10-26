@@ -1,6 +1,6 @@
 import { AppPressable } from '../../components/common/AppPressable';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, Platform } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Bell, Mail, MessageCircle, BellDot } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -346,6 +346,14 @@ export default function NotificationsScreen() {
         )}
       </View>
 
+      {Platform.OS === 'web' && (
+        <View style={styles.webNotice}>
+          <Text style={styles.webNoticeText}>
+            Real-time in-app notifications sync automatically while this tab is open.
+          </Text>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.listContent}>
           {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
@@ -458,4 +466,20 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accentRed}});
+    backgroundColor: colors.accentRed,
+  },
+  webNotice: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surfaceHover || '#F1F5F9',
+    borderRadius: radius.sm,
+  },
+  webNoticeText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+});
