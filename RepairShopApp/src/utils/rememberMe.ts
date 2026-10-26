@@ -9,6 +9,43 @@ export interface LastLoginInfo {
   rememberMe: boolean;
 }
 
+const webFallback = new Map<string, string>();
+
+function getWebItem(key: string): string | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+  } catch {
+    // Private browsing or restricted webview
+  }
+  return webFallback.get(key) ?? null;
+}
+
+function setWebItem(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+      return;
+    }
+  } catch {
+    // Private browsing or restricted webview
+  }
+  webFallback.set(key, value);
+}
+
+function removeWebItem(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+  } catch {
+    // Private browsing or restricted webview
+  }
+  webFallback.delete(key);
+}
+
 /**
  * Retrieve saved login info from secure storage or localStorage
  */
@@ -16,9 +53,7 @@ export async function getLastLoginInfo(): Promise<LastLoginInfo | null> {
   try {
     let raw: string | null = null;
     if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        raw = window.localStorage.getItem(STORAGE_KEY);
-      }
+      raw = getWebItem(STORAGE_KEY);
     } else {
       raw = await SecureStore.getItemAsync(STORAGE_KEY);
     }
@@ -38,13 +73,10 @@ export async function saveLastLoginInfo(info: LastLoginInfo): Promise<void> {
   try {
     const raw = JSON.stringify(info);
     if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        if (info.rememberMe) {
-          window.localStorage.setItem(STORAGE_KEY, raw);
-        } else {
-          // If rememberMe is unchecked, still keep firstName for greeting if desired, or clear email
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ firstName: info.firstName, rememberMe: false, email: '' }));
-        }
+      if (info.rememberMe) {
+        setWebItem(STORAGE_KEY, raw);
+      } else {
+        setWebItem(STORAGE_KEY, JSON.stringify({ firstName: info.firstName, rememberMe: false, email: '' }));
       }
     } else {
       if (info.rememberMe) {
@@ -64,9 +96,7 @@ export async function saveLastLoginInfo(info: LastLoginInfo): Promise<void> {
 export async function clearLastLoginInfo(): Promise<void> {
   try {
     if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
+      removeWebItem(STORAGE_KEY);
     } else {
       await SecureStore.deleteItemAsync(STORAGE_KEY);
     }
