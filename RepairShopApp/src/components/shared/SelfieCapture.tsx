@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Platform, View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
 import { CameraView } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera, MapPin, CheckCircle2 } from 'lucide-react-native';
@@ -161,16 +162,8 @@ export default function SelfieCapture({
     return await uploadToDrive(targetUri, uploadEndpoint, uploadPayload);
   };
 
-  const handleCapture = async () => {
-    if (!cameraRef.current || !isCameraReady) return;
-
+  const processPhotoUri = async (photoUri: string) => {
     try {
-      setLoadingState('camera');
-      const photo = await cameraRef.current.takePictureAsync({ base64: false });
-      if (!photo || !photo.uri) throw new Error('Capture failed');
-      
-      setIsCameraActive(false);
-
       // Fetch location with multi-tier graceful fallback (10s High -> 6s Balanced -> Last Known -> Degraded indoor fallback)
       setLoadingState('gps');
       let location: Location.LocationObject | null = null;
@@ -251,9 +244,9 @@ export default function SelfieCapture({
 
       // Compress photo
       setLoadingState('compressing');
-      let readyUri = photo.uri;
+      let readyUri = photoUri;
       try {
-        readyUri = await compressImage(photo.uri);
+        readyUri = await compressImage(photoUri);
       } catch (compErr) {
         console.warn('[SelfieCapture] compressImage fallback:', compErr);
       }
@@ -263,7 +256,7 @@ export default function SelfieCapture({
       const { fileId, link } = await uploadPhoto(readyUri);
 
       onCaptureComplete({
-        uri: photo.uri,
+        uri: photoUri,
         driveFileId: fileId,
         driveLink: link,
         gpsLat: finalLat,
@@ -278,6 +271,58 @@ export default function SelfieCapture({
       setIsCameraActive(false);
     } finally {
       setLoadingState('idle');
+    }
+  };
+
+  const handleCapture = async () => {
+    if (!cameraRef.current || !isCameraReady) return;
+
+    try {
+      setLoadingState('camera');
+      const photo = await cameraRef.current.takePictureAsync({ base64: false });
+      if (!photo || !photo.uri) throw new Error('Capture failed');
+      
+      setIsCameraActive(false);
+      await processPhotoUri(photo.uri);
+    } catch (e: any) {
+      console.error(e);
+      showToast({ title: 'Error', message: e.message, type: 'error' });
+      setIsCameraActive(false);
+      setLoadingState('idle');
+    }
+  };
+
+  const handleFallbackPick = async () => {
+    setIsCameraActive(false);
+    try {
+      setLoadingState('camera');
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets || !result.assets[0]?.uri) {
+        setLoadingState('idle');
+        return;
+      }
+      await processPhotoUri(result.assets[0].uri);
+    } catch (err) {
+      console.warn('[SelfieCapture] launchCameraAsync fallback failed, trying launchImageLibraryAsync:', err);
+      try {
+        const libResult = await ImagePicker.launchImageLibraryAsync({
+          quality: 0.8,
+        });
+        if (libResult.canceled || !libResult.assets || !libResult.assets[0]?.uri) {
+          setLoadingState('idle');
+          return;
+        }
+        await processPhotoUri(libResult.assets[0].uri);
+      } catch (pickErr: any) {
+        setLoadingState('idle');
+        showToast({
+          title: 'Photo Upload Failed',
+          message: pickErr?.message || 'Unable to select photo.',
+          type: 'error',
+        });
+      }
     }
   };
 
@@ -314,12 +359,13 @@ export default function SelfieCapture({
               onCameraReady={() => setIsCameraReady(true)}
               onMountError={(err) => {
                 console.error('[SelfieCapture] Camera mount error:', err);
+                setIsCameraActive(false);
                 showToast({
-                  title: 'Camera Unavailable',
-                  message: err.message || 'Could not open camera stream on this device.',
+                  title: 'Camera Stream Unavailable',
+                  message: 'Opening device photo selector instead.',
                   type: 'error'
                 });
-                setIsCameraActive(false);
+                handleFallbackPick();
               }}
             />
             <View style={styles.cameraControls}>
@@ -331,6 +377,16 @@ export default function SelfieCapture({
               >
                 <Text style={styles.camBtnTextCancel}>Cancel</Text>
               </AppPressable>
+              {Platform.OS === 'web' && (
+                <AppPressable 
+                  style={[styles.camBtn, { backgroundColor: colors.accentBlue, marginHorizontal: spacing.xs }]} 
+                  onPress={handleFallbackPick}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pick Photo File"
+                >
+                  <Text style={styles.camBtnText}>Pick File</Text>
+                </AppPressable>
+              )}
               <AppPressable 
                 style={[styles.camBtn, { backgroundColor: colors.primary }]} 
                 onPress={handleCapture} 
