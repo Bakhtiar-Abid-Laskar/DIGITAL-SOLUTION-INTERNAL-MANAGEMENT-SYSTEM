@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, Dimensions, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, ZapOff, ScanLine } from 'lucide-react-native';
+import { X, Zap, ZapOff, ScanLine, ArrowRight } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../tokens';
+import { AppPressable } from './AppPressable';
 
 const { width } = Dimensions.get('window');
 
@@ -29,8 +30,7 @@ export function CameraBarcodeScannerModalMobile({
   const [torch, setTorch] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(true);
-
-  if (!visible) return null;
+  const [manualInput, setManualInput] = useState('');
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     if (!isScanning) return;
@@ -45,6 +45,51 @@ export function CameraBarcodeScannerModalMobile({
       onClose();
     }
   };
+
+  // Hardware barcode scanner support on web
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    let buffer = '';
+    let lastKeyTime = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      const now = performance.now();
+      const interval = now - lastKeyTime;
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        const text = buffer.trim();
+        if (text.length >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleBarcodeScanned({ data: text });
+        }
+        buffer = '';
+        return;
+      }
+
+      if (e.key.length === 1) {
+        if (interval > 50) {
+          buffer = e.key;
+        } else {
+          buffer += e.key;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [visible, isScanning]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -80,10 +125,16 @@ export function CameraBarcodeScannerModalMobile({
         {/* Camera Viewfinder */}
         {!permission?.granted ? (
           <View style={styles.permissionBox}>
-            <Text style={styles.permissionText}>Camera permission is required to scan barcodes.</Text>
-            <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
-              <Text style={styles.permissionBtnText}>Grant Permission</Text>
-            </TouchableOpacity>
+            <Text style={styles.permissionText}>
+              {Platform.OS === 'web'
+                ? 'Camera access is unavailable or denied. You can enter or scan the barcode / serial manually below.'
+                : 'Camera permission is required to scan barcodes.'}
+            </Text>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+                <Text style={styles.permissionBtnText}>Grant Permission</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.cameraContainer}>
@@ -116,10 +167,43 @@ export function CameraBarcodeScannerModalMobile({
           </View>
         )}
 
+        {/* Manual Serial Input Row */}
+        <View style={styles.manualInputContainer}>
+          <TextInput
+            style={styles.manualTextInput}
+            placeholder="Type serial / barcode manually..."
+            placeholderTextColor="#94A3B8"
+            value={manualInput}
+            onChangeText={setManualInput}
+            onSubmitEditing={() => {
+              if (manualInput.trim()) {
+                handleBarcodeScanned({ data: manualInput.trim() });
+                setManualInput('');
+              }
+            }}
+            returnKeyType="done"
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <AppPressable
+            style={styles.manualSubmitBtn}
+            onPress={() => {
+              if (manualInput.trim()) {
+                handleBarcodeScanned({ data: manualInput.trim() });
+                setManualInput('');
+              }
+            }}
+          >
+            <ArrowRight size={18} color="#FFFFFF" />
+          </AppPressable>
+        </View>
+
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerHint}>
-            Align the barcode or QR code inside the frame to scan automatically.
+            {Platform.OS === 'web'
+              ? 'Scan with camera, type serial above, or use a USB/Bluetooth barcode reader.'
+              : 'Align the barcode or QR code inside the frame to scan automatically.'}
           </Text>
           <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
             <Text style={styles.doneBtnText}>Done</Text>
@@ -283,5 +367,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  manualInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#0F172A',
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    gap: spacing.sm,
+  },
+  manualTextInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: '#1E293B',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    color: '#FFFFFF',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  manualSubmitBtn: {
+    width: 42,
+    height: 42,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
