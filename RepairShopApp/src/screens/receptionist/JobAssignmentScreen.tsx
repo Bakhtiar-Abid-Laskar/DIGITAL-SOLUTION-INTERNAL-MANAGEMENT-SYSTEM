@@ -22,6 +22,7 @@ import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
 import { createWhatsAppUrl } from '@repairshop/shared';
+import { openWhatsAppChat } from '../../utils/authLink';
 import { printJobCard } from '../../lib/jobCardService';
 
 export default function JobAssignmentScreen() {
@@ -174,20 +175,9 @@ export default function JobAssignmentScreen() {
   const handleWhatsAppInvoice = async () => {
     if (!createdJob) return;
     const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing Digital Solution.`;
-    const url = createWhatsAppUrl(createdJob.customer_contact, msg);
-    if (!url) {
-      showToast({ title: 'Invalid number', message: 'Could not format the contact number for WhatsApp.', type: 'error' });
-      return;
-    }
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) {
-        showToast({ title: 'WhatsApp unavailable', message: 'WhatsApp is not installed.', type: 'error' });
-        return;
-      }
-      await Linking.openURL(url);
-    } catch (err: any) {
-      showToast({ title: 'WhatsApp failed', message: err.message, type: 'error' });
+    const res = await openWhatsAppChat(createdJob.customer_contact, msg);
+    if (!res.success) {
+      showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });
     }
   };
 

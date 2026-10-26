@@ -19,6 +19,7 @@ import {
   reverseCalcBillFromGrandTotal,
   LineItem,
 } from '@repairshop/shared';
+import { openWhatsAppChat } from '../../utils/authLink';
 import { AppPressable } from '../../components/common/AppPressable';
 import { ArrowLeft, ArrowRight, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react-native';
 
@@ -284,14 +285,9 @@ export default function NewSaleScreen() {
   const handleWhatsAppInvoice = async () => {
     if (!createdSale) return;
     const msg = `Hello ${form.customer_name.trim()}, your Digital Solution itemized invoice for Sale ${createdSale.sale_code} is ready.\n\nSubtotal: ${formatCurrency(subtotal)}\nTax: ${formatCurrency(totalTax)}\n*Grand Total: ${formatCurrency(createdSale.total_amount || grandTotal)}*\n\nThank you for choosing Digital Solution.`;
-    const url = createWhatsAppUrl(form.customer_contact.trim(), msg);
-    if (!url) { showToast({ title: 'Invalid number', message: 'Could not format number for WhatsApp.', type: 'error' }); return; }
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) { showToast({ title: 'WhatsApp unavailable', message: 'WhatsApp is not installed.', type: 'error' }); return; }
-      await Linking.openURL(url);
-    } catch (err: any) {
-      showToast({ title: 'WhatsApp failed', message: err.message || 'Could not open WhatsApp.', type: 'error' });
+    const res = await openWhatsAppChat(form.customer_contact.trim(), msg);
+    if (!res.success) {
+      showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });
     }
   };
 

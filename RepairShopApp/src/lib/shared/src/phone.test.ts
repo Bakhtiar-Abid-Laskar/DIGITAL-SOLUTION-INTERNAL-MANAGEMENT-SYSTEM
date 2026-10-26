@@ -1,4 +1,4 @@
-import { cleanPhoneNumber, createWhatsAppUrl, formatIndianPhoneForWhatsApp, validateAndNormalizeIndianPhone, formatPhoneInput } from './phone';
+import { cleanPhoneNumber, createWhatsAppUrl, createWhatsAppWebUrl, formatIndianPhoneForWhatsApp, validateAndNormalizeIndianPhone, formatPhoneInput } from './phone';
 
 describe('Phone Normalization & WhatsApp Utilities (@repairshop/shared/phone.ts)', () => {
   describe('cleanPhoneNumber', () => {
@@ -63,6 +63,16 @@ describe('Phone Normalization & WhatsApp Utilities (@repairshop/shared/phone.ts)
       const url = createWhatsAppUrl('9876543210', 'Total: ₹1,500.00 & Status: Done');
       expect(url).toContain('%E2%82%B91%2C500.00');
       expect(url).toContain('%26');
+    });
+
+    it('generates https://wa.me/ URL when web option is specified', () => {
+      const url = createWhatsAppUrl('9876543210', 'Hello World', { web: true });
+      expect(url).toBe('https://wa.me/919876543210?text=Hello%20World');
+    });
+
+    it('generates https://wa.me/ URL via createWhatsAppWebUrl directly', () => {
+      const url = createWhatsAppWebUrl('9876543210', 'Ready for pickup');
+      expect(url).toBe('https://wa.me/919876543210?text=Ready%20for%20pickup');
     });
   });
 

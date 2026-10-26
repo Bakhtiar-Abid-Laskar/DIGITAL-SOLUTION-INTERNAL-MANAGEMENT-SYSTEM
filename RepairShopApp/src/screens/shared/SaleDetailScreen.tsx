@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { formatCurrency, formatDate, createWhatsAppUrl } from '@repairshop/shared';
+import { openWhatsAppChat } from '../../utils/authLink';
 import ErrorState from '../../components/common/ErrorState';
 import PaymentRecordingBox from '../../components/billing/PaymentRecordingBox';
 import ItemizedBillTable from '../../components/billing/ItemizedBillTable';
@@ -76,20 +77,9 @@ export default function SaleDetailScreen() {
   const handleWhatsApp = async () => {
     if (!invoice) return;
     const msg = `Hello ${invoice.customer_name || 'Customer'}, your Digital Solution invoice ${invoice.invoice_code} is ready.\n\nGrand Total: ₹${Number(invoice.grand_total || 0).toFixed(2)}\nAmount Paid: ₹${Number(invoice.amount_paid || 0).toFixed(2)}\nBalance Due: ₹${Math.max(0, Number(invoice.grand_total || 0) - Number(invoice.amount_paid || 0)).toFixed(2)}\n\nThank you for choosing Digital Solution.`;
-    const url = createWhatsAppUrl(invoice.customer_contact || '', msg);
-    if (!url) {
-      showToast({ title: 'Error', message: 'No valid phone number for WhatsApp.', type: 'error' });
-      return;
-    }
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) {
-        showToast({ title: 'Error', message: 'WhatsApp is not installed.', type: 'error' });
-        return;
-      }
-      await Linking.openURL(url);
-    } catch {
-      showToast({ title: 'Error', message: 'Could not open WhatsApp.', type: 'error' });
+    const res = await openWhatsAppChat(invoice.customer_contact || '', msg);
+    if (!res.success) {
+      showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });
     }
   };
 

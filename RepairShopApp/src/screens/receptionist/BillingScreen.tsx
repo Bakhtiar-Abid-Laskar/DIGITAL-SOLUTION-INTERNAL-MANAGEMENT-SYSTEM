@@ -23,6 +23,7 @@ import Button from '../../components/common/Button';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { useToast } from '../../context/ToastContext';
+import { openWhatsAppChat } from '../../utils/authLink';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
 
 import ItemizedBillTable, { ItemizedLineItem } from '../../components/billing/ItemizedBillTable';
@@ -371,15 +372,12 @@ export default function BillingScreen() {
       // Fall through to client deep link
     }
 
-    // Fallback: Open WhatsApp directly on device
+    // Open WhatsApp directly on device or web
     const msg = `Hello ${job.customer_name}, your Digital Solution itemized invoice for Job ${job.job_code} is ready.\n\nSubtotal: ₹${subtotal.toFixed(2)}\nTax: ₹${totalTax.toFixed(2)}\n*Grand Total: ₹${finalTotal.toFixed(2)}*\n\nThank you for choosing Digital Solution.`;
-    const url = createWhatsAppUrl(job.customer_contact, msg);
-    if (!url) { showToast({ title: 'Error', message: 'Could not format number for WhatsApp.', type: 'error' }); return; }
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) { showToast({ title: 'Error', message: 'WhatsApp not installed.', type: 'error' }); return; }
-      await Linking.openURL(url);
-    } catch { showToast({ title: 'Error', message: 'Could not open WhatsApp.', type: 'error' }); }
+    const res = await openWhatsAppChat(job.customer_contact, msg);
+    if (!res.success) {
+      showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });
+    }
   };
 
   const handleEmail = async () => {

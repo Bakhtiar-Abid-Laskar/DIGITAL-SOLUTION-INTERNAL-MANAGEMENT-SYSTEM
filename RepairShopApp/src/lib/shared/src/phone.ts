@@ -29,14 +29,26 @@ export const formatIndianPhoneForWhatsApp = (phone: string): string | null => {
 };
 
 /**
- * Creates the wa.me URL with a prefilled message draft.
+ * Creates the universal https://wa.me/ URL for web browsers and universal linking.
  */
-export const createWhatsAppUrl = (phone: string, message: string): string | null => {
+export const createWhatsAppWebUrl = (phone: string, message: string): string | null => {
+  const formattedPhone = formatIndianPhoneForWhatsApp(phone);
+  if (!formattedPhone) return null;
+  const numericOnly = formattedPhone.replace('+', '');
+  return `https://wa.me/${numericOnly}?text=${encodeURIComponent(message)}`;
+};
+
+/**
+ * Creates the WhatsApp URL with a prefilled message draft.
+ * Defaults to whatsapp://send. If options.web is true, creates https://wa.me/.
+ */
+export const createWhatsAppUrl = (phone: string, message: string, options?: { web?: boolean }): string | null => {
+  if (options?.web) {
+    return createWhatsAppWebUrl(phone, message);
+  }
   const formattedPhone = formatIndianPhoneForWhatsApp(phone);
   if (!formattedPhone) return null;
   
-  // Remove the '+' for the wa.me link format as per WhatsApp docs, though + often works too.
-  // Actually, wa.me works best with just digits including country code.
   const numericOnly = formattedPhone.replace('+', '');
   return `whatsapp://send?phone=${numericOnly}&text=${encodeURIComponent(message)}`;
 };
