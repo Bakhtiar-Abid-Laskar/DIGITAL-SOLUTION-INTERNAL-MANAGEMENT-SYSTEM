@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { showAlert } from '../../context/ToastContext';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { Job, JobMaterial } from '../../types/job';
@@ -185,7 +186,7 @@ export default function BillingScreen() {
 
   const handleSaveBill = async () => {
     if (invoice?.id && invoice?.status === 'paid') {
-      Alert.alert(
+      showAlert(
         'Update Paid Invoice?',
         `This will change the recorded rate/tax for this bill from ₹${Number(invoice.grand_total || 0).toFixed(2)} to ₹${grandTotal.toFixed(2)}. Continue?`,
         [
