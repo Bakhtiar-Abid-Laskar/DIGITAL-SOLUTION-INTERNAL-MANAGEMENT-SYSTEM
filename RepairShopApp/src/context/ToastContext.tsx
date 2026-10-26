@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, Platform, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, Platform, Alert } from 'react-native';
 import { Toast } from '../components/common/Toast';
 import Button from '../components/common/Button';
 import { colors, radius, spacing, typography, shadow } from '../tokens';

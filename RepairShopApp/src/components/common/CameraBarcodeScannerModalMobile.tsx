@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, Dimensions, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, useWindowDimensions, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X, Zap, ZapOff, ScanLine, ArrowRight } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../tokens';
 import { AppPressable } from './AppPressable';
-
-const { width } = Dimensions.get('window');
 
 interface CameraBarcodeScannerModalMobileProps {
   visible: boolean;
@@ -26,6 +24,9 @@ export function CameraBarcodeScannerModalMobile({
   targetCount,
   currentCount,
 }: CameraBarcodeScannerModalMobileProps) {
+  const { width } = useWindowDimensions();
+  const frameWidth = Math.min((width || 360) * 0.75, 340);
+  const frameHeight = frameWidth * 0.55;
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -150,7 +151,7 @@ export function CameraBarcodeScannerModalMobile({
 
             {/* Viewfinder Target */}
             <View style={styles.viewfinderOverlay}>
-              <View style={styles.targetFrame}>
+              <View style={[styles.targetFrame, { width: frameWidth, height: frameHeight }]}>
                 <View style={[styles.corner, styles.topLeft]} />
                 <View style={[styles.corner, styles.topRight]} />
                 <View style={[styles.corner, styles.bottomLeft]} />
@@ -261,8 +262,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   targetFrame: {
-    width: width * 0.75,
-    height: width * 0.45,
     position: 'relative',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',

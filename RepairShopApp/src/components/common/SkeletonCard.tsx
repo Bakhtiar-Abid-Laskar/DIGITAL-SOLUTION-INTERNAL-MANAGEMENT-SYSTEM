@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -10,18 +10,18 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radius, spacing, shadow } from '../../tokens';
 
-const { width } = Dimensions.get('window');
-
 function ShimmerBlock({ w, h, rad = 8 }: { w: number | string; h: number; rad?: number }) {
-  const translateX = useSharedValue(-width);
+  const { width } = useWindowDimensions();
+  const screenWidth = width || 360;
+  const translateX = useSharedValue(-screenWidth);
 
   useEffect(() => {
     translateX.value = withRepeat(
-      withTiming(width, { duration: 1500, easing: Easing.linear }),
+      withTiming(screenWidth, { duration: 1500, easing: Easing.linear }),
       -1,
       false,
     );
-  }, []);
+  }, [screenWidth]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -42,7 +42,8 @@ function ShimmerBlock({ w, h, rad = 8 }: { w: number | string; h: number; rad?: 
 }
 
 export default function SkeletonCard() {
-  const cardWidth = width - spacing.lg * 2;
+  const { width } = useWindowDimensions();
+  const cardWidth = (width || 360) - spacing.lg * 2;
 
   return (
     <View style={[styles.card, { width: cardWidth }]}>
