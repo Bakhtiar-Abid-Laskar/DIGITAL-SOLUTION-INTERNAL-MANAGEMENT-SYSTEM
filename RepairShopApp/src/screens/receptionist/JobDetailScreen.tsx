@@ -7,6 +7,7 @@ import { Printer, MessageCircle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Job, JobMaterial } from '../../types/job';
 import { createWhatsAppUrl } from '@repairshop/shared';
+import { openWhatsAppChat } from '../../utils/authLink';
 
 import { mapErrorToUserMessage } from '../../utils/errorMessages';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
@@ -126,20 +127,9 @@ export default function JobDetailScreen() {
   const handleWhatsApp = async () => {
     if (!job) return;
     const msg = `Hello ${job.customer_name}, your device for Job ${job.job_code} is ready for pickup. Please visit RepairShop with your receipt. Thank you.`;
-    const url = createWhatsAppUrl(job.customer_contact, msg);
-    if (!url) { 
-      showToast({ title: 'Invalid Number', message: 'Could not format the contact number for WhatsApp.', type: 'error' }); 
-      return; 
-    }
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) { 
-        showToast({ title: 'Error', message: 'WhatsApp is not installed on this device.', type: 'error' }); 
-        return; 
-      }
-      await Linking.openURL(url);
-    } catch { 
-      showToast({ title: 'Error', message: 'Could not open WhatsApp.', type: 'error' }); 
+    const res = await openWhatsAppChat(job.customer_contact, msg);
+    if (!res.success) {
+      showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });
     }
   };
 
