@@ -8,7 +8,6 @@ import {
   RefreshControl,
   TextInput,
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
 } from 'react-native';
@@ -22,7 +21,7 @@ import EmptyState from '../../components/common/EmptyState';
 import { SkeletonList } from '../../components/common/SkeletonCard';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
-import { useToast } from '../../context/ToastContext';
+import { useToast, showAlert } from '../../context/ToastContext';
 import { InventoryRow, InventoryItem } from '../../components/inventory/InventoryRow';
 import { InventoryFormSheet } from '../../components/inventory/InventoryFormSheet';
 import { PurchaseDetailModalMobile } from '../../components/inventory/PurchaseDetailModalMobile';
@@ -257,7 +256,7 @@ export default function InventoryScreen() {
   const confirmDelete = (id: string) => {
     if (!isAdmin) { showToast({ title: 'Permission Error', message: 'Only admins can delete inventory.', type: 'error' }); return; }
     const targetItem = items.find(i => i.id === id);
-    Alert.alert(
+    showAlert(
       'Delete Item',
       `Are you sure you want to delete "${targetItem?.item_name || 'this item'}"?`,
       [

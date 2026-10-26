@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { User, ShieldCheck, Wrench, Headphones, MoreVertical, Plus } from 'lucide-react-native';
@@ -11,7 +11,7 @@ import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
-import { useToast } from '../../context/ToastContext';
+import { useToast, showAlert } from '../../context/ToastContext';
 
 type UserData = {
   id: string;
@@ -270,7 +270,7 @@ export default function StaffScreen() {
 
   const confirmDeactivate = () => {
     if (!selectedUser) return;
-    Alert.alert(
+    showAlert(
       'Deactivate Staff Member',
       `Are you sure you want to deactivate ${selectedUser.name}? Their login access will be immediately revoked, and they will no longer appear in job assignment pickers. All past jobs, payments, attendance, and financial history will remain intact.`,
       [
@@ -286,7 +286,7 @@ export default function StaffScreen() {
 
   const confirmActivate = () => {
     if (!selectedUser) return;
-    Alert.alert(
+    showAlert(
       'Activate Staff Member',
       `Are you sure you want to activate ${selectedUser.name}? They will regain login access to the system.`,
       [
@@ -301,7 +301,7 @@ export default function StaffScreen() {
 
   const confirmDelete = () => {
     if (!selectedUser) return;
-    Alert.alert(
+    showAlert(
       'Delete Staff Member',
       `Are you sure you want to permanently delete ${selectedUser.name}? If this staff member has associated historical records (such as jobs, payments, or attendance), they will remain safely deactivated to preserve financial audit trails. If they have no records, their account will be permanently erased.`,
       [

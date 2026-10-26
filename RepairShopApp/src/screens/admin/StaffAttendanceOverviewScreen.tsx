@@ -7,8 +7,8 @@ import {
   RefreshControl,
   Modal,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../context/ToastContext';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -286,10 +286,10 @@ export default function StaffAttendanceOverviewScreen() {
         .eq('id', attendanceId);
 
       if (error) throw error;
-      Alert.alert('Attendance Updated', `Attendance has been marked as ${decision}.`);
+      showAlert('Attendance Updated', `Attendance has been marked as ${decision}.`);
       await loadData();
     } catch (err: any) {
-      Alert.alert('Review Error', err.message);
+      showAlert('Review Error', err.message);
     }
   };
 

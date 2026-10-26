@@ -81,3 +81,6 @@ export function mapErrorToUserMessage(err: unknown): string {
   // Generic fallback — intentionally vague for security
   return 'Something went wrong. Please try again.';
 }
+
+export { showAlert, type AlertButton } from '../context/ToastContext';
+

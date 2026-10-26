@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, RefreshControl } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Search, Package } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -10,7 +10,7 @@ import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 import AllottedMaterialsCard, { AllottedMaterialRecord } from '../../components/materials/AllottedMaterialsCard';
 import { colors, radius, spacing, typography } from '../../tokens';
-import { useToast } from '../../context/ToastContext';
+import { useToast, showAlert } from '../../context/ToastContext';
 
 interface AllottedMaterialsScreenProps {
   mode?: 'all' | 'scoped';
@@ -127,7 +127,7 @@ export default function AllottedMaterialsScreen({ mode: propMode }: AllottedMate
   };
 
   const handleMarkReturned = useCallback(async (allotmentId: string) => {
-    Alert.alert(
+    showAlert(
       'Mark as Returned',
       'This will restore the material quantity back to central inventory. Are you sure?',
       [
