@@ -10,7 +10,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Linking,
-  Dimensions,
   Modal,
 } from 'react-native';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
@@ -50,8 +49,6 @@ import { fetchUserRow } from '../../lib/auth';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { AppPressable } from '../../components/common/AppPressable';
 import { getLastLoginInfo, saveLastLoginInfo } from '../../utils/rememberMe';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // 5 Brand Service Categories
 const SERVICES = [

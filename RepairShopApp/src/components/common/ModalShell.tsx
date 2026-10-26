@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Modal, Pressable, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { colors, radius, spacing, shadow, SPRING } from '../../tokens';
 
@@ -9,10 +9,9 @@ interface ModalShellProps {
   children: React.ReactNode;
 }
 
-const { height } = Dimensions.get('window');
-
 export default function ModalShell({ visible, onClose, children }: ModalShellProps) {
-  const translateY = useSharedValue(height);
+  const { height } = useWindowDimensions();
+  const translateY = useSharedValue(height || 600);
   const opacity = useSharedValue(0);
   const [shouldRender, setShouldRender] = useState(visible);
 
@@ -25,14 +24,14 @@ export default function ModalShell({ visible, onClose, children }: ModalShellPro
       translateY.value = withSpring(0, SPRING);
       opacity.value = withSpring(1, { damping: 20, stiffness: 150, overshootClamping: true });
     } else {
-      translateY.value = withSpring(height, SPRING);
+      translateY.value = withSpring(height || 600, SPRING);
       opacity.value = withSpring(0, { damping: 20, stiffness: 150, overshootClamping: true }, (finished) => {
         if (finished) {
           runOnJS(setShouldRender)(false);
         }
       });
     }
-  }, [visible]);
+  }, [visible, height]);
 
   const animatedSheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -87,7 +86,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: Platform.OS === 'ios' ? spacing.xxl + 8 : spacing.xl,
     paddingHorizontal: spacing.xl,
-    maxHeight: height * 0.85,
+    maxHeight: '85%',
     minHeight: 180,
     ...shadow.card,
   },

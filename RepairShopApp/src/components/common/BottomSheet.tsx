@@ -3,7 +3,7 @@ import {
   View,
   StyleSheet,
   Modal,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   PanResponder,
   Animated as RNAnimated,
@@ -29,11 +29,11 @@ interface BottomSheetProps {
   children: React.ReactNode;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 100;
 const DISMISS_VELOCITY = 500;
 
 export default function BottomSheet({ visible, onClose, children }: BottomSheetProps) {
+  const { height: screenHeight } = useWindowDimensions();
   const [showModal, setShowModal] = useState(visible);
 
   // Sync showModal when visible flips to true
@@ -41,7 +41,7 @@ export default function BottomSheet({ visible, onClose, children }: BottomSheetP
     if (visible) setShowModal(true);
   }, [visible]);
 
-  const translateY    = useSharedValue(SCREEN_HEIGHT);
+  const translateY    = useSharedValue(screenHeight || 800);
   const opacity       = useSharedValue(0);
 
   // dragY is a plain RN Animated value used by PanResponder (not Reanimated).
@@ -59,12 +59,12 @@ export default function BottomSheet({ visible, onClose, children }: BottomSheetP
       translateY.value = withSpring(0, { damping: 26, stiffness: 400, overshootClamping: true });
       opacity.value    = withTiming(0.4, { duration: 300 });
     } else {
-      translateY.value = withSpring(SCREEN_HEIGHT, { damping: 26, stiffness: 400, overshootClamping: true });
+      translateY.value = withSpring(screenHeight || 800, { damping: 26, stiffness: 400, overshootClamping: true });
       opacity.value    = withTiming(0, { duration: 250 }, (finished) => {
         if (finished) runOnJS(setShowModal)(false);
       });
     }
-  }, [visible]);
+  }, [visible, screenHeight]);
 
   // ─── Swipe-to-dismiss (built-in PanResponder — no native linking needed) ──
   const panResponder = useRef(
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing.xl,
     paddingBottom: 40,
-    maxHeight: SCREEN_HEIGHT * 0.8,
+    maxHeight: '80%',
   },
   handleContainer: {
     width: '100%',
