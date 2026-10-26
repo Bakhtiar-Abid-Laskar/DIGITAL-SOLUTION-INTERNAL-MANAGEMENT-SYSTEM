@@ -362,8 +362,19 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.find_or_create_supplier FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.find_or_create_supplier TO authenticated;
+DO $$
+DECLARE
+  fn_args text;
+BEGIN
+  FOR fn_args IN
+    SELECT pg_get_function_identity_arguments(p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.proname = 'find_or_create_supplier'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.find_or_create_supplier(%s) FROM PUBLIC, anon', fn_args);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION public.find_or_create_supplier(%s) TO authenticated', fn_args);
+  END LOOP;
+END $$;
 
 -- 3. search_products_catalog
 CREATE OR REPLACE FUNCTION public.search_products_catalog(
@@ -1706,8 +1717,19 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.create_invoice FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.create_invoice TO authenticated;
+DO $$
+DECLARE
+  fn_args text;
+BEGIN
+  FOR fn_args IN
+    SELECT pg_get_function_identity_arguments(p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.proname = 'create_invoice'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.create_invoice(%s) FROM PUBLIC, anon', fn_args);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION public.create_invoice(%s) TO authenticated', fn_args);
+  END LOOP;
+END $$;
 
 -- 2. update_invoice
 CREATE OR REPLACE FUNCTION public.update_invoice(
@@ -2034,15 +2056,27 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.update_invoice FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.update_invoice TO authenticated;
+DO $$
+DECLARE
+  fn_args text;
+BEGIN
+  FOR fn_args IN
+    SELECT pg_get_function_identity_arguments(p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.proname = 'update_invoice'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.update_invoice(%s) FROM PUBLIC, anon', fn_args);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION public.update_invoice(%s) TO authenticated', fn_args);
+  END LOOP;
+END $$;
 
 -- 3. preview_invoice
+DROP FUNCTION IF EXISTS public.preview_invoice(uuid, jsonb, numeric, text);
+
 CREATE OR REPLACE FUNCTION public.preview_invoice(
-  p_customer_id uuid,
   p_items       jsonb    DEFAULT '[]'::jsonb,
-  p_discount    numeric  DEFAULT 0,
-  p_tax_regime  text     DEFAULT 'intra_state'
+  p_tax_regime  text     DEFAULT 'intra_state',
+  p_discount    numeric  DEFAULT 0
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -2175,8 +2209,19 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.preview_invoice FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.preview_invoice TO authenticated;
+DO $$
+DECLARE
+  fn_args text;
+BEGIN
+  FOR fn_args IN
+    SELECT pg_get_function_identity_arguments(p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.proname = 'preview_invoice'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION public.preview_invoice(%s) FROM PUBLIC, anon', fn_args);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION public.preview_invoice(%s) TO authenticated', fn_args);
+  END LOOP;
+END $$;
 
 -- 4D. DB-002 & NEW-08: Customer Phone Normalization and Unique Index
 DO $$
