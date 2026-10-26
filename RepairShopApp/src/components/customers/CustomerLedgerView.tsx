@@ -362,6 +362,28 @@ export default function CustomerLedgerView({ customer }: CustomerLedgerViewProps
 
       const cleanCustomerName = customer.name.replace(/[^a-zA-Z0-9_-]/g, '_');
       const filename = data.filename || `Customer_Ledger_${cleanCustomerName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      if (Platform.OS === 'web') {
+        const binaryStr = typeof window !== 'undefined' ? window.atob(data.base64) : '';
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast({ title: 'Export Complete', message: `Downloaded ${filename}`, type: 'success' });
+        return;
+      }
+
       const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 
       await FileSystem.writeAsStringAsync(fileUri, data.base64, {

@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TextInput, Platform } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
+import { exportOrShareHtmlOnWeb } from '../../lib/invoiceService';
+
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import AppHeader from '../../components/common/AppHeader';
@@ -62,14 +65,27 @@ type StaffRateInfo = {
 const HISTORY_PAGE_SIZE = 6;
 const fmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function fmtMonth(monthStr: string) {
   if (!monthStr) return '';
-  return new Date(monthStr).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const safeStr = monthStr.length === 7 ? `${monthStr}-01` : monthStr;
+  return new Date(safeStr).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 }
 
 function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRole: string) {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const monthLabel = fmtMonth(record.month);
+  const safeName = escapeHtml(employeeName);
+  const safeRole = escapeHtml(employeeRole);
 
   const addRows = [
     `<tr><td class="desc">Fixed Monthly Salary</td><td class="amount">${fmt.format(record.monthly_salary_base || 0)}</td></tr>`,
@@ -85,7 +101,7 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
     record.advance_deducted > 0 ? `<tr><td class="desc">Advance Salary Deducted</td><td class="amount negative">-${fmt.format(record.advance_deducted)}</td></tr>` : '',
   ].filter(Boolean).join('');
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Salary Slip - ${employeeName}</title>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Salary Slip - ${safeName}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
@@ -115,14 +131,15 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
   <div class="slip-container">
     <div class="header">
       <div class="brand"><h1>RepairShop</h1><p>Service Management System</p></div>
-      <div class="title-box"><h2>Payslip</h2><p>${monthLabel}</p></div>
+      <div class="title-box"><h2>Payslip</h2><p>${escapeHtml(monthLabel)}</p></div>
     </div>
     <div class="emp-details">
-      <div><div class="d-label">Employee Name</div><div class="d-value">${employeeName}</div></div>
-      <div><div class="d-label">Role</div><div class="d-value" style="text-transform:capitalize">${employeeRole}</div></div>
-      <div><div class="d-label">Date Generated</div><div class="d-value">${today}</div></div>
-      <div><div class="d-label">Status</div><div class="d-value" style="color:${record.status === 'paid' ? '#059669' : '#d97706'};text-transform:capitalize">${record.status}</div></div>
+      <div><div class="d-label">Employee Name</div><div class="d-value">${safeName}</div></div>
+      <div><div class="d-label">Role</div><div class="d-value" style="text-transform:capitalize">${safeRole}</div></div>
+      <div><div class="d-label">Date Generated</div><div class="d-value">${escapeHtml(today)}</div></div>
+      <div><div class="d-label">Status</div><div class="d-value" style="color:${record.status === 'paid' ? '#059669' : '#d97706'};text-transform:capitalize">${escapeHtml(record.status)}</div></div>
     </div>
+
     <table><thead><tr><th>Earnings</th><th class="amount">Amount</th></tr></thead>
     <tbody>${addRows}<tr class="subtotal-row"><td>Total Gross Salary</td><td class="amount">${fmt.format(record.gross_salary)}</td></tr></tbody></table>
     <table><thead><tr><th>Deductions</th><th class="amount">Amount</th></tr></thead>
@@ -256,25 +273,47 @@ export default function SalaryScreen() {
     setDownloadingId(r.id);
     try {
       const html = generateSlipHtml(r, displayName || 'Employee', role || '');
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      const fileName = `RepairShop_Payslip_${r.month.substring(0, 7)}.pdf`;
-      // @ts-ignore
-      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-      if (permissions.granted) {
+      const baseName = `RepairShop_Payslip_${r.month.substring(0, 7)}`;
+
+      if (Platform.OS === 'web') {
+        await exportOrShareHtmlOnWeb(html, baseName);
+        showToast({ title: 'Success', message: 'Salary slip generated.', type: 'success' });
+      } else if (Platform.OS === 'android') {
+        const { uri } = await Print.printToFileAsync({ html, base64: false });
+        const fileName = `${baseName}.pdf`;
         // @ts-ignore
-        const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/pdf');
-        const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-        await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: 'base64' });
-        showToast({ title: 'Success', message: 'Your salary slip has been saved.', type: 'success' });
+        const permissions = await FileSystem.StorageAccessFramework?.requestDirectoryPermissionsAsync();
+        if (permissions?.granted) {
+          // @ts-ignore
+          const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'application/pdf');
+          const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+          await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: 'base64' });
+          showToast({ title: 'Success', message: 'Your salary slip has been saved.', type: 'success' });
+        } else {
+          showToast({ title: 'Error', message: 'Unable to save the file without folder permission.', type: 'error' });
+        }
       } else {
-        showToast({ title: 'Error', message: 'Unable to save the file without folder permission.', type: 'error' });
+        // iOS
+        const { uri } = await Print.printToFileAsync({ html, base64: false });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Salary Slip ${r.month}`,
+          });
+        } else {
+          await Print.printAsync({ html });
+        }
+        showToast({ title: 'Success', message: 'Salary slip opened.', type: 'success' });
       }
-    } catch (err) {
-      showToast({ title: 'Error', message: 'Could not download salary slip.', type: 'error' });
+    } catch (err: any) {
+      console.error('[SalaryScreen] handleDownload error:', err);
+      showToast({ title: 'Error', message: err?.message || 'Could not download salary slip.', type: 'error' });
     } finally {
       setDownloadingId(null);
     }
   };
+
 
   const handleApplyLeave = async () => {
     if (!user || !leaveDate) {
