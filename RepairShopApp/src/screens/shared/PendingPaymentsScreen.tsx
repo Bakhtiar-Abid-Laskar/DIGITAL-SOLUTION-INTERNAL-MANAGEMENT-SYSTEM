@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import * as Print from 'expo-print';
+import { printHtmlOnWeb } from '../../lib/invoiceService';
 import AppHeader from '../../components/common/AppHeader';
 import { AppPressable } from '../../components/common/AppPressable';
 import EmptyState from '../../components/common/EmptyState';
@@ -265,6 +266,16 @@ export default function PendingPaymentsScreen() {
   };
 
   const closePaymentModal = () => setActivePaymentInvoice(null);
+
+  function escapeHtml(str: string | null | undefined): string {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
   
   const printMoneyReceiptMobile = async (
     activeInvoice: { invoice: PendingInvoiceItem; customerName: string; customerContact: string }, 
@@ -273,11 +284,18 @@ export default function PendingPaymentsScreen() {
     paymentRef: string, 
     paymentNotes: string
   ) => {
+    const safeRef = escapeHtml(activeInvoice.invoice.reference);
+    const safeCustomer = escapeHtml(activeInvoice.customerName);
+    const safeContact = escapeHtml(activeInvoice.customerContact || 'N/A');
+    const safeMethod = escapeHtml(paymentMethod);
+    const safePaymentRef = paymentRef ? ` (${escapeHtml(paymentRef)})` : '';
+    const safeNotes = paymentNotes ? escapeHtml(paymentNotes) : '';
+
     const receiptHtml = `
       <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-        <title>Money Receipt - ${activeInvoice.invoice.reference}</title>
+        <title>Money Receipt - ${safeRef}</title>
         <style>
           body { font-family: 'Arial', sans-serif; padding: 20px; color: #111827; }
           .receipt-container { margin: 0 auto; padding: 10px; }
@@ -318,19 +336,19 @@ export default function PendingPaymentsScreen() {
             </div>
             <div class="detail-item">
               <div class="detail-label">Customer Name</div>
-              <div class="detail-value">${activeInvoice.customerName}</div>
+              <div class="detail-value">${safeCustomer}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">Phone</div>
-              <div class="detail-value">${activeInvoice.customerContact || 'N/A'}</div>
+              <div class="detail-value">${safeContact}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">Reference (Invoice)</div>
-              <div class="detail-value">${activeInvoice.invoice.reference}</div>
+              <div class="detail-value">${safeRef}</div>
             </div>
             <div class="detail-item">
               <div class="detail-label">Payment Mode</div>
-              <div class="detail-value">${paymentMethod} ${paymentRef ? `(${paymentRef})` : ''}</div>
+              <div class="detail-value">${safeMethod}${safePaymentRef}</div>
             </div>
           </div>
   
@@ -358,7 +376,7 @@ export default function PendingPaymentsScreen() {
             </div>
           </div>
           
-          ${paymentNotes ? `<div style="margin-top: 20px; font-size: 13px; color: #4b5563;"><strong>Notes:</strong> ${paymentNotes}</div>` : ''}
+          ${safeNotes ? `<div style="margin-top: 20px; font-size: 13px; color: #4b5563;"><strong>Notes:</strong> ${safeNotes}</div>` : ''}
   
           <div class="signature">
             <div class="sig-line">Customer Signature</div>
@@ -373,7 +391,11 @@ export default function PendingPaymentsScreen() {
       </html>
     `;
     try {
-      await Print.printAsync({ html: receiptHtml });
+      if (Platform.OS === 'web') {
+        await printHtmlOnWeb(receiptHtml);
+      } else {
+        await Print.printAsync({ html: receiptHtml });
+      }
     } catch (err) {
       console.warn("Print receipt failed", err);
     }

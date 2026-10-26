@@ -1,11 +1,97 @@
-// invoiceService.ts — Mobile App Invoice Service (SVG edition)
-// Calls the generate-invoice Edge Function which now returns SVG-based HTML.
-// The HTML is rendered via expo-print (WebKit) to produce a pixel-perfect PDF
-// matching the digitalsolution_bill_templete.svg design.
-
+import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from './supabase';
+
+/**
+ * Universal web printing utility that prints only the document HTML via an isolated iframe.
+ */
+export function printHtmlOnWeb(html: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve();
+      return;
+    }
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (!doc) {
+        document.body.removeChild(iframe);
+        window.print();
+        resolve();
+        return;
+      }
+
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.warn('[printHtmlOnWeb] print error:', e);
+        }
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch {}
+          resolve();
+        }, 1200);
+      }, 350);
+    } catch (err) {
+      console.warn('[printHtmlOnWeb] fallback to window.print:', err);
+      if (typeof window !== 'undefined') window.print();
+      resolve();
+    }
+  });
+}
+
+/**
+ * Universal web document share/export utility. Uses navigator.share when available,
+ * or opens the document in a dedicated preview tab / downloads as HTML.
+ */
+export async function exportOrShareHtmlOnWeb(html: string, filename: string, driveUrl?: string | null): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  if (driveUrl && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({
+        title: filename,
+        url: driveUrl,
+      });
+      return;
+    } catch (shareErr: any) {
+      if (shareErr.name === 'AbortError') return;
+      console.log('[exportOrShareHtmlOnWeb] navigator.share URL fallback:', shareErr);
+    }
+  }
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  const previewWindow = window.open(blobUrl, '_blank');
+  if (!previewWindow) {
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${filename}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+}
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,15 +180,21 @@ export async function printInvoice(
   onProgress?: PdfProgressCallback
 ): Promise<{ driveLink: string | null }> {
   const { html, driveLink } = await callEdgeFunction(req, onProgress);
-  onProgress?.('rendering', 85, 'Rendering high-resolution PDF...');
-  await Print.printAsync({ html, useMarkupFormatter: false });
+  onProgress?.('rendering', 85, 'Rendering document preview...');
+  
+  if (Platform.OS === 'web') {
+    await printHtmlOnWeb(html);
+  } else {
+    await Print.printAsync({ html, useMarkupFormatter: false });
+  }
+
   onProgress?.('complete', 100, 'Print preview ready');
   return { driveLink };
 }
 
 /**
  * Saves the invoice as a PDF file and opens the native share sheet
- * (WhatsApp, Drive, Email, etc.).
+ * (WhatsApp, Drive, Email, etc.) or web export.
  */
 export async function shareInvoice(
   req: MobileInvoiceRequest,
@@ -111,14 +203,21 @@ export async function shareInvoice(
 ): Promise<{ driveLink: string | null }> {
   const { html, driveLink } = await callEdgeFunction(req, onProgress);
 
-  onProgress?.('rendering', 85, 'Rendering PDF file...');
-  const { uri } = await Print.printToFileAsync({ html });
-
   const docLabel = 'docType' in req
     ? `Invoice-${req.docType}`
     : 'Invoice';
+  const finalFilename = filename || docLabel;
 
-  const destUri = uri.replace(/[^/]+$/, `${filename || docLabel}.pdf`);
+  if (Platform.OS === 'web') {
+    onProgress?.('rendering', 85, 'Preparing document...');
+    await exportOrShareHtmlOnWeb(html, finalFilename, driveLink);
+    onProgress?.('complete', 100, 'Document ready');
+    return { driveLink };
+  }
+
+  onProgress?.('rendering', 85, 'Rendering PDF file...');
+  const { uri } = await Print.printToFileAsync({ html });
+  const destUri = uri.replace(/[^/]+$/, `${finalFilename}.pdf`);
 
   onProgress?.('complete', 95, 'Opening share sheet...');
   const canShare = await Sharing.isAvailableAsync();
@@ -134,3 +233,4 @@ export async function shareInvoice(
   onProgress?.('complete', 100, 'Document shared');
   return { driveLink };
 }
+

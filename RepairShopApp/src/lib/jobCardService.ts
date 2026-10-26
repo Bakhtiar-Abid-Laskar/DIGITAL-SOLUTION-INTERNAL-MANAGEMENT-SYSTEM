@@ -1,11 +1,10 @@
-// jobCardService.ts — Mobile App Job Card Service
-// Uses expo-print to produce an operational Job Card document
-// with native AirPrint / Android Print Spooler and Sharing support.
-
+import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from './supabase';
 import { generateJobCardHtml, JobCardData, JobCardMaterialItem } from '@repairshop/shared';
+import { printHtmlOnWeb, exportOrShareHtmlOnWeb } from './invoiceService';
+
 
 export type JobCardProgressCallback = (percent: number, message: string) => void;
 
@@ -208,22 +207,33 @@ export async function printJobCard(options: MobilePrintJobCardOptions): Promise<
   const html = generateJobCardHtml(jobCardData);
 
   options.onProgress?.(90, 'Rendering document preview...');
-  await Print.printAsync({ html, useMarkupFormatter: false });
+  if (Platform.OS === 'web') {
+    await printHtmlOnWeb(html);
+  } else {
+    await Print.printAsync({ html, useMarkupFormatter: false });
+  }
   options.onProgress?.(100, 'Print preview ready');
 }
 
 /**
- * Exports the Job Card to PDF and opens the system Share Sheet.
+ * Exports the Job Card to PDF and opens the system Share Sheet or web export.
  */
 export async function shareJobCard(options: MobilePrintJobCardOptions): Promise<void> {
   const jobCardData = await prepareJobCardData(options);
   const html = generateJobCardHtml(jobCardData);
+  const safeCode = (jobCardData.jobCode || 'JobCard').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `JobCard-${safeCode}`;
+
+  if (Platform.OS === 'web') {
+    options.onProgress?.(85, 'Preparing document...');
+    await exportOrShareHtmlOnWeb(html, filename);
+    options.onProgress?.(100, 'Document ready');
+    return;
+  }
 
   options.onProgress?.(85, 'Rendering PDF file...');
   const { uri } = await Print.printToFileAsync({ html });
-
-  const safeCode = (jobCardData.jobCode || 'JobCard').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const destUri = uri.replace(/[^/]+$/, `JobCard-${safeCode}.pdf`);
+  const destUri = uri.replace(/[^/]+$/, `${filename}.pdf`);
 
   options.onProgress?.(95, 'Opening share sheet...');
   const canShare = await Sharing.isAvailableAsync();
@@ -238,3 +248,4 @@ export async function shareJobCard(options: MobilePrintJobCardOptions): Promise<
 
   options.onProgress?.(100, 'Document shared');
 }
+
