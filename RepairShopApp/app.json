@@ -36,7 +36,15 @@
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Digital Solution - Service & Repair",
+      "shortName": "Digital Solution",
+      "description": "Digital Solution Service Management System",
+      "themeColor": "#2563EB",
+      "backgroundColor": "#0B111E",
+      "display": "standalone",
+      "orientation": "portrait",
+      "lang": "en-IN"
     },
     "experiments": {
       "tsconfigPaths": true
