@@ -2483,9 +2483,6 @@ CREATE INDEX IF NOT EXISTS idx_inventory_transactions_inventory_id
 CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice_id
   ON public.invoice_payments (invoice_id);
 
-CREATE INDEX IF NOT EXISTS idx_payments_invoice_id
-  ON public.payments (invoice_id);
-
 CREATE INDEX IF NOT EXISTS idx_attendance_user_date
   ON public.attendance (user_id, date DESC);
 
