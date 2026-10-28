@@ -23,7 +23,7 @@ import Button from '../../components/common/Button';
 import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { useToast } from '../../context/ToastContext';
-import { openWhatsAppChat } from '../../utils/authLink';
+import { openWhatsAppChat } from '../../utils/openWhatsAppChat';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
 
 import ItemizedBillTable, { ItemizedLineItem } from '../../components/billing/ItemizedBillTable';

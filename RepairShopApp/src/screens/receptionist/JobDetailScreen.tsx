@@ -7,7 +7,7 @@ import { Printer, MessageCircle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Job, JobMaterial } from '../../types/job';
 import { createWhatsAppUrl } from '@repairshop/shared';
-import { openWhatsAppChat } from '../../utils/authLink';
+import { openWhatsAppChat } from '../../utils/openWhatsAppChat';
 
 import { mapErrorToUserMessage } from '../../utils/errorMessages';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';

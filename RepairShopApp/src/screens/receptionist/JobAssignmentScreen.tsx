@@ -22,7 +22,7 @@ import { colors, radius, spacing, shadow, typography } from '../../tokens';
 import { useToast } from '../../context/ToastContext';
 import { usePdfGenerator } from '../../context/PdfProgressContext';
 import { createWhatsAppUrl } from '@repairshop/shared';
-import { openWhatsAppChat } from '../../utils/authLink';
+import { openWhatsAppChat } from '../../utils/openWhatsAppChat';
 import { printJobCard } from '../../lib/jobCardService';
 
 export default function JobAssignmentScreen() {

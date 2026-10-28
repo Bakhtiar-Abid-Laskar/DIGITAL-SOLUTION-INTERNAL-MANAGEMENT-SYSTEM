@@ -150,7 +150,7 @@ export default function ReportsPage() {
     }
   }, []);
 
-  const exportPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const exportPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopExportPolling = useCallback(() => {
     if (exportPollIntervalRef.current) {
