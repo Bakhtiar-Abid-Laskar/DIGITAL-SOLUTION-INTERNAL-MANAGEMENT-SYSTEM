@@ -19,7 +19,7 @@ import {
   reverseCalcBillFromGrandTotal,
   LineItem,
 } from '@repairshop/shared';
-import { openWhatsAppChat } from '../../utils/authLink';
+import { openWhatsAppChat } from '../../utils/openWhatsAppChat';
 import { AppPressable } from '../../components/common/AppPressable';
 import { ArrowLeft, ArrowRight, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react-native';
 

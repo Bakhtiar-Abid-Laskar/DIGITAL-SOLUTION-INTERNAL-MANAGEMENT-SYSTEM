@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, typography, shadow } from '../../tokens';
 import { formatCurrency, formatDate, createWhatsAppUrl } from '@repairshop/shared';
-import { openWhatsAppChat } from '../../utils/authLink';
+import { openWhatsAppChat } from '../../utils/openWhatsAppChat';
 import ErrorState from '../../components/common/ErrorState';
 import PaymentRecordingBox from '../../components/billing/PaymentRecordingBox';
 import ItemizedBillTable from '../../components/billing/ItemizedBillTable';

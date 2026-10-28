@@ -8,4 +8,8 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
+  modulePathIgnorePatterns: [
+    "<rootDir>/../RepairShopApp/src/lib/shared",
+    "<rootDir>/RepairShopApp/src/lib/shared",
+  ],
 };

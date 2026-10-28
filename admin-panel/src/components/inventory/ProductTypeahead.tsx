@@ -52,7 +52,7 @@ export function ProductTypeahead({
   const [loading, setLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchResults = useCallback(async (query: string) => {
     if (!query || query.trim().length < 2) {
