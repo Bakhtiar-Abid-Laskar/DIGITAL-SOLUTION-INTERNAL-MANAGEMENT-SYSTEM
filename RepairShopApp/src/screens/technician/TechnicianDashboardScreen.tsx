@@ -25,7 +25,9 @@ import {
   MessageCircle,
   Mail,
   BarChart3,
+  Banknote,
 } from 'lucide-react-native';
+import { formatCurrency } from '@repairshop/shared';
 
 import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
@@ -54,6 +56,7 @@ export default function TechnicianDashboardScreen() {
     completedToday: 0,
     urgentPending: 0,
   });
+  const [pendingSalary, setPendingSalary] = useState<number | null>(null);
 
   const handleLogout = () => {
     setLogoutVisible(true);
@@ -164,6 +167,15 @@ export default function TechnicianDashboardScreen() {
       if (activeJobsRes.data) {
         setActiveJobs(activeJobsRes.data);
       }
+
+      try {
+        const { data: salData } = await supabase.rpc('get_technician_pending_salary');
+        if (salData?.estimated_net_salary !== undefined) {
+          setPendingSalary(Number(salData.estimated_net_salary));
+        }
+      } catch (salErr) {
+        console.warn('Error fetching technician pending salary:', salErr);
+      }
     } catch (error) {
       console.error('Error fetching tech dashboard:', error);
     } finally {
@@ -221,6 +233,7 @@ export default function TechnicianDashboardScreen() {
   ];
 
   const stats: StatCard[] = [
+    { id: 'pending_salary', label: 'Pending Salary (Est.)', value: pendingSalary !== null ? formatCurrency(pendingSalary) : '₹0.00', type: 'completed', icon: Banknote, onPress: () => navigation.navigate('Salary') },
     { id: 'assigned', label: 'Total Assigned', value: loading ? '-' : statsData.totalAssigned, type: 'total', icon: ClipboardList, onPress: () => navigateToJobs('All') },
     { id: 'in_progress', label: 'In Progress', value: loading ? '-' : statsData.inProgress, type: 'progress', icon: Activity, onPress: () => navigateToJobs('In Progress') },
     { id: 'completed', label: 'Completed Today', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle2, onPress: () => navigateToJobs('Completed') },

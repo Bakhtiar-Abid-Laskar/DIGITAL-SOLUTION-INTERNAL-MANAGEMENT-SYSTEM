@@ -5,6 +5,9 @@
     "admin-panel",
     "packages/*"
   ],
+  "scripts": {
+    "build:apk": "node scripts/build_apk.js"
+  },
   "devDependencies": {
     "supabase": "^2.109.1"
   },

@@ -149,10 +149,13 @@ serve(async (req: Request) => {
               // Non-critical, continue without total
             }
 
+            const feedbackUrl = `https://digitalsolution.app/feedback?job=${newJob.id}`;
+
             const readyMsg = `Hello ${customerName},\n\n` +
               `🎉 Great news! Your device for Job *${newJob.job_code}* has been successfully repaired and is *READY FOR PICKUP*.\n` +
               totalNotice +
-              `\nPlease visit *Digital Solution* during shop hours with your intake receipt to collect your device.\n\n` +
+              `\n⭐ *Customer Feedback:* ${feedbackUrl}\n\n` +
+              `Please visit *Digital Solution* during shop hours with your intake receipt to collect your device.\n\n` +
               `Thank you for trusting Digital Solution!`;
 
             await sendCustomerWhatsApp(supabase, {

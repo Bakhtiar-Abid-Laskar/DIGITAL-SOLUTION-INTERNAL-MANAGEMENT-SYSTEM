@@ -110,7 +110,6 @@ export default function JobAssignmentScreen() {
         remarks:          formState.remarks?.trim() || null,
         job_type:         formState.job_type || 'Inhouse',
         job_type_ref_id:  formState.job_type_ref_id || null,
-        snap_technician_incentive:   formState.snap_technician_incentive || 0,
         priority:         formState.priority || 'Normal',
         status:           'Received',
         receptionist_id:  user?.id,
@@ -174,7 +173,16 @@ export default function JobAssignmentScreen() {
 
   const handleWhatsAppInvoice = async () => {
     if (!createdJob) return;
-    const msg = `Hello ${createdJob.customer_name.trim()},\n\nYour device has been registered for repair successfully.\n\nJob ID: ${createdJob.job_code}\nDevice: ${createdJob.device_type}\nIssue: ${createdJob.reported_issue}\n\nThank you for choosing Digital Solution.`;
+    const itemsRec = createdJob.items_received || createdJob.remarks || 'Standard device only';
+    const addressStr = createdJob.customer_address ? `\n📍 Address: ${createdJob.customer_address}` : '';
+    const msg = `Hello ${createdJob.customer_name.trim()},\n\n` +
+      `Your service job has been registered successfully with Digital Solution.\n\n` +
+      `📌 *Job ID:* ${createdJob.job_code}\n` +
+      `📱 *Device:* ${createdJob.device_type_id || 'Device'}\n` +
+      `⚠️ *Reported Issue:* ${createdJob.reported_issue}\n` +
+      `📦 *Items Received:* ${itemsRec}` +
+      addressStr +
+      `\n\nThank you for choosing Digital Solution!`;
     const res = await openWhatsAppChat(createdJob.customer_contact, msg);
     if (!res.success) {
       showToast({ title: 'WhatsApp Error', message: res.error || 'Could not open WhatsApp.', type: 'error' });

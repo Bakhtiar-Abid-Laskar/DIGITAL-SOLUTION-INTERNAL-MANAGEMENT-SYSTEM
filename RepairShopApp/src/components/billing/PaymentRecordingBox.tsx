@@ -117,8 +117,10 @@ export default function PaymentRecordingBox({
     }
   };
 
-  const isFullPaid = derivedStatus === 'paid' && grandTotal > 0;
-  const isInvalid = Boolean(validationError) || numAmount <= 0 || numAmount > balanceDue;
+  const isFullPaid = (derivedStatus === 'paid' || status === 'paid' || balanceDue <= 0) && grandTotal > 0;
+  const isInputFilled = amountInput.trim().length > 0;
+  const hasInputError = Boolean(validationError) || (isInputFilled && (numAmount <= 0 || numAmount > balanceDue));
+  const canSubmit = isInputFilled && numAmount > 0 && numAmount <= balanceDue && !validationError;
 
   const badgeStyles =
     derivedStatus === 'paid'
@@ -148,96 +150,110 @@ export default function PaymentRecordingBox({
         <Text style={styles.totalDisplayValue}>{formatCurrency(grandTotal)}</Text>
       </View>
 
-      {/* Editable Amount Input with Header Shortcut */}
-      <View style={styles.fieldGroup}>
-        <View style={styles.fieldLabelRow}>
-          <Text style={styles.fieldLabel}>Installment Amount (₹)</Text>
-          {balanceDue > 0 && (
-            <AppPressable onPress={handleSetFullAmount} disabled={disabled || loading}>
-              <Text style={styles.payFullLink}>Pay Full ({formatCurrency(balanceDue)})</Text>
-            </AppPressable>
-          )}
-        </View>
-        <TextInput
-          style={[styles.input, isInvalid && styles.inputError]}
-          keyboardType="numeric"
-          value={amountInput}
-          onChangeText={handleAmountChange}
-          editable={!disabled && !loading}
-          placeholder="0.00"
-          placeholderTextColor={colors.textMuted}
-        />
-        {validationError && (
-          <View style={styles.errorRow}>
-            <AlertCircle size={14} color={colors.error} />
-            <Text style={styles.errorText}>{validationError}</Text>
+      {isFullPaid ? (
+        <View style={styles.paidSuccessCard}>
+          <CheckCircle2 size={24} color="#15803D" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.paidSuccessTitle}>Invoice Fully Paid</Text>
+            <Text style={styles.paidSuccessSubtitle}>
+              Total of {formatCurrency(grandTotal)} received via {paymentMethod || method}.
+            </Text>
           </View>
-        )}
-      </View>
-
-      {/* Payment Method Selector */}
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Payment Method</Text>
-        <View style={styles.methodRow}>
-          {PAYMENT_METHODS.map((m) => {
-            const isSelected = method.toLowerCase() === m.toLowerCase();
-            return (
-              <AppPressable
-                key={m}
-                onPress={() => setMethod(m)}
-                disabled={disabled || loading}
-                style={[styles.methodChip, isSelected && styles.methodChipSelected]}
-              >
-                <Text style={[styles.methodChipText, isSelected && styles.methodChipTextSelected]}>
-                  {m}
-                </Text>
-              </AppPressable>
-            );
-          })}
         </View>
-      </View>
+      ) : (
+        <>
+          {/* Editable Amount Input with Header Shortcut */}
+          <View style={styles.fieldGroup}>
+            <View style={styles.fieldLabelRow}>
+              <Text style={styles.fieldLabel}>Installment Amount (₹)</Text>
+              {balanceDue > 0 && (
+                <AppPressable onPress={handleSetFullAmount} disabled={disabled || loading}>
+                  <Text style={styles.payFullLink}>Pay Full ({formatCurrency(balanceDue)})</Text>
+                </AppPressable>
+              )}
+            </View>
+            <TextInput
+              style={[styles.input, hasInputError && styles.inputError]}
+              keyboardType="numeric"
+              value={amountInput}
+              onChangeText={handleAmountChange}
+              editable={!disabled && !loading}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+            />
+            {validationError && (
+              <View style={styles.errorRow}>
+                <AlertCircle size={14} color={colors.error} />
+                <Text style={styles.errorText}>{validationError}</Text>
+              </View>
+            )}
+          </View>
 
-      {/* Reference Number (UPI ID, Cheque No., etc.) */}
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Reference No. (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={referenceNumber}
-          onChangeText={setReferenceNumber}
-          editable={!disabled && !loading}
-          placeholder="UPI ref, cheque no., etc."
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-        />
-      </View>
+          {/* Payment Method Selector */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Payment Method</Text>
+            <View style={styles.methodRow}>
+              {PAYMENT_METHODS.map((m) => {
+                const isSelected = method.toLowerCase() === m.toLowerCase();
+                return (
+                  <AppPressable
+                    key={m}
+                    onPress={() => setMethod(m)}
+                    disabled={disabled || loading}
+                    style={[styles.methodChip, isSelected && styles.methodChipSelected]}
+                  >
+                    <Text style={[styles.methodChipText, isSelected && styles.methodChipTextSelected]}>
+                      {m}
+                    </Text>
+                  </AppPressable>
+                );
+              })}
+            </View>
+          </View>
 
-      {/* Balance Remaining Display */}
-      <View style={styles.balanceRow}>
-        <Text style={styles.balanceLabel}>Balance Remaining:</Text>
-        <Text
-          style={[
-            styles.balanceValue,
-            { color: balanceDue > 0 ? colors.error : colors.success },
-          ]}
-        >
-          {formatCurrency(balanceDue)}
-        </Text>
-      </View>
+          {/* Reference Number (UPI ID, Cheque No., etc.) */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Reference No. (optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={referenceNumber}
+              onChangeText={setReferenceNumber}
+              editable={!disabled && !loading}
+              placeholder="UPI ref, cheque no., etc."
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+            />
+          </View>
 
-      {/* Action Button */}
-      <Button
-        label={isFullPaid ? 'Mark as Paid' : 'Record Payment'}
-        onPress={handleRecordPayment}
-        loading={loading}
-        disabled={disabled || loading || isInvalid || !invoiceId}
-        variant="primary"
-        style={styles.actionBtn}
-      />
+          {/* Balance Remaining Display */}
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceLabel}>Balance Remaining:</Text>
+            <Text
+              style={[
+                styles.balanceValue,
+                { color: balanceDue > 0 ? colors.error : colors.success },
+              ]}
+            >
+              {formatCurrency(balanceDue)}
+            </Text>
+          </View>
 
-      {!invoiceId && (
-        <Text style={styles.helperText}>
-          Save billing statement first to enable payment recording.
-        </Text>
+          {/* Action Button */}
+          <Button
+            label={numAmount >= balanceDue ? 'Pay Full' : 'Record Installment'}
+            onPress={handleRecordPayment}
+            loading={loading}
+            disabled={disabled || loading || !canSubmit || !invoiceId}
+            variant="primary"
+            style={styles.actionBtn}
+          />
+
+          {!invoiceId && (
+            <Text style={styles.helperText}>
+              Save billing statement first to enable payment recording.
+            </Text>
+          )}
+        </>
       )}
     </View>
   );
@@ -402,5 +418,26 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.xs,
+  },
+  paidSuccessCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  paidSuccessTitle: {
+    ...typography.bodyBold,
+    color: '#15803D',
+    fontSize: 15,
+  },
+  paidSuccessSubtitle: {
+    ...typography.caption,
+    color: '#166534',
+    marginTop: 2,
   },
 });

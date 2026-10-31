@@ -262,53 +262,37 @@ export default function BillingScreen() {
           .single();
         newInvoice = fetchInv;
       } else {
-        // Update existing invoice fields
-        const { error: updateError } = await supabase.from('invoices').update({
-          customer_name: job?.customer_name || 'Walk-in',
-          customer_contact: job?.customer_contact || null,
-          customer_email: job?.customer_email || null,
-          customer_gstin: job?.customer_gstin || null,
-          subtotal: subtotal,
-          total_tax: totalTax,
-          discount: 0,
-          grand_total: grandTotal,
-        }).eq('id', invoice.id);
-        if (updateError) throw updateError;
-
-        // Synchronize invoice_items with snapshotted tax_percent and hsn_code
-        await supabase.from('invoice_items').delete().eq('invoice_id', invoice.id);
-        const newInvoiceItems = itemsToBill.map(it => {
-          const taxable = it.selling_amount;
-          const taxPct = it.tax_percent || 18;
-          const cgstRate = roundMoney(taxPct / 2);
-          const sgstRate = roundMoney(taxPct / 2);
-          const cgstAmt = roundMoney(taxable * cgstRate / 100);
-          const sgstAmt = roundMoney(taxable * sgstRate / 100);
-          return {
-            invoice_id: invoice.id,
-            product_id: it.product_id,
-            item_name: it.item_name,
-            quantity: it.quantity,
-            selling_rate: it.selling_rate,
-            hsn_code: it.hsn_code,
-            tax_percent: taxPct,
-            cgst_rate: cgstRate,
-            sgst_rate: sgstRate,
-            igst_rate: 0,
-            taxable_amount: taxable,
-            cgst_amount: cgstAmt,
-            sgst_amount: sgstAmt,
-            igst_amount: 0,
-            line_total: taxable + cgstAmt + sgstAmt,
-            discount_amount: 0,
-            serial_number: it.serial_number,
-          };
-        });
-
-        if (newInvoiceItems.length > 0) {
-          const { error: itemsErr } = await supabase.from('invoice_items').insert(newInvoiceItems);
-          if (itemsErr) throw itemsErr;
+        // Resolve customer_id for the update call (same logic as create path)
+        let editCustomerId: string | null = invoice.customer_id || null;
+        if (!editCustomerId && job?.customer_name) {
+          const { data: custData } = await supabase.rpc('find_or_create_customer', {
+            p_customer_id: null,
+            p_name: job.customer_name,
+            p_phone: job.customer_contact || null,
+            p_email: job.customer_email || null,
+            p_gstin: job.customer_gstin || null,
+            p_address: null,
+            p_created_via: 'job',
+            p_user_id: null,
+          });
+          if (custData?.id) editCustomerId = custData.id;
         }
+        if (!editCustomerId) throw new Error('Could not resolve customer. Ensure a customer record exists before saving billing.');
+
+        // Update existing invoice atomically via update_invoice RPC (avoids client-side generated column mutation)
+        const { error: updateError } = await supabase.rpc('update_invoice', {
+          p_invoice_id: invoice.id,
+          p_customer_name: job?.customer_name || 'Walk-in',
+          p_customer_id: editCustomerId,
+          p_customer_contact: job?.customer_contact || null,
+          p_customer_email: job?.customer_email || null,
+          p_customer_gstin: job?.customer_gstin || null,
+          p_items: itemsToBill,
+          p_discount: 0,
+          p_payment_method: invoice?.payment_method || 'Cash',
+          p_status: invoice?.status || 'draft',
+        });
+        if (updateError) throw updateError;
 
         const { data: fetchInv } = await supabase
           .from('invoices')

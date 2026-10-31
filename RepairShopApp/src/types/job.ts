@@ -1,4 +1,4 @@
-export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Completed' | 'Delivered' | 'Cancelled';
+export type JobStatus = 'Received' | 'In Progress' | 'Waiting for Materials' | 'Delay for Customer Response' | 'Other' | 'Completed' | 'Delivered' | 'Cancelled';
 
 export type JobPriority = 'Normal' | 'High' | 'Urgent';
 export type JobType = 'Inhouse' | 'Onsite';
@@ -17,6 +17,10 @@ export interface Job {
   device_type_id: DeviceType; // references ui_device_types.id (text)
   reported_issue: string;
   remarks: string | null;
+  items_received?: string | null;
+  completion_id?: string | null;
+  completion_id_verified_at?: string | null;
+  other_status_reason?: string | null;
   work_notes: string | null;
   job_type: JobType; // Inhouse | Onsite
   job_type_ref_id?: string | null;
@@ -62,6 +66,7 @@ export interface NewJobFormValues {
 
   reported_issue: string;
   remarks: string;
+  items_received?: string;
   job_type: JobType; // Inhouse | Onsite
   job_type_ref_id?: string;
   job_type_title?: string;

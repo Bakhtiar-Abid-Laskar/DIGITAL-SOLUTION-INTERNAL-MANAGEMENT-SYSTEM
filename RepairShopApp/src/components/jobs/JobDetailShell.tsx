@@ -96,7 +96,7 @@ export default function JobDetailShell({
           </View>
           {job.remarks && (
             <>
-              <Text style={styles.subLabel}>Remarks</Text>
+              <Text style={styles.subLabel}>Items Received</Text>
               <View style={styles.box}>
                 <Text style={styles.boxText}>{job.remarks}</Text>
               </View>

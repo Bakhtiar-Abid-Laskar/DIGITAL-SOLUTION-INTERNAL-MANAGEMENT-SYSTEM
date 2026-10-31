@@ -25,7 +25,13 @@ import { formatCurrency } from '@repairshop/shared';
 import { Plus, ChevronDown, Package, Tag, CheckCircle2, AlertTriangle, Wrench } from 'lucide-react-native';
 import { mapErrorToUserMessage } from '../../utils/errorMessages';
 
-const ALL_STATUS_OPTIONS: JobStatus[] = ['In Progress', 'Waiting for Materials', 'Completed'];
+const ALL_STATUS_OPTIONS: JobStatus[] = [
+  'In Progress',
+  'Waiting for Materials',
+  'Delay for Customer Response',
+  'Other',
+  'Completed',
+];
 
 interface CatalogItem {
   id: string;
@@ -65,6 +71,8 @@ export default function UpdateWorkScreen() {
       arrivalRequired: false,
       completionSelfieRequired: false,
       visitData: null as any,
+      otherReasonModalVisible: false,
+      otherReasonText: '',
     }
   );
 
@@ -90,6 +98,8 @@ export default function UpdateWorkScreen() {
     selectedJobType,
     arrivalRequired,
     completionSelfieRequired,
+    otherReasonModalVisible,
+    otherReasonText,
   } = state;
 
   const fetchCatalog = useCallback(async () => {
@@ -256,6 +266,10 @@ export default function UpdateWorkScreen() {
 
   const deleteMaterial = async () => {
     if (!materialToDelete) return;
+    if (role !== 'admin') {
+      showToast({ title: 'Action Prohibited', message: 'Materials cannot be deleted once added. Only an administrator may reverse materials.', type: 'error' });
+      return;
+    }
     setState({ deleteConfirmVisible: false });
     try {
       const { error } = await supabase.from('job_materials').delete().eq('id', materialToDelete);
@@ -344,7 +358,7 @@ export default function UpdateWorkScreen() {
           };
         });
 
-        // Call atomic completion RPC
+        // Call atomic completion RPC (reconciles materials AND marks job Completed atomically)
         const { error: rpcError } = await supabase.rpc('complete_job_materials', {
           p_job_id: jobId,
           p_materials: materialPayload,
@@ -390,7 +404,13 @@ export default function UpdateWorkScreen() {
       });
       return;
     }
+    if (selectedStatus === 'Other' && !otherReasonText.trim() && !job.other_status_reason) {
+      setState({ otherReasonModalVisible: true });
+      return;
+    }
+
     setState({ statusSelectorVisible: false });
+
     if (selectedStatus === 'Completed' && job.status !== 'Completed') {
       const unconfirmed = materials.filter((m: any) => m.checkout_status === 'checked_out');
       if (unconfirmed.length > 0) {
@@ -527,7 +547,7 @@ export default function UpdateWorkScreen() {
               subMessage={!isCompleted ? 'Tap Add Item above to log parts or materials' : undefined} compact />
           ) : (
             <>
-              <MaterialList materials={materials} onDelete={confirmDeleteMaterial} canEdit={!isCompleted} hidePricing />
+              <MaterialList materials={materials} onDelete={role === 'admin' ? confirmDeleteMaterial : undefined} canEdit={!isCompleted} hidePricing />
             </>
           )}
         </View>
@@ -613,6 +633,51 @@ export default function UpdateWorkScreen() {
         onCancel={() => setState({ confirmingMaterialsVisible: false })}
         onConfirm={finalizeUpdate}
       />
+
+      {/* R-18: Other Status Reason Modal */}
+      <BottomSheet visible={otherReasonModalVisible} onClose={() => setState({ otherReasonModalVisible: false })}>
+        <Text style={{ ...typography.h2, marginBottom: spacing.xs }}>Delay / Other Reason</Text>
+        <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.md }}>
+          Please describe why this job is on hold or delayed:
+        </Text>
+        <TextInput
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.md,
+            padding: spacing.md,
+            fontSize: 14,
+            minHeight: 80,
+            textAlignVertical: 'top',
+            marginBottom: spacing.lg,
+          }}
+          placeholder="Enter reason for delay..."
+          placeholderTextColor={colors.textMuted}
+          value={otherReasonText}
+          onChangeText={(val) => setState({ otherReasonText: val })}
+          multiline
+        />
+        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Button
+            label="Cancel"
+            variant="secondary"
+            onPress={() => setState({ otherReasonModalVisible: false })}
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="Save Reason"
+            onPress={async () => {
+              if (!otherReasonText.trim()) return;
+              setState({ otherReasonModalVisible: false });
+              await supabase.from('jobs').update({ other_status_reason: otherReasonText.trim() }).eq('id', jobId);
+              await finalizeUpdate();
+            }}
+            disabled={!otherReasonText.trim()}
+            style={{ flex: 1.5 }}
+          />
+        </View>
+      </BottomSheet>
     </KeyboardAvoidingView>
   );
 }

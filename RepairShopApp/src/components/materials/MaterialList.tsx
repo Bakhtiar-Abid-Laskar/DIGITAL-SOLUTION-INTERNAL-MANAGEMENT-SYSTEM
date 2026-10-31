@@ -8,7 +8,7 @@ import { colors, radius, spacing, typography } from '../../tokens';
 
 interface MaterialListProps {
   materials: JobMaterial[];
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
   canEdit: boolean;
   hidePricing?: boolean;
 }
@@ -36,7 +36,7 @@ export default function MaterialList({ materials, onDelete, canEdit, hidePricing
                 </View>
               )}
             </View>
-            {canEdit && (
+            {canEdit && onDelete && (
               <AppPressable style={styles.deleteBtn} onPress={() => onDelete(mat.id)} accessibilityRole="button" accessibilityLabel="Delete material">
                 <Trash2 size={20} color={colors.error} />
               </AppPressable>

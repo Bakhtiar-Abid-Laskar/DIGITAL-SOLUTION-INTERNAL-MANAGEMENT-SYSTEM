@@ -4,6 +4,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserRole, UserRow, fetchUserRow } from '../lib/auth';
 import { parseAuthUrl } from '../utils/authLink';
+import { unregisterCurrentDeviceToken } from '../hooks/usePushNotifications';
 
 interface AuthContextProps {
   user: User | null;
@@ -193,6 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      await unregisterCurrentDeviceToken().catch(() => {});
       await supabase.auth.signOut();
     } catch (err) {
       console.error('Error signing out from Supabase:', err);

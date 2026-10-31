@@ -29,7 +29,6 @@ type JobTypeCatalogItem = {
   id: string;
   title: string;
   customer_charge_amount: number;
-  technician_incentive: number;
 };
 
 export default function CustomerIntakeScreen() {
@@ -56,7 +55,6 @@ export default function CustomerIntakeScreen() {
     job_type_ref_id: '',
     job_type_title: '',
     customer_charge_amount: 0,
-    snap_technician_incentive: 0,
     priority: 'Normal',
     technician_id: '',
   });
@@ -67,16 +65,29 @@ export default function CustomerIntakeScreen() {
   const fetchCatalog = React.useCallback(async () => {
     setCatalogLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('job_types')
-        .select('id, title, customer_charge_amount, technician_incentive')
-        .eq('is_active', true)
+      let catalogRows = null;
+      const { data: viewData, error: viewError } = await supabase
+        .from('job_types_staff_catalog')
+        .select('id, title, customer_charge_amount')
         .order('title', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching job types catalog:', error.message);
-      } else if (data) {
-        setCatalogItems(data as JobTypeCatalogItem[]);
+      if (!viewError && viewData) {
+        catalogRows = viewData;
+      } else {
+        const { data: tblData, error: tblError } = await supabase
+          .from('job_types')
+          .select('id, title, customer_charge_amount')
+          .eq('is_active', true)
+          .order('title', { ascending: true });
+        if (tblError) {
+          console.error('Error fetching job types catalog:', tblError.message);
+        } else {
+          catalogRows = tblData;
+        }
+      }
+
+      if (catalogRows) {
+        setCatalogItems(catalogRows as JobTypeCatalogItem[]);
       }
 
       // Load device types from lookup table; store id as value (FK reference)
@@ -116,7 +127,6 @@ export default function CustomerIntakeScreen() {
         job_type_ref_id: selected.id,
         job_type_title: selected.title,
         customer_charge_amount: Number(selected.customer_charge_amount || 0),
-        snap_technician_incentive: Number(selected.technician_incentive || 0),
       }));
     } else {
       setForm(prev => ({
@@ -124,7 +134,6 @@ export default function CustomerIntakeScreen() {
         job_type_ref_id: '',
         job_type_title: '',
         customer_charge_amount: 0,
-        snap_technician_incentive: 0,
       }));
     }
   };
@@ -239,10 +248,15 @@ export default function CustomerIntakeScreen() {
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <ScreenScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
+        <ScreenScrollView 
+          ref={scrollViewRef} 
+          contentContainerStyle={styles.scrollContent}
+          extraBottomPadding={140}
+          keyboardDismissMode="on-drag"
+        >
           <View style={styles.sectionHeaderBg}>
             <SectionLabel title="CUSTOMER DETAILS" />
           </View>
@@ -293,7 +307,7 @@ export default function CustomerIntakeScreen() {
             {form.job_type_title ? (
               <View style={styles.catalogInfoBadge}>
                 <Text style={styles.catalogInfoText}>
-                  Starting Base Charge: ₹{form.customer_charge_amount} | Tech Incentive: ₹{form.snap_technician_incentive}
+                  Starting Base Charge: ₹{form.customer_charge_amount}
                 </Text>
               </View>
             ) : null}
@@ -319,7 +333,7 @@ export default function CustomerIntakeScreen() {
             />
 
             {renderField('reported_issue', 'Reported Issue *', null, { multiline: true })}
-            {renderField('remarks',        'Remarks (optional)', null, { multiline: true })}
+            {renderField('remarks',        'Items received (optional)', null, { multiline: true, placeholder: 'e.g. Laptop charger, bag, power adapter...' })}
           </View>
 
           <View style={styles.sectionHeaderBg}>

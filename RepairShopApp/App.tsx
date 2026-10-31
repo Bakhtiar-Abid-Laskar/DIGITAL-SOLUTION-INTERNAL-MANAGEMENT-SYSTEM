@@ -46,15 +46,15 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 const queryClient = new QueryClient();
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
   });
 
-  // Keep splash screen visible until fonts are ready — avoids FOUT
-  if (!fontsLoaded) return null;
+  // Render app once fonts are ready or if font loading had an error (fall back to system fonts)
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

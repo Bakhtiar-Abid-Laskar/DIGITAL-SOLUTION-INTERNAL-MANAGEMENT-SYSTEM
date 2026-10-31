@@ -36,6 +36,7 @@ export interface JobCardData {
   serialNumber?: string | null;
   reportedIssue: string;
   remarks?: string | null;
+  itemsReceived?: string | null;
   workNotes?: string | null;
 
   materials?: JobCardMaterialItem[];
@@ -492,10 +493,10 @@ export function generateJobCardHtml(data: JobCardData): string {
         <div class="jc-issue-box">${escapeHtml(data.reportedIssue || 'None reported.')}</div>
       </div>
 
-      ${data.remarks ? `
+      ${(data.itemsReceived || data.remarks) ? `
       <div style="margin-top: 8px;">
-        <span style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Physical Condition & Accessories Received:</span>
-        <div class="jc-remarks-box">${escapeHtml(data.remarks)}</div>
+        <span style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Items Received & Physical Condition:</span>
+        <div class="jc-remarks-box">${escapeHtml(data.itemsReceived || data.remarks || '')}</div>
       </div>` : ''}
     </div>
 

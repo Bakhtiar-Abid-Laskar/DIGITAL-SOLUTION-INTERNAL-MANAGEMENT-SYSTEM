@@ -3,10 +3,7 @@
     "name": "Digital Solution",
     "slug": "digitalsolution",
     "scheme": "repairshop",
-    "version": "1.0.0",
-    "cli": {
-      "appVersionSource": "remote"
-    },
+    "version": "1.0.3",
     "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -33,7 +30,8 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.repairshop.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 4
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -58,7 +56,6 @@
           "recordAudioAndroid": false
         }
       ],
-
       [
         "expo-location",
         {

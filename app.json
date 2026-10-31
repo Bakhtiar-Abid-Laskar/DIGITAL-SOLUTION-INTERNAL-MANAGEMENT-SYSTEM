@@ -1,12 +1,14 @@
 {
   "expo": {
+    "name": "Digital Solution",
+    "slug": "digitalsolution",
     "extra": {
       "eas": {
-        "projectId": "7e33115f-5b88-4cf1-9b16-8fdbde6e562b"
+        "projectId": "9e74d61a-0e68-4312-a3ce-4114cf44a72d"
       }
     },
     "android": {
-      "package": "com.bakhtiarabid02.repairshopworkspace"
+      "package": "com.repairshop.app"
     }
   }
 }

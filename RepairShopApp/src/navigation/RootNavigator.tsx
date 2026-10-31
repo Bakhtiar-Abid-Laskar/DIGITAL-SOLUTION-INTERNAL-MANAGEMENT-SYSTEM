@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar } from 'react-native';
+import { StatusBar, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 import LoadingScreen from '../screens/shared/LoadingScreen';
@@ -21,7 +21,9 @@ import { navigationRef } from './navigationRef';
 const linking = {
   prefixes: [
     'repairshop://',
-    ...(typeof window !== 'undefined' ? [window.location.origin, '/'] : ['/']),
+    'exp+repairshopapp://',
+    'exp+digitalsolution://',
+    ...(Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin ? [window.location.origin, '/'] : []),
   ],
   config: {
     screens: {

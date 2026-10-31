@@ -53,15 +53,25 @@ export function showAlert(title: string, message?: string, buttons?: AlertButton
     globalAlertHandler(title, message, buttons);
   } else {
     // Web fallback if provider not ready
-    if (!buttons || buttons.length <= 1) {
-      if (typeof window !== 'undefined') window.alert(`${title}\n\n${message || ''}`);
-      if (buttons?.[0]?.onPress) buttons[0].onPress();
+    if (Platform.OS === 'web') {
+      if (!buttons || buttons.length <= 1) {
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert(`${title}\n\n${message || ''}`);
+        }
+        if (buttons?.[0]?.onPress) buttons[0].onPress();
+      } else {
+        const ok = typeof window !== 'undefined' && typeof window.confirm === 'function'
+          ? window.confirm(`${title}\n\n${message || ''}`)
+          : false;
+        const confirmBtn = buttons.find(b => b.style !== 'cancel') || buttons[1];
+        const cancelBtn = buttons.find(b => b.style === 'cancel') || buttons[0];
+        if (ok && confirmBtn?.onPress) confirmBtn.onPress();
+        else if (!ok && cancelBtn?.onPress) cancelBtn.onPress();
+      }
     } else {
-      const ok = typeof window !== 'undefined' ? window.confirm(`${title}\n\n${message || ''}`) : false;
-      const confirmBtn = buttons.find(b => b.style !== 'cancel') || buttons[1];
-      const cancelBtn = buttons.find(b => b.style === 'cancel') || buttons[0];
-      if (ok && confirmBtn?.onPress) confirmBtn.onPress();
-      else if (!ok && cancelBtn?.onPress) cancelBtn.onPress();
+      // Native console fallback
+      console.warn('[GlobalAlert]', title, message);
+      if (buttons?.[0]?.onPress) buttons[0].onPress();
     }
   }
 }

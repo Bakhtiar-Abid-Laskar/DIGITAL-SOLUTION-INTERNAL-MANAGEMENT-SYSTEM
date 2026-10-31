@@ -1,6 +1,6 @@
 {
   "name": "repairshopapp",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -50,6 +50,7 @@
     "typescript": "~5.9.2"
   },
   "scripts": {
+    "build:apk": "node ../scripts/build_apk.js",
     "build": "npx expo export --platform web",
     "start": "expo start",
     "android": "expo run:android",
@@ -60,5 +61,3 @@
   },
   "private": true
 }
-
-

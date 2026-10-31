@@ -3,7 +3,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Shield, User, Globe, Store, Bell, CheckCircle2, Cloud } from "lucide-react";
+import { Shield, User, Globe, Store, Bell, CheckCircle2, Cloud, Send, Smartphone, Laptop, AlertCircle, RefreshCw } from "lucide-react";
+import {
+  checkWebPushSupport,
+  subscribeToWebPush,
+  unsubscribeFromWebPush,
+  WebPushSupportStatus,
+} from "@/lib/webPushManager";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/common/Card";
 import { Input } from "@/components/common/Input";
@@ -26,6 +32,72 @@ export default function SettingsPage() {
   
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [pushNotifs, setPushNotifs] = useState(true);
+  const [pushStatus, setPushStatus] = useState<WebPushSupportStatus | null>(null);
+  const [subscribingWeb, setSubscribingWeb] = useState(false);
+  const [sendingTestPush, setSendingTestPush] = useState(false);
+  const [testPushResult, setTestPushResult] = useState<any>(null);
+
+  const refreshPushStatus = async () => {
+    try {
+      const status = await checkWebPushSupport();
+      setPushStatus(status);
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    refreshPushStatus();
+  }, []);
+
+  const handleToggleWebPush = async () => {
+    if (!pushStatus) return;
+    setSubscribingWeb(true);
+    try {
+      if (pushStatus.isSubscribed) {
+        await unsubscribeFromWebPush();
+        showToast('Web push notifications disabled', 'info');
+      } else {
+        const res = await subscribeToWebPush();
+        if (res.success) {
+          showToast(res.message || 'Web push enabled successfully!', 'success');
+        } else {
+          showToast(res.message || 'Failed to enable web push', 'error');
+        }
+      }
+      await refreshPushStatus();
+    } catch (err: any) {
+      showToast(err.message || 'Error configuring web push', 'error');
+    } finally {
+      setSubscribingWeb(false);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    if (!profile?.id) {
+      showToast('Profile not loaded', 'error');
+      return;
+    }
+    setSendingTestPush(true);
+    setTestPushResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: {
+          user_ids: [profile.id],
+          title: 'Digital Solution Diagnostic Test',
+          body: 'Unified Push Test: Verified across Android, iOS Safari PWA, and Web.',
+          data: { test: true, timestamp: Date.now() },
+        },
+      });
+
+      if (error) throw error;
+      setTestPushResult(data);
+      showToast('Diagnostic test push dispatched successfully!', 'success');
+    } catch (err: any) {
+      setTestPushResult({ error: err.message || 'Failed to dispatch test notification' });
+      showToast(err.message || 'Failed to dispatch test notification', 'error');
+    } finally {
+      setSendingTestPush(false);
+    }
+  };
 
   useEffect(() => {
     if (profile?.name) {

@@ -1,0 +1,26 @@
+{
+  "name": "Digital Solution - Service & Repair Admin",
+  "short_name": "Digital Solution",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B111E",
+  "theme_color": "#2563EB",
+  "description": "Digital Solution Service & Repair Management System",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
