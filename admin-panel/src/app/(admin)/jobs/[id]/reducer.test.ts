@@ -24,7 +24,7 @@ describe('Job Detail State Machine Reducer (jobs/[id]/reducer.ts)', () => {
 
   it('handles FETCH_SUCCESS by populating job, materials, technicians, and billing form', () => {
     const materials: JobMaterial[] = [
-      { id: 'mat-1', job_id: 'job-123', material_name: 'Display Cable', quantity: 1, unit_cost: 450, total_cost: 450 },
+      { id: 'mat-1', job_id: 'job-123', material_name: 'Display Cable', serial_number: 'CAB-99281', quantity: 1, unit_cost: 450, total_cost: 450 },
     ];
     const technicians: User[] = [
       { id: 'tech-1', name: 'Arshad Ali', email: 'arshad@repairshop.com', role: 'technician', is_active: true, created_at: '2026-08-14T09:00:00Z' },
@@ -89,7 +89,7 @@ describe('Job Detail State Machine Reducer (jobs/[id]/reducer.ts)', () => {
     expect(updatedJobState.job?.status).toBe('Completed');
 
     const newMaterials: JobMaterial[] = [
-      { id: 'm-2', job_id: 'job-123', material_name: 'Battery', quantity: 1, unit_cost: 1200, total_cost: 1200 },
+      { id: 'm-2', job_id: 'job-123', material_name: 'Battery', serial_number: 'BAT-10023', quantity: 1, unit_cost: 1200, total_cost: 1200 },
     ];
     const updatedMatState = jobDetailReducer(initialState, { type: 'UPDATE_MATERIALS', materials: newMaterials });
     expect(updatedMatState.materials).toEqual(newMaterials);

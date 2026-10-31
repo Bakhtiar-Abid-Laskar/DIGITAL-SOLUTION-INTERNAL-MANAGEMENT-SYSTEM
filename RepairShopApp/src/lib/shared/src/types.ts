@@ -54,6 +54,8 @@ export interface JobMaterial {
   id: string;
   job_id: string;
   material_name: string;
+  serial_number: string;
+  serial_id?: string | null;
   quantity: number;
   added_qty?: number;
   used_qty?: number;
@@ -70,6 +72,15 @@ export interface JobMaterial {
   returned_at?: string | null;
   created_at?: string;
   technician?: { name: string } | null;
+}
+
+export interface JobMaterialSerial {
+  id: string;
+  job_id: string;
+  job_material_id: string;
+  serial_id?: string | null;
+  serial_number: string;
+  created_at: string;
 }
 
 export interface MaterialAllotment {
