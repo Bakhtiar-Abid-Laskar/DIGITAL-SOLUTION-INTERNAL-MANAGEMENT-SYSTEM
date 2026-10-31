@@ -40,6 +40,9 @@ export default function RootLayout({
       lang="en"
       className={`h-full antialiased ${inter.variable}`}
     >
+      <head>
+        <meta charSet="utf-8" />
+      </head>
       <body className="min-h-full flex flex-col font-sans bg-admin-bg-base text-admin-text-primary">
         <QueryProvider>
           <ToastProvider>

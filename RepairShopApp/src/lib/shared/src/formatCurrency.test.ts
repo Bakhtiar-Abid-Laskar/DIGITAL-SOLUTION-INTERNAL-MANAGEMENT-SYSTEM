@@ -1,6 +1,11 @@
-import { formatCurrency } from './formatCurrency';
+import { formatCurrency, RUPEE } from './formatCurrency';
 
 describe('Currency Formatting Engine (@repairshop/shared/formatCurrency.ts)', () => {
+  it('exports RUPEE constant with Unicode code point \\u20B9', () => {
+    expect(RUPEE).toBe('\u20B9');
+    expect(RUPEE).toBe('₹');
+  });
+
   it('formats positive amounts with INR currency symbol and two decimals', () => {
     const formatted = formatCurrency(1500);
     expect(formatted).toContain('1,500.00');

@@ -1,4 +1,4 @@
-﻿// svgAssets.ts — Pre-encoded base64 images for SVG invoice rendering.
+// svgAssets.ts — Pre-encoded base64 images for SVG invoice rendering.
 // Images are resized at encode time: logo ≤150px, QR 200x200.
 // Regenerate by running: node scripts/encodeAssets.js
 // Do NOT import these into client-side bundles — Edge Function only.

@@ -302,7 +302,7 @@ export function JobBillingCard({
     setConfirmModal({
       isOpen: true,
       title: 'Confirm Billing Statement',
-      message: `Save itemized billing for job ${jobCode}? Grand Total: â‚¹${grandTotalPreview.toFixed(2)}.`,
+      message: `Save itemized billing for job ${jobCode}? Grand Total: ${formatCurrency(grandTotalPreview)}.`,
       isDestructive: false,
       onConfirm: async () => {
         setConfirmModal(null);
@@ -334,8 +334,8 @@ export function JobBillingCard({
         invoiceNo: billing?.invoice_code || jobCode || 'INV',
         invoiceDate: billing?.created_at || job?.created_at || new Date().toISOString(),
         customerName: job?.customer_name || 'Walk-in Customer',
-        customerAddress: job?.customer_address || 'â€”',
-        customerPhone: job?.customer_contact || 'â€”',
+        customerAddress: job?.customer_address || '—',
+        customerPhone: job?.customer_contact || '—',
         customerEmail: job?.customer_email || '',
         customerGstin: job?.customer_gstin || undefined,
         deviceSerialNumber: job?.serial_number || undefined,

@@ -73,7 +73,7 @@ describe('Unified Push Notification Infrastructure', () => {
         priority: 'high',
         title: title || 'RepairShop',
         body,
-        data: { jobId: jobId || null, ...(data || {}) },
+        data: { jobId: jobId || null, ...(data || {}) } as Record<string, any>,
         channelId: 'default',
       };
     }

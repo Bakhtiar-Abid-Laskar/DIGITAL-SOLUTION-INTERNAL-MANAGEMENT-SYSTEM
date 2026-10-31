@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
-import { formatCurrency, validatePaymentAmount, derivePaymentStatus } from "@repairshop/shared";
+import { formatCurrency, RUPEE, validatePaymentAmount, derivePaymentStatus } from "@repairshop/shared";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
 import { Button } from "@/components/common/Button";
@@ -160,7 +160,7 @@ export function PaymentRecordingBox({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-admin-text-secondary">
-            Amount Paid (â‚¹)
+            Amount Paid ({RUPEE})
           </label>
           {numAmount < grandTotal && (
             <button
@@ -225,7 +225,7 @@ export function PaymentRecordingBox({
                   : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
               }`}
             >
-              â‚¹{denomination}
+              {RUPEE}{denomination}
             </button>
           ))}
         </div>

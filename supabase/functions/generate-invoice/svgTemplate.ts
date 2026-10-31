@@ -53,9 +53,11 @@ export type SvgInvoiceInput = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Indian lakh/crore currency formatting: ₹12,45,678.00 */
+const RUPEE = '\u20B9';
+
 function formatINR(n: number): string {
-  if (!isFinite(n)) return '₹0.00';
-  return '₹' + Math.abs(n).toLocaleString('en-IN', {
+  if (!isFinite(n)) return `${RUPEE}0.00`;
+  return RUPEE + Math.abs(n).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -130,7 +132,7 @@ function buildDescriptionTspan(
   if (taxPercent !== undefined && taxPercent !== null) subMetaParts.push(`GST: ${taxPercent}%`);
   const subMetaLine = subMetaParts.length > 0 ? subMetaParts.join(' | ') : null;
 
-  let markup = `<text x="90" y="${baseY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a">`;
+  let markup = `<text x="90" y="${baseY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a">`;
   markup += `<tspan x="90" dy="0">${x(lines[0])}</tspan>`;
   for (let i = 1; i < lines.length; i++) {
     markup += `<tspan x="90" dy="${DESC_WRAP_DY}">${x(lines[i])}</tspan>`;
@@ -171,7 +173,7 @@ function buildTermsTspan(terms: string, baseY: number): string {
   }
 
   // Typography change: color #7a7f8c for better contrast
-  let markup = `<text x="50" y="${baseY}" font-family="Arial, Helvetica, sans-serif" font-size="8.5" fill="#7a7f8c">`;
+  let markup = `<text x="50" y="${baseY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="8.5" fill="#7a7f8c">`;
   if (lines.length > 0) {
     markup += `<tspan x="50" dy="0">Terms: ${x(lines[0])}</tspan>`;
     for (let i = 1; i < lines.length; i++) {
@@ -218,19 +220,19 @@ function buildItemRows(items: SvgLineItem[]): { page1Markup: string; overflow: S
     markup += `<rect x="50" y="${currentY - 15}" width="694" height="${rowH}" fill="${bgFill}" opacity="0.6"/>`;
 
     // SL number — centred in ~40px column starting at x=50
-    markup += `<text x="65" y="${currentY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(item.sn)}</text>`;
+    markup += `<text x="65" y="${currentY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(item.sn)}</text>`;
 
     // DESCRIPTION (with tspan wrapping)
     markup += descMarkup;
 
     // QTY — centred at x=480
-    markup += `<text x="480" y="${currentY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(item.qty)}</text>`;
+    markup += `<text x="480" y="${currentY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(item.qty)}</text>`;
 
     // RATE — centred at x=590
-    markup += `<text x="590" y="${currentY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(formatINR(item.rate))}</text>`;
+    markup += `<text x="590" y="${currentY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="middle">${x(formatINR(item.rate))}</text>`;
 
     // AMOUNT — right-anchored at x=744
-    markup += `<text x="744" y="${currentY}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="700" text-anchor="end">${x(formatINR(item.amount))}</text>`;
+    markup += `<text x="744" y="${currentY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="700" text-anchor="end">${x(formatINR(item.amount))}</text>`;
 
     // Thin bottom separator line for each row (darkened for better definition)
     markup += `<line x1="50" y1="${currentY - 15 + rowH}" x2="744" y2="${currentY - 15 + rowH}" stroke="#8a8f9c" stroke-width="1.0"/>`;
@@ -293,7 +295,7 @@ function buildSvgPage(
 
   // For continuation pages, show a "Continued..." watermark and page label in the items area
   const continuedNote = !isFirstPage
-    ? `<text x="397" y="325" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#8a8f9c" text-anchor="middle" font-style="italic">${x(pageLabel || 'Continued from previous page')}</text>`
+    ? `<text x="397" y="325" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="11" fill="#8a8f9c" text-anchor="middle" font-style="italic">${x(pageLabel || 'Continued from previous page')}</text>`
     : '';
 
   // Make totals position dynamic based on item count, minimum at 450
@@ -303,40 +305,40 @@ function buildSvgPage(
   const totalsSection = showTotals ? `
   <!-- ===================== PAYMENT DETAILS + QR   |   TOTALS ===================== -->
   <polygon points="56,${baseTotalsY} 62,${baseTotalsY+3.5} 62,${baseTotalsY+10.5} 56,${baseTotalsY+14} 50,${baseTotalsY+10.5} 50,${baseTotalsY+3.5}" fill="#1447b5"/>
-  <text x="68" y="${baseTotalsY+11}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">PAYMENT DETAILS</text>
+  <text x="68" y="${baseTotalsY+11}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">PAYMENT DETAILS</text>
 
-  <text id="bank-name"  x="50" y="${baseTotalsY+32}" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">Bank:  ${bankName}</text>
-  <text id="account-no" x="50" y="${baseTotalsY+48}" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">A/C No:  ${accountNo}</text>
-  <text id="ifsc"       x="50" y="${baseTotalsY+64}" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">IFSC:  ${ifscCode}</text>
-  <text id="upi"        x="50" y="${baseTotalsY+80}" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">UPI:  ${upiId}</text>
+  <text id="bank-name"  x="50" y="${baseTotalsY+32}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">Bank:  ${bankName}</text>
+  <text id="account-no" x="50" y="${baseTotalsY+48}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">A/C No:  ${accountNo}</text>
+  <text id="ifsc"       x="50" y="${baseTotalsY+64}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">IFSC:  ${ifscCode}</text>
+  <text id="upi"        x="50" y="${baseTotalsY+80}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">UPI:  ${upiId}</text>
   ${buildTermsTspan(TERMS, baseTotalsY+98)}
 
   <rect x="296" y="${baseTotalsY-2}" width="98" height="98" rx="8" fill="#fbfcfe" stroke="#1447b5" stroke-width="1.2" stroke-dasharray="4 3" filter="url(#softShadow)"/>
   <polygon points="296,${baseTotalsY+14} 296,${baseTotalsY-2} 312,${baseTotalsY-2}" fill="url(#headerBlue)" opacity="0.6"/>
   <image id="payment-qr" href="${QR_B64}" x="304" y="${baseTotalsY+6}" width="82" height="82" preserveAspectRatio="xMidYMid meet"/>
-  <text x="345" y="${baseTotalsY+112}" font-family="Arial, Helvetica, sans-serif" font-size="9" fill="#8a8f9c" text-anchor="middle">Scan to Pay</text>
+  <text x="345" y="${baseTotalsY+112}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9" fill="#8a8f9c" text-anchor="middle">Scan to Pay</text>
 
   <line x1="474" y1="${baseTotalsY}" x2="744" y2="${baseTotalsY}" stroke="#e4e9f4" stroke-width="1"/>
 
-  <text x="474" y="${baseTotalsY+20}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Subtotal</text>
-  <text id="subtotal" x="744" y="${baseTotalsY+20}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="700" text-anchor="end">${subtotalTxt}</text>
+  <text x="474" y="${baseTotalsY+20}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#5a5f6e">Subtotal</text>
+  <text id="subtotal" x="744" y="${baseTotalsY+20}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="700" text-anchor="end">${subtotalTxt}</text>
 
-  <text x="474" y="${baseTotalsY+38}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Discount</text>
-  <text id="discount" x="744" y="${baseTotalsY+38}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="600" text-anchor="end">${discountTxt}</text>
+  <text x="474" y="${baseTotalsY+38}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#5a5f6e">Discount</text>
+  <text id="discount" x="744" y="${baseTotalsY+38}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="600" text-anchor="end">${discountTxt}</text>
 
-  <text x="474" y="${baseTotalsY+56}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Tax / GST</text>
-  <text id="tax" x="744" y="${baseTotalsY+56}" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="600" text-anchor="end">${taxTxt}</text>
+  <text x="474" y="${baseTotalsY+56}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#5a5f6e">Tax / GST</text>
+  <text id="tax" x="744" y="${baseTotalsY+56}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a" font-weight="600" text-anchor="end">${taxTxt}</text>
 
   <line x1="474" y1="${baseTotalsY+66}" x2="744" y2="${baseTotalsY+66}" stroke="#e4e9f4" stroke-width="1"/>
 
   <rect x="474" y="${baseTotalsY+74}" width="270" height="34" rx="6" fill="url(#headerBlue)" filter="url(#softShadow)"/>
   <polygon points="474,${baseTotalsY+74} 490,${baseTotalsY+74} 474,${baseTotalsY+84}" fill="#ffffff" opacity="0.18"/>
-  <text x="490" y="${baseTotalsY+96}" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" fill="#ffffff">Total</text>
-  <text id="total" x="730" y="${baseTotalsY+96}" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="end">${totalTxt}</text>
+  <text x="490" y="${baseTotalsY+96}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="800" fill="#ffffff">Total</text>
+  <text id="total" x="730" y="${baseTotalsY+96}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="end">${totalTxt}</text>
 
   <!-- ===================== CLOSING NOTES ===================== -->
-  <text x="397" y="${baseTotalsY+140}" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#0b1f6b" text-anchor="middle">Thank you for your business!</text>
-  <text x="397" y="${baseTotalsY+158}" font-family="Arial, Helvetica, sans-serif" font-size="9.5" font-style="italic" fill="#8a8f9c" text-anchor="middle">This is a computer generated document and does not require a signature.</text>
+  <text x="397" y="${baseTotalsY+140}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#0b1f6b" text-anchor="middle">Thank you for your business!</text>
+  <text x="397" y="${baseTotalsY+158}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9.5" font-style="italic" fill="#8a8f9c" text-anchor="middle">This is a computer generated document and does not require a signature.</text>
   ` : '';
 
   return `<svg width="794" height="1123" viewBox="0 0 794 1123" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -425,43 +427,43 @@ function buildSvgPage(
   <rect x="40" y="26" width="102" height="102" rx="14" fill="#ffffff" filter="url(#softShadow)"/>
   <image id="company-logo" href="${LOGO_B64}" x="52" y="38" width="78" height="78" preserveAspectRatio="xMidYMid meet"/>
 
-  <text id="company-name" x="160" y="62" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800" fill="#0b1f6b">${companyName}</text>
-  <text id="company-tagline" x="160" y="80" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing="1.5" fill="#5b7bb8">${companyTagline}</text>
-  <text id="company-address" x="160" y="99" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">${companyAddress}</text>
-  <text id="company-contact" x="160" y="114" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#5a5f6e">Ph: ${companyPhone}  |  ${companyEmail}</text>
+  <text id="company-name" x="160" y="62" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="22" font-weight="800" fill="#0b1f6b">${companyName}</text>
+  <text id="company-tagline" x="160" y="80" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" letter-spacing="1.5" fill="#5b7bb8">${companyTagline}</text>
+  <text id="company-address" x="160" y="99" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">${companyAddress}</text>
+  <text id="company-contact" x="160" y="114" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#5a5f6e">Ph: ${companyPhone}  |  ${companyEmail}</text>
 
   <line x1="565" y1="36" x2="565" y2="122" stroke="#e4e9f4" stroke-width="1"/>
 
-  <text x="738" y="62" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="800" fill="#0b1f6b" text-anchor="end">INVOICE</text>
+  <text x="738" y="62" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="800" fill="#0b1f6b" text-anchor="end">INVOICE</text>
   <rect x="626" y="72" width="112" height="3" fill="url(#accentStrip)"/>
-  <text id="invoice-no" x="738" y="94" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">INV NO:  <tspan font-weight="700" fill="#1a1a1a">${invNo}</tspan></text>
-  <text id="invoice-date" x="738" y="110" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">DATE:  <tspan font-weight="700" fill="#1a1a1a">${invDate}</tspan></text>
+  <text id="invoice-no" x="738" y="94" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">INV NO:  <tspan font-weight="700" fill="#1a1a1a">${invNo}</tspan></text>
+  <text id="invoice-date" x="738" y="110" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">DATE:  <tspan font-weight="700" fill="#1a1a1a">${invDate}</tspan></text>
 
   <!-- ===================== BILL TO ===================== -->
   <rect x="38" y="156" width="706" height="104" rx="10" fill="#f7f9fd" filter="url(#softShadow)"/>
   <polygon points="726,156 744,156 744,174" fill="url(#accentStrip)" opacity="0.55"/>
   <polygon points="38,244 38,260 56,260" fill="url(#accentStrip)" opacity="0.35"/>
   <polygon points="63,180 69,183.5 69,190.5 63,194 57,190.5 57,183.5" fill="#1447b5"/>
-  <text x="76" y="191" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">BILLED TO</text>
+  <text x="76" y="191" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1.5" fill="#0b1f6b">BILLED TO</text>
 
-  <text id="client-name" x="63" y="214" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#1a1a1a">${clientName}</text>
-  <text id="client-address" x="63" y="232" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">${clientAddress}</text>
-  <text id="client-contact" x="63" y="248" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#5a5f6e">Ph: ${clientPhone}  |  ${clientEmail}</text>
-  <text id="client-gstin-label" x="420" y="214" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700" fill="#0b1f6b">GSTIN</text>
-  <text id="client-gstin-value" x="420" y="230" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700" fill="#1a1a1a">${clientGstin}</text>
+  <text id="client-name" x="63" y="214" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="700" fill="#1a1a1a">${clientName}</text>
+  <text id="client-address" x="63" y="232" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#5a5f6e">${clientAddress}</text>
+  <text id="client-contact" x="63" y="248" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#5a5f6e">Ph: ${clientPhone}  |  ${clientEmail}</text>
+  <text id="client-gstin-label" x="420" y="214" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="700" fill="#0b1f6b">GSTIN</text>
+  <text id="client-gstin-value" x="420" y="230" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1a1a1a">${clientGstin}</text>
   ` : `
   <!-- Continuation page header note -->
-  <text x="397" y="80" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="800" fill="#0b1f6b" text-anchor="middle">${companyName}</text>
-  <text x="738" y="80" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">INV NO:  <tspan font-weight="700" fill="#1a1a1a">${invNo}</tspan></text>
+  <text x="397" y="80" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="800" fill="#0b1f6b" text-anchor="middle">${companyName}</text>
+  <text x="738" y="80" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#3a3f4c" text-anchor="end">INV NO:  <tspan font-weight="700" fill="#1a1a1a">${invNo}</tspan></text>
   <line x1="38" y1="150" x2="756" y2="150" stroke="#e4e9f4" stroke-width="1"/>
   `}
 
   <!-- ===================== ITEMS TABLE ===================== -->
-  <text x="50"  y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">SL</text>
-  <text x="90"  y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">DESCRIPTION</text>
-  <text x="480" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">QTY</text>
-  <text x="590" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">RATE</text>
-  <text x="744" y="298" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="end">AMOUNT</text>
+  <text x="50"  y="298" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">SL</text>
+  <text x="90"  y="298" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b">DESCRIPTION</text>
+  <text x="480" y="298" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">QTY</text>
+  <text x="590" y="298" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="middle">RATE</text>
+  <text x="744" y="298" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="800" letter-spacing="1" fill="#0b1f6b" text-anchor="end">AMOUNT</text>
   <rect x="50" y="306" width="694" height="2" fill="url(#accentStrip)"/>
 
   <g id="items-area">
@@ -478,23 +480,23 @@ function buildSvgPage(
   <g transform="translate(66.6,1034.6) scale(0.6)">
     <path fill="#ffffff" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
   </g>
-  <text x="96" y="1038" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#3a3f4c">7002204047</text>
-  <text x="96" y="1051" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#3a3f4c">7002611748</text>
+  <text x="96" y="1038" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#3a3f4c">7002204047</text>
+  <text x="96" y="1051" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10" fill="#3a3f4c">7002611748</text>
 
   <!-- Email -->
   <circle cx="305" cy="1042" r="14" fill="url(#headerBlue)"/>
   <g transform="translate(297.6,1034.6) scale(0.6)">
     <path fill="#ffffff" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
   </g>
-  <text x="327" y="1046" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">digitalsolutionsilchar@gmail.com</text>
+  <text x="327" y="1046" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9.2" fill="#3a3f4c">digitalsolutionsilchar@gmail.com</text>
 
   <!-- Location -->
   <circle cx="536" cy="1042" r="14" fill="url(#headerBlue)"/>
   <g transform="translate(528.6,1034.6) scale(0.6)">
     <path fill="#ffffff" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
   </g>
-  <text x="558" y="1038" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">Rangirkhari, Tarani Road,</text>
-  <text x="558" y="1051" font-family="Arial, Helvetica, sans-serif" font-size="9.2" fill="#3a3f4c">Silchar-788005, Cachar, Assam</text>
+  <text x="558" y="1038" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9.2" fill="#3a3f4c">Rangirkhari, Tarani Road,</text>
+  <text x="558" y="1051" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9.2" fill="#3a3f4c">Silchar-788005, Cachar, Assam</text>
 
   <!-- FOOTER SEAL -->
   <line x1="170" y1="1088" x2="624" y2="1088" stroke="#e4e9f4" stroke-width="1"/>
@@ -590,7 +592,7 @@ export function renderSvgInvoice(input: SvgInvoiceInput): string {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     @page { size: A4 portrait; margin: 0; }
-    body { background: #f0f0f0; font-family: Arial, Helvetica, sans-serif; }
+    body { background: #f0f0f0; font-family: 'Inter', 'Roboto', 'Noto Sans', 'Segoe UI', Arial, sans-serif; }
     .print-page { width: 210mm; height: 297mm; display: block; overflow: hidden; }
     .print-page svg { display: block; width: 210mm; height: 297mm; }
     @media print {
