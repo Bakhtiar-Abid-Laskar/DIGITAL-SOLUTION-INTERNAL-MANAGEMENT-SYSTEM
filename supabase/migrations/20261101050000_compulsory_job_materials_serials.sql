@@ -482,3 +482,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.search_job_material_serials(UUID, UUID, TEXT, INT) TO authenticated;
+

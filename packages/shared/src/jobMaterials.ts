@@ -100,3 +100,4 @@ export function parseSerialNumbers(input: string | null | undefined): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
 }
+

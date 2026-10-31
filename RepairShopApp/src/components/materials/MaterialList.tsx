@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
-import { Trash2, Camera } from 'lucide-react-native';
+import { Trash2, Camera, Hash } from 'lucide-react-native';
 import { JobMaterial } from '../../types/job';
 import { formatCurrency } from '@repairshop/shared';
 import { colors, radius, spacing, typography } from '../../tokens';
@@ -26,6 +26,17 @@ export default function MaterialList({ materials, onDelete, canEdit, hidePricing
           <View key={mat.id} style={styles.row}>
             <View style={styles.info}>
               <Text style={styles.name}>{mat.material_name} (x{mat.quantity})</Text>
+              
+              {mat.serial_number && mat.serial_number.trim() ? (
+                <View style={styles.serialBadge}>
+                  <Hash size={11} color={colors.primary} style={{ marginRight: 2 }} />
+                  <Text style={styles.serialLabel}>S/N: </Text>
+                  <Text style={styles.serialValue}>{mat.serial_number}</Text>
+                </View>
+              ) : (
+                <Text style={styles.missingSerialWarning}>⚠️ Missing Serial Number</Text>
+              )}
+
               {!hidePricing && (
                 <Text style={styles.cost}>@ {formatCurrency(mat.unit_cost)} = {formatCurrency(mat.total_cost)}</Text>
               )}
@@ -83,6 +94,35 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1 },
   name: { color: colors.textPrimary, ...typography.bodyBold },
+  serialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    marginBottom: 2,
+  },
+  serialLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontFamily: 'Inter-SemiBold',
+  },
+  serialValue: {
+    fontSize: 11,
+    color: colors.textPrimary,
+    fontFamily: 'Inter-Medium',
+  },
+  missingSerialWarning: {
+    fontSize: 11,
+    color: colors.error,
+    fontFamily: 'Inter-SemiBold',
+    marginTop: 2,
+  },
   cost: { color: colors.textSecondary, ...typography.caption, marginTop: 2 },
   photoIndicator: {
     flexDirection: 'row',

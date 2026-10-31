@@ -132,9 +132,10 @@ describe('Job Detail State Machine Reducer (jobs/[id]/reducer.ts)', () => {
   it('handles material creation form state, SET_ADDING_MATERIAL, and RESET_NEW_MATERIAL', () => {
     const fillingState = jobDetailReducer(initialState, {
       type: 'UPDATE_NEW_MATERIAL',
-      payload: { name: 'Thermal Paste', qty: 2, unitCost: 120 },
+      payload: { name: 'Thermal Paste', serialNumber: 'TP-2026', qty: 2, unitCost: 120 },
     });
     expect(fillingState.newMaterial.name).toBe('Thermal Paste');
+    expect(fillingState.newMaterial.serialNumber).toBe('TP-2026');
     expect(fillingState.newMaterial.qty).toBe(2);
 
     const addingState = jobDetailReducer(fillingState, { type: 'SET_ADDING_MATERIAL', adding: true });
@@ -142,6 +143,7 @@ describe('Job Detail State Machine Reducer (jobs/[id]/reducer.ts)', () => {
 
     const resetState = jobDetailReducer(addingState, { type: 'RESET_NEW_MATERIAL' });
     expect(resetState.newMaterial.name).toBe('');
+    expect(resetState.newMaterial.serialNumber).toBe('');
     expect(resetState.newMaterial.qty).toBe(1);
     expect(resetState.newMaterial.unitCost).toBe(0);
   });

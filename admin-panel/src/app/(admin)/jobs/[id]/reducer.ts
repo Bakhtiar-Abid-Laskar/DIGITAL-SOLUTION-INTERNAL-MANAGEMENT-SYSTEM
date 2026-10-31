@@ -32,7 +32,7 @@ export interface JobDetailState {
   notesSaving: boolean;
   
   // Materials State
-  newMaterial: { name: string; qty: number; unitCost: number };
+  newMaterial: { name: string; serialNumber: string; qty: number; unitCost: number; serialId?: string | null };
   addingMaterial: boolean;
 }
 
@@ -75,7 +75,7 @@ export const initialState: JobDetailState = {
   notes: '',
   notesSaving: false,
   
-  newMaterial: { name: '', qty: 1, unitCost: 0 },
+  newMaterial: { name: '', serialNumber: '', qty: 1, unitCost: 0, serialId: null },
   addingMaterial: false,
   isReassignModalOpen: false,
 };

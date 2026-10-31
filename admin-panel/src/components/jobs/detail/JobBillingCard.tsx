@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
-import { Save, Printer, Wrench, Package, Hash, Tag, MessageCircle } from "lucide-react";
+import { Save, Printer, Wrench, Package, Hash, Tag, MessageCircle, AlertCircle } from "lucide-react";
 import { formatCurrency, calculateBillingTotals, forwardCalcLine, reverseCalcLineFromTotal, recalcBill, reverseCalcBillFromGrandTotal, LineItem } from '@repairshop/shared';
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
@@ -84,7 +84,8 @@ export function JobBillingCard({
         unit_price: Number(m.unit_cost) || 0,
         tax_percent: 18,
         hsn_code: m.product?.hsn_sac || null,
-        serial_number: null,
+        serial_number: m.serial_number || null,
+        selected_serial_numbers: m.serial_number ? [m.serial_number] : [],
         product_id: m.product_id || null,
         is_labour: false,
       }));
@@ -299,6 +300,14 @@ export function JobBillingCard({
   };
 
   const handleSaveBilling = () => {
+    // Compulsory serial check for all hardware materials
+    const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
+    if (missingSerialItems.length > 0) {
+      const names = missingSerialItems.map(i => `"${i.item_name}"`).join(', ');
+      showToast(`Serial number is compulsory for all billed parts. Missing on: ${names}`, 'error');
+      return;
+    }
+
     setConfirmModal({
       isOpen: true,
       title: 'Confirm Billing Statement',
@@ -312,6 +321,14 @@ export function JobBillingCard({
   };
 
   const handlePrint = async () => {
+    // Compulsory serial check for all hardware materials
+    const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
+    if (missingSerialItems.length > 0) {
+      const names = missingSerialItems.map(i => `"${i.item_name}"`).join(', ');
+      showToast(`Cannot generate Tax Invoice: Every part requires a verified serial number. Missing on: ${names}`, 'error');
+      return;
+    }
+
     setPrintState({ isOpen: true, percent: 15, message: 'Preparing invoice...' });
 
     try {
@@ -438,24 +455,43 @@ export function JobBillingCard({
                     className="p-3.5 rounded-xl bg-admin-bg-subtle border border-admin-border space-y-2.5"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {line.is_labour ? (
-                          <Wrench size={15} className="text-indigo-400" />
-                        ) : (
-                          <Package size={15} className="text-admin-text-muted" />
-                        )}
-                        <span className="text-sm font-semibold text-admin-text-primary">
-                          {line.item_name}
-                        </span>
-                        {line.is_labour && (
-                          <span className="text-[10px] font-bold bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
-                            SERVICE
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {line.is_labour ? (
+                            <Wrench size={15} className="text-indigo-400" />
+                          ) : (
+                            <Package size={15} className="text-admin-text-muted" />
+                          )}
+                          <span className="text-sm font-semibold text-admin-text-primary">
+                            {line.item_name}
                           </span>
-                        )}
-                        {line.hsn_code && (
-                          <span className="text-[10px] font-medium text-admin-text-muted bg-admin-surface px-1.5 py-0.5 rounded border border-admin-border flex items-center gap-1">
-                            <Tag size={10} /> HSN: {line.hsn_code}
-                          </span>
+                          {line.is_labour && (
+                            <span className="text-[10px] font-bold bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20">
+                              SERVICE
+                            </span>
+                          )}
+                          {line.hsn_code && (
+                            <span className="text-[10px] font-medium text-admin-text-muted bg-admin-surface px-1.5 py-0.5 rounded border border-admin-border flex items-center gap-1">
+                              <Tag size={10} /> HSN: {line.hsn_code}
+                            </span>
+                          )}
+                        </div>
+                        {!line.is_labour && (
+                          <div className="text-xs">
+                            {line.serial_number && line.serial_number.trim() ? (
+                              <span className="inline-flex items-center gap-1 text-admin-text-secondary">
+                                <span className="font-semibold text-admin-accent-text text-[11px]">S/N:</span>
+                                <code className="font-mono text-[11px] bg-admin-bg-base px-1.5 py-0.5 rounded border border-admin-border font-medium text-admin-text-primary">
+                                  {line.serial_number}
+                                </code>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-admin-danger font-medium">
+                                <AlertCircle size={11} />
+                                Serial number missing (compulsory)
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                       <div className="text-right">
@@ -533,7 +569,7 @@ export function JobBillingCard({
                     {!line.is_labour && (
                       <div className="pt-1.5 border-t border-admin-border/40">
                         <label className="block text-[10px] font-semibold text-admin-text-muted mb-1 uppercase tracking-wider">
-                          Tracked Serial Number (Optional)
+                          Serial Number * (Compulsory)
                         </label>
                         <SerialSelectionDropdown
                           productId={line.product_id || null}

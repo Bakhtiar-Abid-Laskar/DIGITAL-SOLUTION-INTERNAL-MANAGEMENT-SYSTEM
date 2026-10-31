@@ -43,6 +43,8 @@ export interface JobMaterial {
   id: string;
   job_id: string;
   material_name: string;
+  serial_number?: string;
+  serial_id?: string | null;
   quantity: number;
   qty_taken?: number | null;
   unit_cost: number;

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
 import Button from '../common/Button';
-import { Package } from 'lucide-react-native';
+import { Package, ScanLine, Hash } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { colors, radius, spacing, typography } from '../../tokens';
 import ModalShell from '../common/ModalShell';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { validateJobMaterial } from '../../lib/shared/src/jobMaterials';
+import { CameraBarcodeScannerModalMobile } from '../common/CameraBarcodeScannerModalMobile';
 
 interface AddMaterialModalProps {
   visible: boolean;
@@ -31,6 +33,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
     (prev: any, next: any) => ({ ...prev, ...next }),
     {
       name: '',
+      serialNumber: '',
       selectedInventoryId: null as string | null,
       selectedProductId: null as string | null,
       quantity: '1',
@@ -41,12 +44,25 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
       showSuggestions: false,
       selectedStock: null as number | null,
       isCameraActive: false,
+      isScannerOpen: false,
       loading: false,
     }
   );
 
-  const { name, selectedInventoryId, selectedProductId, quantity, unitCost, photoUri, suggestions, suggestionsLoading, showSuggestions, selectedStock, isCameraActive, loading } = state;
-
+  const {
+    name,
+    serialNumber,
+    selectedInventoryId,
+    selectedProductId,
+    quantity,
+    unitCost,
+    suggestions,
+    suggestionsLoading,
+    showSuggestions,
+    selectedStock,
+    isScannerOpen,
+    loading,
+  } = state;
 
   const { showToast } = useToast();
   const navigation = useNavigation<any>();
@@ -89,31 +105,50 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
 
   const reset = () => {
     setState({
-      name: '', selectedInventoryId: null, selectedProductId: null, selectedStock: null,
-      quantity: '1', unitCost: '', photoUri: null, isCameraActive: false,
+      name: '', serialNumber: '', selectedInventoryId: null, selectedProductId: null, selectedStock: null,
+      quantity: '1', unitCost: '', photoUri: null, isCameraActive: false, isScannerOpen: false,
       suggestions: [], showSuggestions: false
     });
   };
 
   const handleClose = () => { reset(); onClose(); };
 
-
-
   const { user } = useAuth();
 
   const submit = async () => {
     if (!name.trim()) return showToast({ title: 'Error', message: 'Material name is required.', type: 'error' });
+    const trimmedSerial = (serialNumber || '').trim();
+    if (!trimmedSerial) {
+      return showToast({
+        title: 'Serial Number Required',
+        message: 'Serial number is compulsory for all job materials.',
+        type: 'error',
+      });
+    }
+
     const q = parseFloat(quantity), c = parseFloat(unitCost || '0');
     if (isNaN(q) || q <= 0) return showToast({ title: 'Error', message: 'Quantity must be > 0.', type: 'error' });
     if (isNaN(c) || c < 0) return showToast({ title: 'Error', message: 'Unit cost must be >= 0.', type: 'error' });
     if (selectedStock !== null && q > selectedStock) {
       return showToast({ title: 'Insufficient Stock', message: `Only ${selectedStock} unit(s) available for "${name.trim()}".`, type: 'error' });
     }
+
+    const validation = validateJobMaterial({
+      material_name: name.trim(),
+      serial_number: trimmedSerial,
+      quantity: q,
+      unit_cost: c,
+    });
+    if (!validation.valid) {
+      return showToast({ title: 'Validation Error', message: validation.error || 'Invalid material details.', type: 'error' });
+    }
+
     setState({ loading: true });
     try {
       const { error } = await supabase.from('job_materials').insert({
         job_id: jobId,
         material_name: name.trim(),
+        serial_number: trimmedSerial,
         qty_taken: q,
         quantity: q,
         added_qty: q,
@@ -126,14 +161,12 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
         checkout_status: 'checked_out',
       });
       if (error) throw error;
-      showToast({ title: 'Success', message: 'Material added.', type: 'success' });
+      showToast({ title: 'Success', message: 'Material added with verified serial.', type: 'success' });
       handleClose(); onAdded();
     } catch (e: any) {
-      showToast({ title: 'Insufficient Stock', message: e.message || 'Stock deduction failed.', type: 'error' });
+      showToast({ title: 'Error', message: e.message || 'Failed to add material.', type: 'error' });
     } finally { setState({ loading: false }); }
   };
-
-
 
   return (
     <ModalShell visible={visible} onClose={handleClose}>
@@ -183,6 +216,26 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
           ) : null}
         </View>
 
+        {/* Compulsory Serial Number Input + Camera Barcode Scanner */}
+        <View style={styles.serialInputRow}>
+          <TextInput
+            style={[styles.input, styles.serialInput]}
+            placeholder="Serial Number (Compulsory) *"
+            placeholderTextColor={colors.textMuted}
+            value={serialNumber}
+            onChangeText={(val) => setState({ serialNumber: val })}
+            autoCapitalize="characters"
+          />
+          <AppPressable
+            style={styles.scanBtn}
+            onPress={() => setState({ isScannerOpen: true })}
+            accessibilityRole="button"
+            accessibilityLabel="Scan barcode or serial"
+          >
+            <ScanLine size={20} color={colors.primary} />
+          </AppPressable>
+        </View>
+
         <TextInput
           style={styles.input}
           placeholder="Qty Taken (Incl. Buffer) *" placeholderTextColor={colors.textMuted}
@@ -207,6 +260,16 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
           </>
         )}
       </View>
+
+      <CameraBarcodeScannerModalMobile
+        visible={isScannerOpen}
+        onClose={() => setState({ isScannerOpen: false })}
+        onScan={(scanned) => {
+          setState({ serialNumber: scanned, isScannerOpen: false });
+          showToast({ title: 'Barcode Scanned', message: scanned, type: 'info' });
+        }}
+        title="Scan Part Serial Number"
+      />
     </ModalShell>
   );
 }
@@ -218,6 +281,26 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.backgroundAlt, color: colors.textPrimary, ...typography.body,
     padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md,
+  },
+  serialInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  serialInput: {
+    flex: 1,
+    marginBottom: 0,
+    fontFamily: 'Inter-Medium',
+  },
+  scanBtn: {
+    marginLeft: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   row: { flexDirection: 'row' },
   suggestionsContainer: {
@@ -232,16 +315,6 @@ const styles = StyleSheet.create({
   suggestionText: { marginLeft: spacing.sm, ...typography.body, color: colors.textSecondary },
   suggestionName: { ...typography.bodyBold, color: colors.textPrimary, flex: 1 },
   suggestionMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  photoSection: { marginBottom: spacing.lg },
-  photoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  photoAttached: { flexDirection: 'row', alignItems: 'center' },
-  removePhotoBtn: { padding: spacing.xs },
-  photoBtn: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderStyle: 'dashed',
-    borderColor: colors.navBackground, borderRadius: radius.md, padding: spacing.md,
-    justifyContent: 'center',
-  },
-  photoBtnText: { ...typography.bodyBold, color: colors.navBackground },
   allotmentBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: spacing.md, marginTop: spacing.sm,

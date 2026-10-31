@@ -3,7 +3,7 @@
 import { useEffect, useState, use, useCallback, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Job } from '@repairshop/shared';
+import { Job, canCompleteJobMaterials } from '@repairshop/shared';
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
@@ -135,6 +135,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       };
 
       if (state.editForm.status === 'Completed' && state.job?.status !== 'Completed') {
+        const check = canCompleteJobMaterials(state.materials);
+        if (!check.allowed) {
+          showToast(`Cannot complete job: The following parts are missing compulsory serial numbers: ${check.missingMaterials.join(', ')}`, "error");
+          return;
+        }
         updateData.completed_at = new Date().toISOString();
       }
 
