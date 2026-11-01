@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { User } from '@repairshop/shared';
+import { User, isSalaryComingSoon } from '@repairshop/shared';
+import { ComingSoon } from '@/components/common/ComingSoon';
 import { SalaryBreakdown } from '@/types/salary';
 import StaffRateForm from '@/components/salary/StaffRateForm';
 import SalaryCalculatorForm from '@/components/salary/SalaryCalculatorForm';

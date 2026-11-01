@@ -10,6 +10,8 @@ import { ChevronLeft, ChevronRight, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, typography } from '../../tokens';
+import { isSalaryComingSoon } from '../../lib/shared';
+import { ComingSoon } from '../../components/common/ComingSoon';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';

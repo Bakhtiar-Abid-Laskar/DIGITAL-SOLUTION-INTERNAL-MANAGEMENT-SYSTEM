@@ -99,7 +99,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const filteredNavItems = NAV_ITEMS.filter((item) => {
     if (profile?.role === 'receptionist') {
-      const adminOnlyPrefixes = ['/staff', '/reports', '/salary', '/expenditure', '/settings'];
+      const adminOnlyPrefixes = ['/staff', '/reports', '/expenditure', '/settings'];
       return !adminOnlyPrefixes.some(prefix => item.href.startsWith(prefix));
     }
     return true;

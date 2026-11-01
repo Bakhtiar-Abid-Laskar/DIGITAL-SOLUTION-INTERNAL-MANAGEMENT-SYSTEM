@@ -12,3 +12,4 @@ export * from './src/incentive';
 export * from './src/jobCardTemplate';
 export * from './src/payrollEngine';
 export * from './src/jobMaterials';
+export * from './src/salaryConfig';
