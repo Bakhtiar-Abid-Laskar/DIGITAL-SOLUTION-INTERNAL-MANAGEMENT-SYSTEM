@@ -261,7 +261,7 @@ export default function CustomersPage() {
   }, [customers, totalCount, searchQuery, globalStats]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto w-full">
       <PageHeader
         title="Customers Directory"
         description="Central registry of customer contact information, GST numbers, addresses, and service histories."

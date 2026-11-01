@@ -176,7 +176,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="System Settings" 
         description="Manage your profile and application configuration."

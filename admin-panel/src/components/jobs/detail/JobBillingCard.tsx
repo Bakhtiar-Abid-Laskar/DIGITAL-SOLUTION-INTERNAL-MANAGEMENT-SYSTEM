@@ -668,32 +668,35 @@ export function JobBillingCard({
         </div>
 
         {/* Footer buttons */}
-        <div className="flex items-center gap-2 border-t border-admin-border p-4 bg-admin-bg-subtle rounded-b-xl">
+        <div className="grid grid-cols-3 gap-2 border-t border-admin-border p-3 bg-admin-bg-subtle rounded-b-xl">
           <Button
             variant="outline"
             onClick={handlePrint}
             disabled={!!printState}
-            leftIcon={<Printer size={16} />}
-            className="flex-1 whitespace-nowrap"
+            leftIcon={<Printer size={15} />}
+            className="w-full h-9 text-xs font-semibold px-2 justify-center"
+            title="Print Tax Invoice"
           >
-            Print Invoice
+            <span className="truncate">Print Bill</span>
           </Button>
           <Button
             variant="outline"
             onClick={handleSendWhatsAppInvoice}
             isLoading={sendingWhatsApp}
-            leftIcon={<MessageCircle size={16} />}
-            className="flex-1 whitespace-nowrap text-emerald-500 hover:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+            leftIcon={<MessageCircle size={15} />}
+            className="w-full h-9 text-xs font-semibold px-2 justify-center text-emerald-500 hover:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+            title="Share Bill via WhatsApp"
           >
-            WhatsApp
+            <span className="truncate">WhatsApp</span>
           </Button>
           <Button
             onClick={handleSaveBilling}
             isLoading={billingSaving}
-            leftIcon={<Save size={16} />}
-            className="flex-1 whitespace-nowrap"
+            leftIcon={<Save size={15} />}
+            className="w-full h-9 text-xs font-semibold px-2 justify-center"
+            title={billing?.id ? 'Update Bill' : 'Save Bill'}
           >
-            {billing?.id ? 'Update' : 'Save'}
+            <span className="truncate">{billing?.id ? 'Update' : 'Save'}</span>
           </Button>
         </div>
       </Card>

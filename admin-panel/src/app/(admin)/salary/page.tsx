@@ -86,7 +86,7 @@ export default function SalaryPage() {
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="Salary Management" 
         description="Calculate payroll, manage staff rates, track advance salaries, and configure company holidays."

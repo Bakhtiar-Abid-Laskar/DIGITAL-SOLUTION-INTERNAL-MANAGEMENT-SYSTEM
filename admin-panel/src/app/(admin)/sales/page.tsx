@@ -222,7 +222,7 @@ export default function SalesPage() {
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader
         title="Invoices & Sales"
         description="Create, search, filter, and export customer invoices."

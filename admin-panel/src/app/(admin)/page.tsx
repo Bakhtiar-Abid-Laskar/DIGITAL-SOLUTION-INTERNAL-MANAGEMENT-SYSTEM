@@ -532,7 +532,7 @@ export default function OverviewPage() {
 
   if (loading) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-5 max-w-7xl mx-auto w-full">
         <div className="h-24 rounded-lg bg-admin-bg-surface border border-admin-border skeleton-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="h-28 rounded-lg bg-admin-bg-surface border border-admin-border skeleton-pulse" />
@@ -557,7 +557,7 @@ export default function OverviewPage() {
   }).format(new Date());
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-w-7xl mx-auto w-full">
       <section className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">

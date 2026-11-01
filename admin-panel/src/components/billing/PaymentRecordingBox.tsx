@@ -7,7 +7,7 @@ import { useToast } from "@/components/common/ToastProvider";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { Badge } from "@/components/common/Badge";
-import { CreditCard, CheckCircle2, AlertCircle } from "lucide-react";
+import { CreditCard, CheckCircle2, AlertCircle, Edit3 } from "lucide-react";
 
 interface PaymentRecordingBoxProps {
   invoiceId?: string;
@@ -33,6 +33,7 @@ export function PaymentRecordingBox({
   const [method, setMethod] = useState<string>(paymentMethod || "Cash");
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
 
   // Sync state with props
   useEffect(() => {
@@ -110,6 +111,7 @@ export function PaymentRecordingBox({
           : `Partial payment of ${formatCurrency(paymentToRecord)} recorded`;
 
       showToast(msg, "success");
+      setIsEditingPayment(false);
 
       if (onPaymentRecorded) {
         onPaymentRecorded(data);
@@ -121,7 +123,7 @@ export function PaymentRecordingBox({
     }
   };
 
-  const isFullPaid = derivedStatus === "paid" && grandTotal > 0;
+  const isFullPaid = (derivedStatus === "paid" || status === "paid" || (amountPaid >= grandTotal && grandTotal > 0));
   const isInvalid = Boolean(validationError) || numAmount < 0;
 
   return (
@@ -134,7 +136,7 @@ export function PaymentRecordingBox({
         </div>
         <Badge
           variant={
-            derivedStatus === "paid"
+            isFullPaid
               ? "success"
               : derivedStatus === "partial"
               ? "warning"
@@ -142,7 +144,7 @@ export function PaymentRecordingBox({
           }
           className="uppercase tracking-wider text-[10px] font-bold"
         >
-          {derivedStatus}
+          {isFullPaid ? "PAID" : derivedStatus}
         </Badge>
       </div>
 
@@ -156,133 +158,172 @@ export function PaymentRecordingBox({
         </span>
       </div>
 
-      {/* Editable Amount Input */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-admin-text-secondary">
-            Amount Paid ({RUPEE})
-          </label>
-          {numAmount < grandTotal && (
-            <button
-              type="button"
-              onClick={handleSetFullAmount}
-              disabled={disabled || loading}
-              className="text-xs font-semibold text-admin-accent-text hover:underline focus:outline-none"
-            >
-              Pay Full ({formatCurrency(grandTotal)})
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={amountInput}
-            onChange={(e) => handleAmountChange(e.target.value)}
-            disabled={disabled || loading}
-            placeholder="0.00"
-            className={`w-full font-semibold text-base ${
-              isInvalid ? "border-admin-urgent-fg focus:ring-admin-urgent-fg" : ""
-            }`}
-          />
-        </div>
-        {validationError && (
-          <div className="flex items-center gap-1.5 text-xs text-admin-urgent-fg pt-1">
-            <AlertCircle size={14} className="shrink-0" />
-            <span>{validationError}</span>
+      {/* Dedicated Settled Banner if Fully Paid and not in edit mode */}
+      {isFullPaid && !isEditingPayment ? (
+        <div className="space-y-3">
+          <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Invoice Fully Settled</p>
+                <p className="text-[11px] text-admin-text-secondary truncate">
+                  Paid {formatCurrency(amountPaid || grandTotal)} via {paymentMethod || method}
+                </p>
+              </div>
+            </div>
+            <Badge variant="success" className="uppercase text-[10px] font-bold shrink-0">PAID</Badge>
           </div>
-        )}
-      </div>
-
-      {/* Fast Cash Shortcuts */}
-      <div className="space-y-1.5 pt-0.5">
-        <span className="text-[11px] font-semibold text-admin-text-muted uppercase tracking-wider">
-          Fast Cash
-        </span>
-        <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={handleSetFullAmount}
+            onClick={() => setIsEditingPayment(true)}
             disabled={disabled || loading}
-            className={`px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
-              numAmount === grandTotal
-                ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
-                : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
-            }`}
+            className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-admin-text-muted hover:text-admin-accent-text hover:underline transition-colors w-full py-1"
           >
-            Exact
+            <Edit3 size={12} />
+            <span>Adjust or Record Payment</span>
           </button>
-          {[500, 1000, 2000].map((denomination) => (
-            <button
-              key={denomination}
-              type="button"
-              onClick={() => handleSelectCashAmount(denomination)}
-              disabled={disabled || loading}
-              className={`px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
-                numAmount === denomination
-                  ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
-                  : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
-              }`}
-            >
-              {RUPEE}{denomination}
-            </button>
-          ))}
         </div>
-      </div>
-
-      {/* Payment Method Selector */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-admin-text-secondary">
-          Payment Method
-        </label>
-        <select
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-          disabled={disabled || loading}
-          className="w-full h-10 px-3 rounded-lg bg-admin-bg-surface border border-admin-border text-sm text-admin-text-primary font-medium focus:outline-none focus:ring-2 focus:ring-admin-accent"
-        >
-          <option value="Cash">Cash</option>
-          <option value="Card">Card</option>
-          <option value="UPI">UPI</option>
-          <option value="Bank Transfer">Bank Transfer</option>
-        </select>
-      </div>
-
-      {/* Balance & Change Due Summary */}
-      <div className="space-y-1.5 bg-admin-bg-surface p-2.5 rounded-lg border border-admin-border text-xs">
-        <div className="flex justify-between items-center text-admin-text-secondary">
-          <span>Balance Remaining:</span>
-          <span
-            className={`font-bold ${
-              balanceDue > 0 ? "text-admin-urgent-fg" : "text-admin-success-fg"
-            }`}
-          >
-            {formatCurrency(balanceDue)}
-          </span>
-        </div>
-        {changeDue > 0 && (
-          <div className="flex justify-between items-center pt-1.5 border-t border-admin-border">
-            <span className="font-semibold text-admin-text-primary">Change to Return:</span>
-            <span className="font-extrabold text-admin-accent-text text-sm">
-              {formatCurrency(changeDue)}
-            </span>
+      ) : (
+        <>
+          {/* Editable Amount Input */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-admin-text-secondary">
+                Amount Paid ({RUPEE})
+              </label>
+              {numAmount < grandTotal && (
+                <button
+                  type="button"
+                  onClick={handleSetFullAmount}
+                  disabled={disabled || loading}
+                  className="text-xs font-semibold text-admin-accent-text hover:underline focus:outline-none"
+                >
+                  Pay Full ({formatCurrency(grandTotal)})
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={amountInput}
+                onChange={(e) => handleAmountChange(e.target.value)}
+                disabled={disabled || loading}
+                placeholder="0.00"
+                className={`w-full font-semibold text-base ${
+                  isInvalid ? "border-admin-urgent-fg focus:ring-admin-urgent-fg" : ""
+                }`}
+              />
+            </div>
+            {validationError && (
+              <div className="flex items-center gap-1.5 text-xs text-admin-urgent-fg pt-1">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{validationError}</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Action Button */}
-      <Button
-        type="button"
-        onClick={handleRecordPayment}
-        isLoading={loading}
-        disabled={disabled || loading || isInvalid || !invoiceId}
-        variant={isFullPaid ? "primary" : "primary"}
-        leftIcon={<CheckCircle2 size={16} />}
-        className="w-full justify-center h-10 font-semibold"
-      >
-        {isFullPaid ? "Mark as Paid" : "Record Payment"}
-      </Button>
+          {/* Fast Cash Shortcuts: strictly 1 row with horizontal scroll if needed */}
+          <div className="space-y-1.5 pt-0.5">
+            <span className="text-[11px] font-semibold text-admin-text-muted uppercase tracking-wider">
+              Fast Cash
+            </span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar whitespace-nowrap">
+              <button
+                type="button"
+                onClick={handleSetFullAmount}
+                disabled={disabled || loading}
+                className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
+                  numAmount === grandTotal
+                    ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
+                    : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
+                }`}
+              >
+                Exact
+              </button>
+              {[500, 1000, 2000].map((denomination) => (
+                <button
+                  key={denomination}
+                  type="button"
+                  onClick={() => handleSelectCashAmount(denomination)}
+                  disabled={disabled || loading}
+                  className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
+                    numAmount === denomination
+                      ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
+                      : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
+                  }`}
+                >
+                  {RUPEE}{denomination}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Payment Method Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-admin-text-secondary">
+              Payment Method
+            </label>
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              disabled={disabled || loading}
+              className="w-full h-10 px-3 rounded-lg bg-admin-bg-surface border border-admin-border text-sm text-admin-text-primary font-medium focus:outline-none focus:ring-2 focus:ring-admin-accent"
+            >
+              <option value="Cash">Cash</option>
+              <option value="Card">Card</option>
+              <option value="UPI">UPI</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+          </div>
+
+          {/* Balance & Change Due Summary */}
+          <div className="space-y-1.5 bg-admin-bg-surface p-2.5 rounded-lg border border-admin-border text-xs">
+            <div className="flex justify-between items-center text-admin-text-secondary">
+              <span>Balance Remaining:</span>
+              <span
+                className={`font-bold ${
+                  balanceDue > 0 ? "text-admin-urgent-fg" : "text-admin-success-fg"
+                }`}
+              >
+                {formatCurrency(balanceDue)}
+              </span>
+            </div>
+            {changeDue > 0 && (
+              <div className="flex justify-between items-center pt-1.5 border-t border-admin-border">
+                <span className="font-semibold text-admin-text-primary">Change to Return:</span>
+                <span className="font-extrabold text-admin-accent-text text-sm">
+                  {formatCurrency(changeDue)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Button */}
+          <Button
+            type="button"
+            onClick={handleRecordPayment}
+            isLoading={loading}
+            disabled={disabled || loading || isInvalid || !invoiceId}
+            variant="primary"
+            leftIcon={<CheckCircle2 size={16} />}
+            className="w-full justify-center h-10 font-semibold"
+          >
+            {isFullPaid ? "Update Payment" : "Record Payment"}
+          </Button>
+
+          {isFullPaid && isEditingPayment && (
+            <button
+              type="button"
+              onClick={() => setIsEditingPayment(false)}
+              className="text-[11px] text-admin-text-muted hover:underline block text-center w-full"
+            >
+              Done Adjusting
+            </button>
+          )}
+        </>
+      )}
 
       {!invoiceId && (
         <p className="text-[11px] text-center text-admin-text-muted">
@@ -292,4 +333,3 @@ export function PaymentRecordingBox({
     </div>
   );
 }
-

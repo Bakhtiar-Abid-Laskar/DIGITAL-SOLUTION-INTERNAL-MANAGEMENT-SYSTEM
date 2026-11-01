@@ -96,7 +96,7 @@ export default function JobTypesPage() {
   );
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader
         title="Job Types Catalog"
         description="Configure base customer charges and technician incentive rates for repair job types."

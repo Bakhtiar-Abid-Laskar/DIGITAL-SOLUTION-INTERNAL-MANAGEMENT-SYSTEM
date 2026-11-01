@@ -155,7 +155,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   };
 
   return (
-    <div className="space-y-6 h-full flex flex-col pb-10">
+    <div className="space-y-6 h-full flex flex-col pb-10 max-w-7xl mx-auto w-full">
       <PageHeader 
         title={`Job ${state.job.job_code}`} 
         description="Manage customer job details, assignment, and billing."
@@ -171,10 +171,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_440px] gap-6 mt-2 w-full">
         
         {/* === LEFT COLUMN === */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="min-w-0 space-y-6">
           <JobInfoCard 
             job={state.job}
             technicians={state.technicians}
@@ -216,7 +216,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         </div>
 
         {/* === RIGHT COLUMN (Sticky) === */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="min-w-0 space-y-6">
           <div className="sticky top-6 space-y-6">
             
             <JobConfigCard

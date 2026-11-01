@@ -291,7 +291,7 @@ export default function JobsPage() {
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="Jobs Management" 
         description="View and manage all customer repair jobs."

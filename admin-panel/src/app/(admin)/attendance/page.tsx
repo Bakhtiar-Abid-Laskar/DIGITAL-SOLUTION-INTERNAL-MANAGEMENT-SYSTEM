@@ -228,7 +228,7 @@ export default function AttendancePage() {
   };
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="Attendance Monitoring" 
         description="Verify staff daily attendance, selfie check-ins, and GPS location status."

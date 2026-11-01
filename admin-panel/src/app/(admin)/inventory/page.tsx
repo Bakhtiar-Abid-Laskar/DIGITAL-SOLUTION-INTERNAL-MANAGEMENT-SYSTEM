@@ -167,7 +167,7 @@ export default function InventoryPage() {
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="Inventory & Purchases" 
         description="Manage your shop's stock, log supplier purchase intake, and track purchase history."

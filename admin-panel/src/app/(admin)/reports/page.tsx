@@ -424,7 +424,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6 min-h-full flex flex-col">
+    <div className="space-y-6 min-h-full flex flex-col max-w-7xl mx-auto w-full">
       <PageHeader 
         title="Reports & Analytics" 
         description="Analyze shop operational metrics, technician productivity, and revenue trends."

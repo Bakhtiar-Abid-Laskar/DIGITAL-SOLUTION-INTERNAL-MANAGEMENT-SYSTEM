@@ -202,7 +202,7 @@ export default function StaffPage() {
   }
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col max-w-7xl mx-auto w-full">
 
       <PageHeader 
         title="Staff Management" 
