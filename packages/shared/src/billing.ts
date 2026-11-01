@@ -407,3 +407,118 @@ export function reverseCalcBillFromGrandTotal(
   };
 }
 
+
+/**
+ * Converts a numeric amount to Indian English currency words.
+ * Handles Indian numbering denominations: Crores, Lakhs, Thousands, Hundreds.
+ * Example: 894 -> "Eight Hundred Ninety Four Rupees Only"
+ * Example: 12500.50 -> "Twelve Thousand Five Hundred Rupees and Fifty Paise Only"
+ */
+export function amountToWordsIndian(amount: number): string {
+  if (isNaN(amount) || amount === null || amount === undefined) return 'Zero Rupees Only';
+  const rounded = roundMoney(amount);
+  if (rounded === 0) return 'Zero Rupees Only';
+  if (rounded < 0) return 'Minus ' + amountToWordsIndian(Math.abs(rounded));
+
+  const integerPart = Math.floor(rounded);
+  const paisePart = Math.round((rounded - integerPart) * 100);
+
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+    'Seventeen', 'Eighteen', 'Nineteen'
+  ];
+
+  const tens = [
+    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
+  ];
+
+  function convertTwoDigits(num: number): string {
+    if (num === 0) return '';
+    if (num < 20) return ones[num];
+    const t = tens[Math.floor(num / 10)];
+    const o = ones[num % 10];
+    return o ? `${t} ${o}` : t;
+  }
+
+  function convertThreeDigits(num: number): string {
+    const h = Math.floor(num / 100);
+    const rem = num % 100;
+    const hStr = h > 0 ? `${ones[h]} Hundred` : '';
+    const remStr = convertTwoDigits(rem);
+    if (hStr && remStr) return `${hStr} ${remStr}`;
+    return hStr || remStr;
+  }
+
+  let n = integerPart;
+  const parts: string[] = [];
+
+  const crores = Math.floor(n / 10000000);
+  n %= 10000000;
+
+  const lakhs = Math.floor(n / 100000);
+  n %= 100000;
+
+  const thousands = Math.floor(n / 1000);
+  n %= 1000;
+
+  const remainder = n;
+
+  if (crores > 0) {
+    parts.push(`${convertTwoDigits(crores)} Crore`);
+  }
+  if (lakhs > 0) {
+    parts.push(`${convertTwoDigits(lakhs)} Lakh`);
+  }
+  if (thousands > 0) {
+    parts.push(`${convertTwoDigits(thousands)} Thousand`);
+  }
+  if (remainder > 0) {
+    parts.push(convertThreeDigits(remainder));
+  }
+
+  const rupeeString = parts.length > 0 ? parts.join(' ') + ' Rupees' : 'Zero Rupees';
+  const paiseString = paisePart > 0 ? ` and ${convertTwoDigits(paisePart)} Paise` : '';
+
+  return `${rupeeString}${paiseString} Only`;
+}
+
+/**
+ * Formats an invoice code sequentially based on financial / calendar year:
+ * e.g., seq=42, year=2026 -> "INV-2026-0042"
+ */
+export function formatInvoiceCode(seqVal: number, year: number = new Date().getFullYear()): string {
+  const safeSeq = Math.max(1, Math.floor(Number(seqVal) || 1));
+  const pad = String(safeSeq).padStart(4, '0');
+  return `INV-${year}-${pad}`;
+}
+
+/**
+ * Formats a date string/timestamp strictly in Indian Standard Time (Asia/Kolkata).
+ * DD/MM/YYYY
+ */
+export function formatDateKolkata(dateInput: string | Date | number): string {
+  try {
+    const d = typeof dateInput === 'string' || typeof dateInput === 'number' ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return String(dateInput);
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return String(dateInput);
+  }
+}
+
+/**
+ * Formats serial numbers for invoice line items:
+ * - Trims whitespace
+ * - If missing or empty, returns "—"
+ * - If multiple, preserves comma-separated list
+ */
+export function formatInvoiceSerial(serialNumber?: string | null): string {
+  if (!serialNumber || !serialNumber.trim()) return '—';
+  return serialNumber.trim();
+}

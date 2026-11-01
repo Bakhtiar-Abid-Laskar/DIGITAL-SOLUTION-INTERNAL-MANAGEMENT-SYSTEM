@@ -65,9 +65,18 @@ function formatINR(n: number): string {
 
 /** DD/MM/YYYY for Indian locale */
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return iso;
+  }
 }
 
 /** XML-escape text for safe injection into SVG text nodes */
@@ -100,6 +109,112 @@ const DESC_WRAP_DY = 16;         // px offset per tspan wrap line
  * Splits description into SVG tspan lines for wrapping within the DESCRIPTION column.
  * Returns the SVG markup and the total extra height added by wrapping.
  */
+
+function amountToWordsIndian(amount: number): string {
+  if (isNaN(amount) || amount === null || amount === undefined) return 'Zero Rupees Only';
+  const rounded = Math.round(amount * 100) / 100;
+  if (rounded === 0) return 'Zero Rupees Only';
+  if (rounded < 0) return 'Minus ' + amountToWordsIndian(Math.abs(rounded));
+
+  const integerPart = Math.floor(rounded);
+  const paisePart = Math.round((rounded - integerPart) * 100);
+
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+    'Seventeen', 'Eighteen', 'Nineteen'
+  ];
+
+  const tens = [
+    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
+  ];
+
+  function convertTwoDigits(num: number): string {
+    if (num === 0) return '';
+    if (num < 20) return ones[num];
+    const t = tens[Math.floor(num / 10)];
+    const o = ones[num % 10];
+    return o ? `${t} ${o}` : t;
+  }
+
+  function convertThreeDigits(num: number): string {
+    const h = Math.floor(num / 100);
+    const rem = num % 100;
+    const hStr = h > 0 ? `${ones[h]} Hundred` : '';
+    const remStr = convertTwoDigits(rem);
+    if (hStr && remStr) return `${hStr} ${remStr}`;
+    return hStr || remStr;
+  }
+
+  let n = integerPart;
+  const parts: string[] = [];
+
+  const crores = Math.floor(n / 10000000);
+  n %= 10000000;
+
+  const lakhs = Math.floor(n / 100000);
+  n %= 100000;
+
+  const thousands = Math.floor(n / 1000);
+  n %= 1000;
+
+  const remainder = n;
+
+  if (crores > 0) parts.push(`${convertTwoDigits(crores)} Crore`);
+  if (lakhs > 0) parts.push(`${convertTwoDigits(lakhs)} Lakh`);
+  if (thousands > 0) parts.push(`${convertTwoDigits(thousands)} Thousand`);
+  if (remainder > 0) parts.push(convertThreeDigits(remainder));
+
+  const rupeeString = parts.length > 0 ? parts.join(' ') + ' Rupees' : 'Zero Rupees';
+  const paiseString = paisePart > 0 ? ` and ${convertTwoDigits(paisePart)} Paise` : '';
+
+  return `${rupeeString}${paiseString} Only`;
+}
+
+function formatSubMetaLines(
+  hsnCode: string | undefined,
+  serialNumber: string | undefined,
+  taxPercent: number | undefined
+): string[] {
+  const parts: string[] = [];
+  if (hsnCode) parts.push(`HSN: ${hsnCode}`);
+  const sDisplay = (serialNumber && serialNumber.trim()) ? serialNumber.trim() : '—';
+  parts.push(`S/N: ${sDisplay}`);
+  if (taxPercent !== undefined && taxPercent !== null) parts.push(`GST: ${taxPercent}%`);
+
+  const maxLineLength = 55;
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const part of parts) {
+    if (part.length > maxLineLength) {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = '';
+      }
+      let rem = part;
+      while (rem.length > maxLineLength) {
+        let breakIdx = rem.lastIndexOf(', ', maxLineLength);
+        if (breakIdx === -1) breakIdx = rem.lastIndexOf(' ', maxLineLength);
+        if (breakIdx === -1) breakIdx = maxLineLength;
+        lines.push(rem.slice(0, breakIdx).trim());
+        rem = rem.slice(breakIdx).replace(/^[, ]+/, '').trim();
+      }
+      if (rem) currentLine = rem;
+    } else {
+      const candidate = currentLine ? `${currentLine} | ${part}` : part;
+      if (candidate.length > maxLineLength && currentLine) {
+        lines.push(currentLine);
+        currentLine = part;
+      } else {
+        currentLine = candidate;
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
 function buildDescriptionTspan(
   desc: string,
   serialNumber: string | undefined,
@@ -110,6 +225,13 @@ function buildDescriptionTspan(
   markup: string;
   extraHeight: number;
 } {
+  if (desc === '(No items)') {
+    return {
+      markup: `<text x="90" y="${baseY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#8a8f9c" font-style="italic">(No items)</text>`,
+      extraHeight: 0,
+    };
+  }
+
   const words = desc.split(' ');
   const lines: string[] = [];
   let current = '';
@@ -125,24 +247,19 @@ function buildDescriptionTspan(
   }
   if (current) lines.push(current);
 
-  // Build metadata sub-line: HSN, Serial Number, Tax %
-  const subMetaParts: string[] = [];
-  if (hsnCode) subMetaParts.push(`HSN: ${hsnCode}`);
-  if (serialNumber) subMetaParts.push(`S/N: ${serialNumber}`);
-  if (taxPercent !== undefined && taxPercent !== null) subMetaParts.push(`GST: ${taxPercent}%`);
-  const subMetaLine = subMetaParts.length > 0 ? subMetaParts.join(' | ') : null;
+  const subLines = formatSubMetaLines(hsnCode, serialNumber, taxPercent);
 
   let markup = `<text x="90" y="${baseY}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="10.5" fill="#1a1a1a">`;
   markup += `<tspan x="90" dy="0">${x(lines[0])}</tspan>`;
   for (let i = 1; i < lines.length; i++) {
     markup += `<tspan x="90" dy="${DESC_WRAP_DY}">${x(lines[i])}</tspan>`;
   }
-  if (subMetaLine) {
-    markup += `<tspan x="90" dy="${DESC_WRAP_DY}" font-size="8.5" fill="#64748B">${x(subMetaLine)}</tspan>`;
+  for (const sLine of subLines) {
+    markup += `<tspan x="90" dy="${DESC_WRAP_DY}" font-size="8.5" fill="#64748B">${x(sLine)}</tspan>`;
   }
   markup += `</text>`;
 
-  const extraHeight = (lines.length - 1) * DESC_WRAP_DY + (subMetaLine ? DESC_WRAP_DY : 0);
+  const extraHeight = (lines.length - 1) * DESC_WRAP_DY + (subLines.length * DESC_WRAP_DY);
   return { markup, extraHeight };
 }
 
@@ -335,6 +452,10 @@ function buildSvgPage(
   <polygon points="474,${baseTotalsY+74} 490,${baseTotalsY+74} 474,${baseTotalsY+84}" fill="#ffffff" opacity="0.18"/>
   <text x="490" y="${baseTotalsY+96}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="800" fill="#ffffff">Total</text>
   <text id="total" x="730" y="${baseTotalsY+96}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="end">${totalTxt}</text>
+
+  <text id="amount-in-words" x="397" y="${baseTotalsY+124}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="9" font-weight="600" fill="#3a3f4c" text-anchor="middle">
+    <tspan fill="#64748B" font-weight="400">Amount in Words: </tspan>${x(amountToWordsIndian(totals.total))}
+  </text>
 
   <!-- ===================== CLOSING NOTES ===================== -->
   <text x="397" y="${baseTotalsY+140}" font-family="Inter, Roboto, 'Noto Sans', 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#0b1f6b" text-anchor="middle">Thank you for your business!</text>
@@ -593,11 +714,27 @@ export function renderSvgInvoice(input: SvgInvoiceInput): string {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     @page { size: A4 portrait; margin: 0; }
     body { background: #f0f0f0; font-family: 'Inter', 'Roboto', 'Noto Sans', 'Segoe UI', Arial, sans-serif; }
-    .print-page { width: 210mm; height: 297mm; display: block; overflow: hidden; }
+    .print-page { 
+      width: 210mm; 
+      height: 297mm; 
+      display: block; 
+      overflow: hidden; 
+      page-break-inside: avoid; 
+      break-inside: avoid; 
+    }
     .print-page svg { display: block; width: 210mm; height: 297mm; }
     @media print {
-      body { background: #fff; }
-      .print-page { box-shadow: none; }
+      html, body { 
+        background: #fff; 
+        margin: 0; 
+        padding: 0; 
+        -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact; 
+      }
+      .print-page { 
+        box-shadow: none; 
+        margin: 0; 
+      }
     }
     @media screen {
       body { padding: 20px; }

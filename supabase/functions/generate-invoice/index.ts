@@ -121,6 +121,7 @@ async function fetchJobReceiptData(
     return {
       sn: idx + 1,
       description: m.material_name || '—',
+      serialNumber: m.serial_number || undefined,
       qty,
       rate,
       amount: qty * rate,

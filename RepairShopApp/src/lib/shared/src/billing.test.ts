@@ -14,6 +14,10 @@ import {
   reverseCalcLineFromTotal,
   recalcBill,
   reverseCalcBillFromGrandTotal,
+  amountToWordsIndian,
+  formatInvoiceCode,
+  formatDateKolkata,
+  formatInvoiceSerial,
 } from './billing';
 
 
@@ -479,6 +483,98 @@ describe('Billing Calculation Engine (@repairshop/shared/billing.ts)', () => {
       expect(resExceed.isValid).toBe(false);
     });
   });
+
+  describe('Phase 4 — Bill & Tax Invoice Generation Audit Suite', () => {
+    it('verifies standard project billing formula (500 + 300 @ 18% - 50 = 894.00)', () => {
+      // (parts 500 + labour 300) = 800
+      // 800 * 1.18 = 944
+      // 944 - 50 discount = 894
+      const grandTotal = calculateGrandTotal(500, 300, 18, 50);
+      expect(grandTotal).toBe(894);
+
+      const totals = calculateBillingTotals({
+        partsTotal: 500,
+        labourCharge: 300,
+        taxPercent: 18,
+        discount: 50,
+      });
+      expect(totals.subtotal).toBe(800);
+      expect(totals.taxAmount).toBe(144);
+      expect(totals.discount).toBe(50);
+      expect(totals.grandTotal).toBe(894);
+    });
+
+    it('verifies intra-state GST split into exact CGST and SGST down to the paisa', () => {
+      const items = [
+        { id: 'item-1', qty: 1, rate: 500, taxPct: 18 },
+        { id: 'labour-1', qty: 1, rate: 300, taxPct: 18 },
+      ];
+      const result = recalcBill(items, 'intra_state');
+      expect(result.billSubtotal).toBe(800);
+      expect(result.billTax).toBe(144);
+      expect(result.cgst).toBe(72);
+      expect(result.sgst).toBe(72);
+      expect(result.igst).toBe(0);
+      expect(result.cgst + result.sgst).toBe(result.billTax);
+      expect(result.grandTotal).toBe(944);
+    });
+
+    it('verifies odd-tax intra-state GST split preserves exact penny reconciliation', () => {
+      // Rate 87.50 @ 18% = 15.75 tax -> CGST 7.88, SGST 7.87 -> total 15.75
+      const items = [
+        { id: 'odd-1', qty: 1, rate: 87.5, taxPct: 18 },
+      ];
+      const result = recalcBill(items, 'intra_state');
+      expect(result.billTax).toBe(15.75);
+      expect(result.cgst).toBe(7.88);
+      expect(result.sgst).toBe(7.87);
+      expect(result.cgst + result.sgst).toBe(15.75);
+    });
+
+    it('verifies inter-state GST assigns 100% tax to IGST with zero CGST/SGST', () => {
+      const items = [
+        { id: 'item-1', qty: 1, rate: 500, taxPct: 18 },
+        { id: 'labour-1', qty: 1, rate: 300, taxPct: 18 },
+      ];
+      const result = recalcBill(items, 'inter_state');
+      expect(result.billSubtotal).toBe(800);
+      expect(result.billTax).toBe(144);
+      expect(result.cgst).toBe(0);
+      expect(result.sgst).toBe(0);
+      expect(result.igst).toBe(144);
+      expect(result.grandTotal).toBe(944);
+    });
+
+    it('converts amounts to Indian English currency words correctly', () => {
+      expect(amountToWordsIndian(894)).toBe('Eight Hundred Ninety Four Rupees Only');
+      expect(amountToWordsIndian(12500.5)).toBe('Twelve Thousand Five Hundred Rupees and Fifty Paise Only');
+      expect(amountToWordsIndian(100000)).toBe('One Lakh Rupees Only');
+      expect(amountToWordsIndian(10000000)).toBe('One Crore Rupees Only');
+      expect(amountToWordsIndian(0)).toBe('Zero Rupees Only');
+      expect(amountToWordsIndian(500)).toBe('Five Hundred Rupees Only');
+    });
+
+    it('formats sequential, gap-free invoice codes', () => {
+      expect(formatInvoiceCode(1, 2026)).toBe('INV-2026-0001');
+      expect(formatInvoiceCode(42, 2026)).toBe('INV-2026-0042');
+      expect(formatInvoiceCode(1234, 2026)).toBe('INV-2026-1234');
+    });
+
+    it('formats dates strictly in Asia/Kolkata timezone regardless of host timezone', () => {
+      // 2026-11-01 20:30:00 UTC is 2026-11-02 02:00:00 in Asia/Kolkata
+      const formatted = formatDateKolkata('2026-11-01T20:30:00Z');
+      expect(formatted).toBe('02/11/2026');
+    });
+
+    it('formats invoice item serial numbers and handles legacy null/empty values', () => {
+      expect(formatInvoiceSerial('  CAB-99281  ')).toBe('CAB-99281');
+      expect(formatInvoiceSerial('')).toBe('—');
+      expect(formatInvoiceSerial(null)).toBe('—');
+      expect(formatInvoiceSerial(undefined)).toBe('—');
+      expect(formatInvoiceSerial('SN-1, SN-2')).toBe('SN-1, SN-2');
+    });
+  });
+
 });
 
 

@@ -4,7 +4,7 @@ import { Card } from "@/components/common/Card";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { Save, Printer, Wrench, Package, Hash, Tag, MessageCircle, AlertCircle } from "lucide-react";
-import { formatCurrency, calculateBillingTotals, forwardCalcLine, reverseCalcLineFromTotal, recalcBill, reverseCalcBillFromGrandTotal, LineItem } from '@repairshop/shared';
+import { formatCurrency, createWhatsAppWebUrl, calculateBillingTotals, forwardCalcLine, reverseCalcLineFromTotal, recalcBill, reverseCalcBillFromGrandTotal, LineItem } from '@repairshop/shared';
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
 import { PaymentRecordingBox } from "@/components/billing/PaymentRecordingBox";
@@ -403,16 +403,23 @@ export function JobBillingCard({
           jobId: jobId,
         }
       });
+      const balanceDue = billing?.balance !== undefined ? billing.balance : (billingForm.is_paid ? 0 : grandTotalPreview);
+      const invCode = billing?.invoice_code || job.job_code;
+      const msg = `Hello ${job.customer_name},\n\nYour Digital Solution Tax Invoice for Job *${job.job_code}* (Invoice No: *${invCode}*) is ready.\n\n💰 *Total Amount:* ${formatCurrency(grandTotalPreview)}\n⚠️ *Balance Due:* ${formatCurrency(balanceDue)}\n\nThank you for choosing Digital Solution!\nPh: 7002204047 / 7002611748`;
+
       if (!error && data?.success) {
         showToast('WhatsApp invoice sent successfully!', 'success');
       } else {
-        const msg = `Hello ${job.customer_name}, your Digital Solution invoice for Job ${job.job_code} is ready.\n\nGrand Total: ${formatCurrency(grandTotalPreview)}\n\nThank you for choosing Digital Solution!`;
-        window.open(`https://wa.me/${job.customer_contact.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        const url = createWhatsAppWebUrl(job.customer_contact, msg);
+        if (url) window.open(url, '_blank');
         showToast('Opened WhatsApp chat draft', 'info');
       }
     } catch {
-      const msg = `Hello ${job.customer_name}, your Digital Solution invoice for Job ${job.job_code} is ready.\n\nGrand Total: ${formatCurrency(grandTotalPreview)}\n\nThank you for choosing Digital Solution!`;
-      window.open(`https://wa.me/${job.customer_contact.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+      const balanceDue = billing?.balance !== undefined ? billing.balance : (billingForm.is_paid ? 0 : grandTotalPreview);
+      const invCode = billing?.invoice_code || job.job_code;
+      const msg = `Hello ${job.customer_name},\n\nYour Digital Solution Tax Invoice for Job *${job.job_code}* (Invoice No: *${invCode}*) is ready.\n\n💰 *Total Amount:* ${formatCurrency(grandTotalPreview)}\n⚠️ *Balance Due:* ${formatCurrency(balanceDue)}\n\nThank you for choosing Digital Solution!\nPh: 7002204047 / 7002611748`;
+      const url = createWhatsAppWebUrl(job.customer_contact, msg);
+      if (url) window.open(url, '_blank');
     } finally {
       setSendingWhatsApp(false);
     }
@@ -667,16 +674,16 @@ export function JobBillingCard({
             onClick={handlePrint}
             disabled={!!printState}
             leftIcon={<Printer size={16} />}
-            className="flex-1"
+            className="flex-1 whitespace-nowrap"
           >
-            Print Tax Invoice
+            Print Invoice
           </Button>
           <Button
             variant="outline"
             onClick={handleSendWhatsAppInvoice}
             isLoading={sendingWhatsApp}
             leftIcon={<MessageCircle size={16} />}
-            className="flex-1 text-emerald-500 hover:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+            className="flex-1 whitespace-nowrap text-emerald-500 hover:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
           >
             WhatsApp
           </Button>
@@ -684,7 +691,7 @@ export function JobBillingCard({
             onClick={handleSaveBilling}
             isLoading={billingSaving}
             leftIcon={<Save size={16} />}
-            className="flex-1"
+            className="flex-1 whitespace-nowrap"
           >
             {billing?.id ? 'Update' : 'Save'}
           </Button>
