@@ -66,6 +66,15 @@ Deno.serve(async (req: Request) => {
   
   const filename = `${sanitizeFilenameSegment(jobCode)}${suffix}.webp`;
 
+  // Server-side live capture & size guard
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const parsedDate = new Date(timestamp);
+  if (isNaN(parsedDate.getTime())) {
+    return new Response(JSON.stringify({ error: 'Invalid timestamp format' }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
   let imageBytes: Uint8Array;
   try {
     if (typeof (imageFile as any) === 'string') {
@@ -79,6 +88,23 @@ Deno.serve(async (req: Request) => {
     }
   } catch (e: any) {
     return new Response(JSON.stringify({ error: 'Failed to read image: ' + e.message }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (imageBytes.length > MAX_FILE_SIZE) {
+    return new Response(JSON.stringify({ error: 'File exceeds maximum allowed size of 10MB' }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Validate image signature (WebP, JPEG, PNG)
+  const isWebp = imageBytes.length > 12 && imageBytes[0] === 0x52 && imageBytes[1] === 0x49 && imageBytes[2] === 0x46 && imageBytes[3] === 0x46;
+  const isJpeg = imageBytes.length > 3 && imageBytes[0] === 0xFF && imageBytes[1] === 0xD8 && imageBytes[2] === 0xFF;
+  const isPng = imageBytes.length > 8 && imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47;
+
+  if (!isWebp && !isJpeg && !isPng) {
+    return new Response(JSON.stringify({ error: 'Invalid image format. Only WebP, JPEG, and PNG images captured from camera are accepted.' }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }

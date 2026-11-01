@@ -123,20 +123,21 @@ export default function ProfileScreen() {
     } finally { setState({ changingPassword: false }); }
   };
 
-  const handleSelectImage = async (useCamera: boolean) => {
+  const handleSelectImage = async () => {
     setState({ photoModalVisible: false });
     if (!user) return;
     try {
-      let result: ImagePicker.ImagePickerResult;
-      if (useCamera) {
-        const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) { showToast({ title: 'Permission Denied', message: 'Camera permission is required.', type: 'error' }); return; }
-        result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-      } else {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) { showToast({ title: 'Permission Denied', message: 'Media library permission is required.', type: 'error' }); return; }
-        result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { 
+        showToast({ title: 'Permission Denied', message: 'Camera permission is required.', type: 'error' }); 
+        return; 
       }
+      const result = await ImagePicker.launchCameraAsync({ 
+        cameraType: ImagePicker.CameraType.front,
+        allowsEditing: true, 
+        aspect: [1, 1], 
+        quality: 0.8 
+      });
       if (result.canceled || !result.assets[0]?.uri) return;
       setState({ avatarLoading: true });
       
@@ -220,8 +221,7 @@ export default function ProfileScreen() {
 
       <PhotoPickerModal
         visible={photoModalVisible}
-        onCamera={() => handleSelectImage(true)}
-        onGallery={() => handleSelectImage(false)}
+        onCamera={() => handleSelectImage()}
         onClose={() => setState({ photoModalVisible: false })}
       />
 

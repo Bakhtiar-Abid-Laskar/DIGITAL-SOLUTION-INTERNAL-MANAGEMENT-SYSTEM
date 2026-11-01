@@ -71,6 +71,15 @@ Deno.serve(async (req: Request) => {
   const yy = String(ts.getUTCFullYear()).slice(-2);
   const filename = `${sanitizeFilenameSegment(staffName)}_${type}_${dd}${monthStr}${yy}.webp`;
 
+  // Server-side live capture & size guard
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const parsedDate = new Date(timestamp);
+  if (isNaN(parsedDate.getTime())) {
+    return new Response(JSON.stringify({ error: 'Invalid timestamp format' }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
   let imageBytes: Uint8Array;
   try {
     if (typeof (imageFile as any) === 'string') {

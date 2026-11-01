@@ -22,14 +22,7 @@ export function MaterialCameraView({ visible, onCapture, onCancel, onRef }: Prop
         onCapture({ takePictureAsync: async () => ({ uri: result.assets[0].uri }) });
       }
     } catch {
-      try {
-        const libResult = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-        if (!libResult.canceled && libResult.assets && libResult.assets[0]?.uri) {
-          onCapture({ takePictureAsync: async () => ({ uri: libResult.assets[0].uri }) });
-        }
-      } catch {
-        onCancel();
-      }
+      onCancel();
     }
   };
 
@@ -53,11 +46,6 @@ export function MaterialCameraView({ visible, onCapture, onCancel, onRef }: Prop
           <AppPressable style={styles.btn} onPress={onCancel}>
             <Text style={styles.cancelText}>Cancel</Text>
           </AppPressable>
-          {Platform.OS === 'web' && (
-            <AppPressable style={[styles.btn, { backgroundColor: colors.accentBlue }]} onPress={handleWebFileFallback}>
-              <Text style={styles.captureText}>Pick File</Text>
-            </AppPressable>
-          )}
           <AppPressable style={[styles.btn, styles.captureBtn]} onPress={() => onCapture(cameraRef)}>
             <Text style={styles.captureText}>Capture</Text>
           </AppPressable>

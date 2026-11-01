@@ -1,16 +1,16 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useRef, useEffect } from 'react';
-import { Platform, View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { Platform, View, Text, StyleSheet, Modal, ActivityIndicator, Image } from 'react-native';
 import { AppPressable } from '../common/AppPressable';
 import { CameraView } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, MapPin, CheckCircle2 } from 'lucide-react-native';
+import { Camera, MapPin, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useCameraPermission } from '../../hooks/useCameraPermission';
 import { useLocationPermission } from '../../hooks/useLocationPermission';
-import { colors, radius, spacing, shadow, typography } from '../../tokens';
+import { colors, radius, spacing, typography } from '../../tokens';
 import Button from '../common/Button';
 import { compressImage } from '../../utils/compressImage';
 import { useToast } from '../../context/ToastContext';
@@ -115,11 +115,15 @@ export default function SelfieCapture({
   
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [loadingState, setLoadingState] = useState<'idle' | 'camera' | 'compressing' | 'gps' | 'uploading'>('idle');
   const cameraRef = useRef<CameraView>(null);
   const { showToast } = useToast();
 
   const startCamera = async () => {
+    setCameraError(null);
+    setCapturedUri(null);
     const hasCamera = await requireCamera();
     if (!hasCamera) {
       showToast({
@@ -164,7 +168,6 @@ export default function SelfieCapture({
 
   const processPhotoUri = async (photoUri: string) => {
     try {
-      // Fetch location with multi-tier graceful fallback (10s High -> 6s Balanced -> Last Known -> Degraded indoor fallback)
       setLoadingState('gps');
       let location: Location.LocationObject | null = null;
       let lowAccuracy = false;
@@ -174,7 +177,6 @@ export default function SelfieCapture({
         if (!enabled) {
           throw new Error('LOCATION_DISABLED');
         }
-        // Tier 1: High accuracy GPS with 10s timeout
         location = await Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GPS_TIMEOUT')), 10000))
@@ -185,7 +187,6 @@ export default function SelfieCapture({
         }
 
         lowAccuracy = true;
-        // Tier 2: Balanced / approximate accuracy fallback
         try {
           location = await Promise.race([
             Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
@@ -196,8 +197,7 @@ export default function SelfieCapture({
             message: 'High accuracy timed out. Using approximate location for admin review.', 
             type: 'error' 
           });
-        } catch (tier2Err) {
-          // Tier 3: Last known cached location
+        } catch {
           try {
             location = await Location.getLastKnownPositionAsync();
             if (location) {
@@ -207,13 +207,12 @@ export default function SelfieCapture({
                 type: 'error' 
               });
             }
-          } catch (tier3Err) {
+          } catch {
             location = null;
           }
         }
       }
 
-      // Tier 4: If completely unavailable (e.g. basement workshop / shielded indoor repair room)
       if (!location) {
         lowAccuracy = true;
         showToast({
@@ -227,7 +226,6 @@ export default function SelfieCapture({
       const finalLng = location?.coords?.longitude ?? 0;
       const isWeakSignal = lowAccuracy || !location || (location.coords?.accuracy ? location.coords.accuracy > 100 : false);
 
-      // Validate GPS against geofence if coordinates were successfully acquired
       let isAtLocation = true;
       if (validateLocation && location?.coords) {
         const validationResult = await validateLocation(location.coords.latitude, location.coords.longitude);
@@ -238,11 +236,9 @@ export default function SelfieCapture({
         }
         isAtLocation = validationResult.atLocation;
       } else if (!location) {
-        // Without coordinates, geofence cannot be verified automatically
         isAtLocation = false;
       }
 
-      // Compress photo
       setLoadingState('compressing');
       let readyUri = photoUri;
       try {
@@ -251,7 +247,6 @@ export default function SelfieCapture({
         console.warn('[SelfieCapture] compressImage fallback:', compErr);
       }
 
-      // Upload
       setLoadingState('uploading');
       const { fileId, link } = await uploadPhoto(readyUri);
 
@@ -281,54 +276,26 @@ export default function SelfieCapture({
       setLoadingState('camera');
       const photo = await cameraRef.current.takePictureAsync({ base64: false });
       if (!photo || !photo.uri) throw new Error('Capture failed');
-      
-      setIsCameraActive(false);
-      await processPhotoUri(photo.uri);
+      setCapturedUri(photo.uri);
     } catch (e: any) {
       console.error(e);
-      showToast({ title: 'Error', message: e.message, type: 'error' });
-      setIsCameraActive(false);
+      showToast({ title: 'Capture Error', message: e.message || 'Unable to capture photo.', type: 'error' });
+    } finally {
       setLoadingState('idle');
     }
   };
 
-  const handleFallbackPick = async () => {
+  const handleConfirmCapture = async () => {
+    if (!capturedUri) return;
+    const uriToProcess = capturedUri;
+    setCapturedUri(null);
     setIsCameraActive(false);
-    try {
-      setLoadingState('camera');
-      const result = await ImagePicker.launchCameraAsync({
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets || !result.assets[0]?.uri) {
-        setLoadingState('idle');
-        return;
-      }
-      await processPhotoUri(result.assets[0].uri);
-    } catch (err) {
-      console.warn('[SelfieCapture] launchCameraAsync fallback failed, trying launchImageLibraryAsync:', err);
-      try {
-        const libResult = await ImagePicker.launchImageLibraryAsync({
-          quality: 0.8,
-        });
-        if (libResult.canceled || !libResult.assets || !libResult.assets[0]?.uri) {
-          setLoadingState('idle');
-          return;
-        }
-        await processPhotoUri(libResult.assets[0].uri);
-      } catch (pickErr: any) {
-        setLoadingState('idle');
-        showToast({
-          title: 'Photo Upload Failed',
-          message: pickErr?.message || 'Unable to select photo.',
-          type: 'error',
-        });
-      }
-    }
+    await processPhotoUri(uriToProcess);
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       
       {loadingState !== 'idle' ? (
         <View style={styles.loadingContainer}>
@@ -351,53 +318,100 @@ export default function SelfieCapture({
       {/* Camera Modal */}
       {isCameraActive && (
         <Modal visible={true} transparent={false} animationType="slide">
-          <View style={styles.cameraWrapper}>
-            <CameraView 
-              style={[styles.cameraView, { aspectRatio: 3/4 }]} 
-              facing={facing} 
-              ref={cameraRef}
-              onCameraReady={() => setIsCameraReady(true)}
-              onMountError={(err) => {
-                console.error('[SelfieCapture] Camera mount error:', err);
-                setIsCameraActive(false);
-                showToast({
-                  title: 'Camera Stream Unavailable',
-                  message: 'Opening device photo selector instead.',
-                  type: 'error'
-                });
-                handleFallbackPick();
-              }}
-            />
-            <View style={styles.cameraControls}>
-              <AppPressable 
-                style={styles.camBtn} 
-                onPress={() => setIsCameraActive(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel Camera"
-              >
-                <Text style={styles.camBtnTextCancel}>Cancel</Text>
-              </AppPressable>
-              {Platform.OS === 'web' && (
-                <AppPressable 
-                  style={[styles.camBtn, { backgroundColor: colors.accentBlue, marginHorizontal: spacing.xs }]} 
-                  onPress={handleFallbackPick}
-                  accessibilityRole="button"
-                  accessibilityLabel="Pick Photo File"
-                >
-                  <Text style={styles.camBtnText}>Pick File</Text>
-                </AppPressable>
-              )}
-              <AppPressable 
-                style={[styles.camBtn, { backgroundColor: colors.primary }]} 
-                onPress={handleCapture} 
-                disabled={!isCameraReady}
-                accessibilityRole="button"
-                accessibilityLabel="Capture Photo"
-              >
-                <Text style={styles.camBtnText}>Capture</Text>
-              </AppPressable>
-            </View>
-          </View>
+          <SafeAreaView style={styles.cameraWrapper}>
+            {cameraError ? (
+              <View style={styles.errorContainer}>
+                <AlertCircle size={48} color={colors.accentRed} style={{ marginBottom: spacing.md }} />
+                <Text style={styles.errorTitle}>Camera Unavailable</Text>
+                <Text style={styles.errorText}>{cameraError}</Text>
+                <Text style={styles.errorSubtext}>
+                  Live camera stream is strictly required. File and gallery uploads are disabled.
+                </Text>
+                <View style={styles.errorButtonsRow}>
+                  <Button
+                    label="Cancel"
+                    variant="secondary"
+                    onPress={() => { setIsCameraActive(false); setCameraError(null); }}
+                    style={{ flex: 1, marginRight: spacing.sm }}
+                  />
+                  <Button
+                    label="Retry Camera"
+                    onPress={async () => {
+                      setCameraError(null);
+                      setIsCameraReady(false);
+                      const hasCamera = await requireCamera();
+                      if (!hasCamera) {
+                        setCameraError('Camera access denied. Please enable camera permission in device/browser settings.');
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            ) : capturedUri ? (
+              <View style={styles.previewContainer}>
+                <View style={styles.previewHeader}>
+                  <Text style={styles.previewHeaderText}>Verify Photo</Text>
+                  <Text style={styles.previewHeaderSub}>Confirm photo clarity before submitting.</Text>
+                </View>
+                <Image
+                  source={{ uri: capturedUri }}
+                  style={[styles.cameraView, { aspectRatio: 3/4 }]}
+                  resizeMode="contain"
+                />
+                <View style={styles.cameraControls}>
+                  <AppPressable 
+                    style={[styles.camBtn, styles.camBtnOutline]} 
+                    onPress={() => setCapturedUri(null)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retake Photo"
+                  >
+                    <Text style={styles.camBtnTextCancel}>Retake</Text>
+                  </AppPressable>
+                  <AppPressable 
+                    style={[styles.camBtn, { backgroundColor: colors.primary }]} 
+                    onPress={handleConfirmCapture}
+                    accessibilityRole="button"
+                    accessibilityLabel="Submit Photo"
+                  >
+                    <Text style={styles.camBtnText}>Submit</Text>
+                  </AppPressable>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.liveCameraContainer}>
+                <CameraView 
+                  style={[styles.cameraView, { aspectRatio: 3/4 }]} 
+                  facing={facing} 
+                  ref={cameraRef}
+                  onCameraReady={() => setIsCameraReady(true)}
+                  onMountError={(err) => {
+                    console.error('[SelfieCapture] Camera mount error:', err);
+                    setCameraError('Camera stream could not be started. Please check permissions or close other camera apps.');
+                  }}
+                />
+                <View style={styles.cameraControls}>
+                  <AppPressable 
+                    style={styles.camBtn} 
+                    onPress={() => { setIsCameraActive(false); setCameraError(null); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel Camera"
+                  >
+                    <Text style={styles.camBtnTextCancel}>Cancel</Text>
+                  </AppPressable>
+                  <AppPressable 
+                    style={[styles.camBtn, { backgroundColor: colors.primary }]} 
+                    onPress={handleCapture} 
+                    disabled={!isCameraReady}
+                    accessibilityRole="button"
+                    accessibilityLabel="Capture Photo"
+                  >
+                    <Text style={styles.camBtnText}>Capture</Text>
+                  </AppPressable>
+                </View>
+              </View>
+            )}
+          </SafeAreaView>
         </Modal>
       )}
     </View>
@@ -443,34 +457,98 @@ const styles = StyleSheet.create({
   },
   cameraWrapper: { 
     flex: 1, 
-    backgroundColor: colors.navBackground, 
+    backgroundColor: '#000000', 
     justifyContent: 'center', 
     alignItems: 'center' 
   },
-  cameraView: { 
-    width: '100%', 
-    maxWidth: 500,
-    maxHeight: '75%',
-    overflow: 'hidden',
-    borderRadius: radius.lg,
-  },
-  cameraControls: { 
-    position: 'absolute', 
-    bottom: 40, 
-    left: spacing.xl, 
-    right: spacing.xl, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
-  },
-  camBtn: { 
-    backgroundColor: colors.surface, 
-    padding: spacing.md, 
-    borderRadius: radius.lg, 
-    minWidth: 100, 
-    minHeight: 44,
+  liveCameraContainer: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  camBtnText: { color: colors.textInverse, ...typography.bodyBold },
-  camBtnTextCancel: { color: colors.textPrimary, ...typography.bodyBold },
+  previewContainer: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewHeader: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  previewHeaderText: {
+    ...typography.h3,
+    color: '#ffffff',
+  },
+  previewHeaderSub: {
+    ...typography.caption,
+    color: '#a0aec0',
+  },
+  cameraView: { 
+    width: '90%', 
+    maxWidth: 400, 
+    borderRadius: radius.lg, 
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+  },
+  cameraControls: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    padding: spacing.lg, 
+    width: '100%',
+    gap: spacing.md,
+  },
+  camBtn: { 
+    paddingVertical: spacing.md, 
+    paddingHorizontal: spacing.xl, 
+    borderRadius: radius.pill, 
+    minWidth: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  camBtnOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  camBtnText: { 
+    ...typography.bodyBold, 
+    color: '#ffffff' 
+  },
+  camBtnTextCancel: { 
+    ...typography.bodyBold, 
+    color: '#cbd5e1' 
+  },
+  errorContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 380,
+    backgroundColor: '#1e293b',
+    borderRadius: radius.card,
+    marginHorizontal: spacing.lg,
+  },
+  errorTitle: {
+    ...typography.h2,
+    color: '#ffffff',
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  errorText: {
+    ...typography.body,
+    color: '#cbd5e1',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  errorSubtext: {
+    ...typography.caption,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  errorButtonsRow: {
+    flexDirection: 'row',
+    width: '100%',
+  },
 });
