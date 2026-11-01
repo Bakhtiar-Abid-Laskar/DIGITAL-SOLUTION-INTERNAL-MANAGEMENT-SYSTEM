@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import AppHeader from '../../components/common/AppHeader';
 import { colors, radius, spacing, typography } from '../../tokens';
-import { isSalaryComingSoon } from '../../lib/shared';
+import { isSalaryComingSoonFor } from '../../config/featureFlags';
 import { ComingSoon } from '../../components/common/ComingSoon';
 import { useBottomInsetPadding } from '../../hooks/useBottomInsetPadding';
 import { supabase } from '../../lib/supabase';
@@ -155,9 +155,9 @@ function generateSlipHtml(record: SalaryRecord, employeeName: string, employeeRo
 }
 
 // ---------------------------------------------------------------------------
-// Screen
+// Screen Implementation (Intact, never executed for gated staff roles)
 // ---------------------------------------------------------------------------
-export default function SalaryScreen() {
+function FullSalaryScreen() {
   const navigation = useNavigation<any>();
   const { user, displayName, role } = useAuth();
   const { showToast } = useToast();
@@ -452,6 +452,44 @@ export default function SalaryScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Gated Salary Screen (Route Entry Point)
+// ---------------------------------------------------------------------------
+export default function SalaryScreen() {
+  const navigation = useNavigation<any>();
+  const { role, isLoading: authLoading } = useAuth();
+
+  // If role is still loading/hydrating from auth, show loading spinner — NEVER flash salary UI
+  if (authLoading || role === null) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <AppHeader title="Salary" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </View>
+    );
+  }
+
+  // Feature gate check: if coming soon is enabled for this role
+  if (isSalaryComingSoonFor(role)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <AppHeader title="Salary" />
+        <ComingSoon
+          title="Coming Soon"
+          description="The Salary section will be available soon."
+          onBackToDashboard={() => navigation.navigate('Dashboard')}
+          showBackButton={true}
+        />
+      </View>
+    );
+  }
+
+  // Only allowed roles (admin/manager/unflagged) render the full salary screen & run queries
+  return <FullSalaryScreen />;
 }
 
 const styles = StyleSheet.create({

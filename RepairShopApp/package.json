@@ -57,7 +57,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint src && tsc --noEmit",
-    "test": "jest --config ../admin-panel/jest.config.js --roots \"<rootDir>/../RepairShopApp/src/lib/shared/src\""
+    "test": "jest --config ../admin-panel/jest.config.js --roots \"<rootDir>/../RepairShopApp/src/lib/shared/src\" \"<rootDir>/../RepairShopApp/src/config\""
   },
   "private": true
 }

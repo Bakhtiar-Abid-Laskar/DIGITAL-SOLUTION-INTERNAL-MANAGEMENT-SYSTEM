@@ -63,6 +63,14 @@ export default function SalaryPage() {
     </div>
   );
 
+  if (isSalaryComingSoon(role)) {
+    return (
+      <div className="h-full flex items-center justify-center py-12">
+        <ComingSoon />
+      </div>
+    );
+  }
+
   if (role !== 'admin') {
     return (
       <div className="h-full flex items-center justify-center">

@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { formatCurrency, RUPEE, validatePaymentAmount, derivePaymentStatus } from "@repairshop/shared";
+import { formatCurrency, validatePaymentAmount, derivePaymentStatus } from "@repairshop/shared";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/common/ToastProvider";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { Badge } from "@/components/common/Badge";
 import { CreditCard, CheckCircle2, AlertCircle, Edit3 } from "lucide-react";
+
+const RUPEE = '\u20B9'; // Indian Rupee sign — Unicode U+20B9
 
 interface PaymentRecordingBoxProps {
   invoiceId?: string;
@@ -139,8 +141,8 @@ export function PaymentRecordingBox({
             isFullPaid
               ? "success"
               : derivedStatus === "partial"
-              ? "warning"
-              : "danger"
+                ? "warning"
+                : "danger"
           }
           className="uppercase tracking-wider text-[10px] font-bold"
         >
@@ -211,9 +213,8 @@ export function PaymentRecordingBox({
                 onChange={(e) => handleAmountChange(e.target.value)}
                 disabled={disabled || loading}
                 placeholder="0.00"
-                className={`w-full font-semibold text-base ${
-                  isInvalid ? "border-admin-urgent-fg focus:ring-admin-urgent-fg" : ""
-                }`}
+                className={`w-full font-semibold text-base ${isInvalid ? "border-admin-urgent-fg focus:ring-admin-urgent-fg" : ""
+                  }`}
               />
             </div>
             {validationError && (
@@ -234,11 +235,10 @@ export function PaymentRecordingBox({
                 type="button"
                 onClick={handleSetFullAmount}
                 disabled={disabled || loading}
-                className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
-                  numAmount === grandTotal
+                className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${numAmount === grandTotal
                     ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
                     : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
-                }`}
+                  }`}
               >
                 Exact
               </button>
@@ -248,11 +248,10 @@ export function PaymentRecordingBox({
                   type="button"
                   onClick={() => handleSelectCashAmount(denomination)}
                   disabled={disabled || loading}
-                  className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${
-                    numAmount === denomination
+                  className={`shrink-0 px-2.5 py-1 text-xs rounded-md font-semibold border transition-colors ${numAmount === denomination
                       ? "bg-admin-accent-dim text-admin-accent-text border-admin-accent/30"
                       : "bg-admin-bg-surface text-admin-text-secondary border-admin-border hover:text-admin-text-primary"
-                  }`}
+                    }`}
                 >
                   {RUPEE}{denomination}
                 </button>
@@ -283,9 +282,8 @@ export function PaymentRecordingBox({
             <div className="flex justify-between items-center text-admin-text-secondary">
               <span>Balance Remaining:</span>
               <span
-                className={`font-bold ${
-                  balanceDue > 0 ? "text-admin-urgent-fg" : "text-admin-success-fg"
-                }`}
+                className={`font-bold ${balanceDue > 0 ? "text-admin-urgent-fg" : "text-admin-success-fg"
+                  }`}
               >
                 {formatCurrency(balanceDue)}
               </span>

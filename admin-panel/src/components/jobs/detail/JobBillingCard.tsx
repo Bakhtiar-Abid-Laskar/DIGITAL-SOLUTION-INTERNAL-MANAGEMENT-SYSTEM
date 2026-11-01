@@ -252,16 +252,16 @@ export function JobBillingCard({
         if (!editCustomerId) throw new Error('Could not resolve customer. Please ensure a customer record exists before saving billing.');
 
         const { data: updateData, error: updateError } = await supabase.rpc('update_invoice', {
-          p_invoice_id:      billing.id,
-          p_customer_name:   job?.customer_name || 'Walk-in',
-          p_customer_id:     editCustomerId,
+          p_invoice_id: billing.id,
+          p_customer_name: job?.customer_name || 'Walk-in',
+          p_customer_id: editCustomerId,
           p_customer_contact: job?.customer_contact || null,
-          p_customer_email:   job?.customer_email   || null,
-          p_customer_gstin:   job?.customer_gstin   || null,
-          p_items:           itemsToBill,
-          p_discount:        0,
-          p_payment_method:  'Cash',
-          p_status:          billingForm.is_paid ? 'paid' : (billing.status || 'draft'),
+          p_customer_email: job?.customer_email || null,
+          p_customer_gstin: job?.customer_gstin || null,
+          p_items: itemsToBill,
+          p_discount: 0,
+          p_payment_method: 'Cash',
+          p_status: billingForm.is_paid ? 'paid' : (billing.status || 'draft'),
         });
         if (updateError) throw new Error(updateError.message);
         void updateData; // grand_total / status returned but not used here; UI re-fetches below
@@ -667,38 +667,40 @@ export function JobBillingCard({
           </div>
         </div>
 
-        {/* Footer buttons */}
-        <div className="grid grid-cols-3 gap-2 border-t border-admin-border p-3 bg-admin-bg-subtle rounded-b-xl">
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            disabled={!!printState}
-            leftIcon={<Printer size={15} />}
-            className="w-full h-9 text-xs font-semibold px-2 justify-center"
-            title="Print Tax Invoice"
-          >
-            <span className="truncate">Print Bill</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleSendWhatsAppInvoice}
-            isLoading={sendingWhatsApp}
-            leftIcon={<MessageCircle size={15} />}
-            className="w-full h-9 text-xs font-semibold px-2 justify-center text-emerald-500 hover:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
-            title="Share Bill via WhatsApp"
-          >
-            <span className="truncate">WhatsApp</span>
-          </Button>
-          <Button
-            onClick={handleSaveBilling}
-            isLoading={billingSaving}
-            leftIcon={<Save size={15} />}
-            className="w-full h-9 text-xs font-semibold px-2 justify-center"
-            title={billing?.id ? 'Update Bill' : 'Save Bill'}
-          >
-            <span className="truncate">{billing?.id ? 'Update' : 'Save'}</span>
-          </Button>
-        </div>
+          {/* Footer buttons: Print Tax Invoice as a big, prominent full-width button */}
+          <div className="space-y-2 border-t border-admin-border p-3.5 bg-admin-bg-subtle rounded-b-xl">
+            <Button
+              variant="primary"
+              onClick={handlePrint}
+              disabled={!!printState}
+              leftIcon={<Printer size={18} />}
+              className="w-full h-11 text-sm font-bold justify-center shadow-xs"
+            >
+              Print Tax Invoice
+            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSendWhatsAppInvoice}
+                isLoading={sendingWhatsApp}
+                leftIcon={<MessageCircle size={15} />}
+                className="w-full h-9 text-xs font-semibold justify-center text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                title="Share Bill via WhatsApp"
+              >
+                <span className="truncate">WhatsApp</span>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSaveBilling}
+                isLoading={billingSaving}
+                leftIcon={<Save size={15} />}
+                className="w-full h-9 text-xs font-semibold justify-center"
+                title={billing?.id ? 'Update Bill' : 'Save Bill'}
+              >
+                <span className="truncate">{billing?.id ? 'Update Bill' : 'Save Bill'}</span>
+              </Button>
+            </div>
+          </div>
       </Card>
 
       {/* Modern Print Progress Modal with Animated Percentage Bar */}

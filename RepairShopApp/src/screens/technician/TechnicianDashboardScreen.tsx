@@ -28,6 +28,7 @@ import {
   Banknote,
 } from 'lucide-react-native';
 import { formatCurrency } from '@repairshop/shared';
+import { isSalaryComingSoonFor } from '../../config/featureFlags';
 
 import BottomSheet from '../../components/common/BottomSheet';
 import Button from '../../components/common/Button';
@@ -40,7 +41,7 @@ const formatTime = (isoString: string) => {
 
 export default function TechnicianDashboardScreen() {
   const navigation = useNavigation<any>();
-  const { signOut, user, displayName, avatarUrl } = useAuth();
+  const { signOut, user, displayName, avatarUrl, role } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [logoutVisible, setLogoutVisible] = useState(false);
@@ -168,13 +169,15 @@ export default function TechnicianDashboardScreen() {
         setActiveJobs(activeJobsRes.data);
       }
 
-      try {
-        const { data: salData } = await supabase.rpc('get_technician_pending_salary');
-        if (salData?.estimated_net_salary !== undefined) {
-          setPendingSalary(Number(salData.estimated_net_salary));
+      if (!isSalaryComingSoonFor(role)) {
+        try {
+          const { data: salData } = await supabase.rpc('get_technician_pending_salary');
+          if (salData?.estimated_net_salary !== undefined) {
+            setPendingSalary(Number(salData.estimated_net_salary));
+          }
+        } catch (salErr) {
+          console.warn('Error fetching technician pending salary:', salErr);
         }
-      } catch (salErr) {
-        console.warn('Error fetching technician pending salary:', salErr);
       }
     } catch (error) {
       console.error('Error fetching tech dashboard:', error);
@@ -233,7 +236,18 @@ export default function TechnicianDashboardScreen() {
   ];
 
   const stats: StatCard[] = [
-    { id: 'pending_salary', label: 'Pending Salary (Est.)', value: pendingSalary !== null ? formatCurrency(pendingSalary) : '₹0.00', type: 'completed', icon: Banknote, onPress: () => navigation.navigate('Salary') },
+    ...(isSalaryComingSoonFor(role)
+      ? []
+      : [
+          {
+            id: 'pending_salary',
+            label: 'Pending Salary (Est.)',
+            value: pendingSalary !== null ? formatCurrency(pendingSalary) : '₹0.00',
+            type: 'completed' as const,
+            icon: Banknote,
+            onPress: () => navigation.navigate('Salary'),
+          },
+        ]),
     { id: 'assigned', label: 'Total Assigned', value: loading ? '-' : statsData.totalAssigned, type: 'total', icon: ClipboardList, onPress: () => navigateToJobs('All') },
     { id: 'in_progress', label: 'In Progress', value: loading ? '-' : statsData.inProgress, type: 'progress', icon: Activity, onPress: () => navigateToJobs('In Progress') },
     { id: 'completed', label: 'Completed Today', value: loading ? '-' : statsData.completedToday, type: 'completed', icon: CheckCircle2, onPress: () => navigateToJobs('Completed') },
