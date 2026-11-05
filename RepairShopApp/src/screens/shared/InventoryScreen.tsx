@@ -124,7 +124,14 @@ export default function InventoryScreen() {
       if (activeTab === 'Low Stock') {
         mapped = mapped.filter((i: any) => i.quantity <= i.low_stock_threshold && i.quantity > 0);
       }
-      if (replace) setItems(mapped); else setItems(prev => [...prev, ...mapped]);
+      if (replace) {
+        setItems(mapped);
+      } else {
+        setItems(prev => {
+          const seen = new Set(prev.map(i => i.id));
+          return [...prev, ...mapped.filter(i => !seen.has(i.id))];
+        });
+      }
       setHasMore((data || []).length === PAGE_SIZE);
     } catch (err) { console.error('Error fetching inventory:', err); }
     finally {

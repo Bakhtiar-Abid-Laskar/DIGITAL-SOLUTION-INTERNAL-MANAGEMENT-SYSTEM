@@ -120,7 +120,7 @@ export default function JobsPage() {
         *,
         technician:users!jobs_technician_id_fkey(name),
         job_technicians(technician_id, removed_at, technician:users!job_technicians_technician_id_fkey(name))
-      `, { count: 'exact' }).order('created_at', { ascending: false });
+      `, { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false });
 
       if (statusFilter === "active") query = query.in('status', ['Received', 'In Progress', 'Waiting for Materials']);
       else if (statusFilter !== "All") query = query.eq('status', statusFilter);

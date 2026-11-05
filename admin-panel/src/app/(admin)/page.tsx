@@ -20,7 +20,7 @@ import {
   UserCheck,
   Wrench,
 } from "lucide-react";
-import { formatCurrency, Job } from "@repairshop/shared";
+import { formatCurrency, Job, getDateIST, getAttendanceDateIST } from "@repairshop/shared";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/common/ToastProvider";
@@ -106,19 +106,17 @@ type ActionItem = {
   tone: "critical" | "warning" | "info";
 };
 
-const startOfDay = (date: Date) => {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-};
-
-const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
-
 const numberValue = (value: number | string | null | undefined) => Number(value || 0);
 
-const sameDay = (isoDate: string, date: Date) => {
-  const itemDate = new Date(isoDate);
-  return itemDate >= startOfDay(date) && itemDate < new Date(startOfDay(date).getTime() + 24 * 60 * 60 * 1000);
+const sameDay = (isoDate: string | null | undefined) => {
+  if (!isoDate) return false;
+  return getDateIST(new Date(isoDate)) === getAttendanceDateIST();
+};
+
+const isCurrentMonth = (isoDate: string | null | undefined) => {
+  if (!isoDate) return false;
+  const currentMonthPrefix = getAttendanceDateIST().slice(0, 7);
+  return getDateIST(new Date(isoDate)).startsWith(currentMonthPrefix);
 };
 
 const isActiveJob = (job: Job) => ACTIVE_JOB_STATUSES.includes(job.status as any);
@@ -350,17 +348,14 @@ export default function OverviewPage() {
     };
     if (!data) return empty;
 
-    const now = new Date();
-    const today = startOfDay(now);
-    const month = startOfMonth(now);
     const activeJobs = data.jobs.filter(isActiveJob);
-    const jobsToday = data.jobs.filter((job) => sameDay(job.created_at, now)).length;
-    const openJobsToday = activeJobs.filter((job) => sameDay(job.created_at, now)).length;
+    const jobsToday = data.jobs.filter((job) => sameDay(job.created_at)).length;
+    const openJobsToday = activeJobs.filter((job) => sameDay(job.created_at)).length;
     const paidInvoices = data.invoices.filter((invoice) => invoice.status === "paid");
-    const todayInvoices = paidInvoices.filter((invoice) => sameDay(invoice.created_at, now));
-    const monthInvoices = paidInvoices.filter((invoice) => new Date(invoice.created_at) >= month);
-    const todayExpensesRows = data.payments.filter((payment) => sameDay(payment.created_at, now));
-    const monthExpensesRows = data.payments.filter((payment) => new Date(payment.created_at) >= month);
+    const todayInvoices = paidInvoices.filter((invoice) => sameDay(invoice.paid_at || invoice.created_at));
+    const monthInvoices = paidInvoices.filter((invoice) => isCurrentMonth(invoice.paid_at || invoice.created_at));
+    const todayExpensesRows = data.payments.filter((payment) => sameDay(payment.created_at));
+    const monthExpensesRows = data.payments.filter((payment) => isCurrentMonth(payment.created_at));
     const todaySales = todayInvoices.reduce((sum, invoice) => sum + numberValue(invoice.grand_total), 0);
     const todayExpenses = todayExpensesRows.reduce((sum, payment) => sum + numberValue(payment.amount), 0);
     const monthRevenue = monthInvoices.reduce((sum, invoice) => sum + numberValue(invoice.grand_total), 0);
@@ -427,8 +422,9 @@ export default function OverviewPage() {
     ].slice(0, 10);
 
     const trend = Array.from({ length: 7 }, (_, index) => {
-      const day = new Date(today);
-      day.setDate(today.getDate() - (6 - index));
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - (6 - index));
       const next = new Date(day);
       next.setDate(day.getDate() + 1);
       const revenue = paidInvoices

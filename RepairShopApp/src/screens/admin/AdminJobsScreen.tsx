@@ -204,8 +204,9 @@ export default function AdminJobsScreen() {
       onSearchQueryChange={handleSearchChange}
       showPriorityFilter={false}
       isDashboard={false}
-      onLoadMore={hasMore ? onLoadMore : undefined}
+      onLoadMore={onLoadMore}
       loadingMore={loadingMore}
+      hasMore={hasMore}
     />
   );
 }

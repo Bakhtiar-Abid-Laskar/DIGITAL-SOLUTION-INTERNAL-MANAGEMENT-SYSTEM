@@ -28,7 +28,7 @@ import {
 
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency } from '@repairshop/shared';
+import { formatCurrency, getTodayDateString, getStartOfTodayIST } from '@repairshop/shared';
 import { colors, radius, spacing, typography, shadow, QUICK_ACTION_COLORS } from '../../tokens';
 import RoleDashboard, { StatCard, QuickAction, KpiCard } from '../../components/shared/RoleDashboard';
 import BottomSheet from '../../components/common/BottomSheet';
@@ -73,7 +73,8 @@ export default function OverviewScreen() {
 
   const fetchData = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
+      const startOfToday = getStartOfTodayIST();
 
       const [jobsRes, billsRes, salesRes, staffRes, stockRes, urgentRes, unreadRes] = await Promise.all([
         supabase
@@ -83,13 +84,13 @@ export default function OverviewScreen() {
         supabase
           .from('invoices')
           .select('grand_total')
-          .neq('status', 'cancelled')
-          .gte('created_at', `${today}T00:00:00Z`),
+          .eq('status', 'paid')
+          .gte('paid_at', startOfToday),
         supabase
           .from('sales')
           .select('grand_total')
-          .neq('payment_status', 'cancelled')
-          .gte('created_at', `${today}T00:00:00Z`),
+          .eq('payment_status', 'paid')
+          .gte('created_at', startOfToday),
         supabase
           .from('attendance')
           .select('*', { count: 'exact', head: true })
@@ -102,7 +103,7 @@ export default function OverviewScreen() {
           .from('jobs')
           .select('*', { count: 'exact', head: true })
           .eq('priority', 'Urgent')
-          .eq('status', 'Received'),
+          .not('status', 'in', '("Completed","Delivered","Cancelled")'),
         supabase
           .from('notifications')
           .select('id', { count: 'exact', head: true })

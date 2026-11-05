@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { validateJobMaterial } from '../../lib/shared/src/jobMaterials';
 import { CameraBarcodeScannerModalMobile } from '../common/CameraBarcodeScannerModalMobile';
+import { mapErrorToUserMessage } from '../../utils/errorMessages';
 
 interface AddMaterialModalProps {
   visible: boolean;
@@ -164,7 +165,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
       showToast({ title: 'Success', message: 'Material added with verified serial.', type: 'success' });
       handleClose(); onAdded();
     } catch (e: any) {
-      showToast({ title: 'Error', message: e.message || 'Failed to add material.', type: 'error' });
+      showToast({ title: 'Error', message: mapErrorToUserMessage(e) || 'Failed to add material.', type: 'error' });
     } finally { setState({ loading: false }); }
   };
 

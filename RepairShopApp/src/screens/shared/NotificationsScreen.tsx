@@ -146,7 +146,11 @@ export default function NotificationsScreen() {
       if (replace) {
         setNotifications(data || []);
       } else {
-        setNotifications(prev => [...prev, ...(data || [])]);
+        setNotifications(prev => {
+          const seen = new Set(prev.map(n => n.id));
+          const newItems = (data || []).filter((n: any) => !seen.has(n.id));
+          return [...prev, ...newItems];
+        });
       }
       
       setHasMore((data || []).length === PAGE_SIZE);

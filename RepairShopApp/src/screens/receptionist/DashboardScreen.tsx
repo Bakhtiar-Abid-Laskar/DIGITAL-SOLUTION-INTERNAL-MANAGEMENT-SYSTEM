@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, ScrollView } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
-import { getTodayDateString } from '@repairshop/shared';
+import { getTodayDateString, getStartOfTodayIST } from '@repairshop/shared';
 import { useAuth } from '../../context/AuthContext';
 import RoleDashboard, { QuickAction, StatCard } from '../../components/shared/RoleDashboard';
 import { PlusSquare, ClipboardList, Users, Bell, LogOut, User, CheckCircle2, AlertTriangle, Activity, Menu, Receipt, BarChart3, Package, MessageCircle, Mail, CreditCard } from 'lucide-react-native';
@@ -72,8 +72,7 @@ export default function DashboardScreen() {
 
   const fetchDashboardData = async (isRefresh = false) => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const startOfToday = `${todayStr}T00:00:00.000Z`;
+      const startOfToday = getStartOfTodayIST();
 
       const [receivedRes, inProgressRes, completedRes, urgentRes, unreadRes] = await Promise.all([
         supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'Received'),

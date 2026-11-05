@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
 import { useAuth } from '../../context/AuthContext';
-import { useDebounceValue } from '@repairshop/shared';
+import { useDebounceValue, getTodayDateString, getStartOfTodayIST } from '@repairshop/shared';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 
@@ -99,12 +99,12 @@ export default function MyJobsScreen() {
         .eq('job_technicians.technician_id', user.id)
         .is('job_technicians.removed_at', null);
 
-      // Apply server-side tab filter
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Apply server-side tab filter (strictly Asia/Kolkata IST)
+      const startOfToday = getStartOfTodayIST();
       if (activeTab === 'Today') {
-        query = query.gte('created_at', todayStr);
+        query = query.gte('created_at', startOfToday);
       } else if (activeTab === 'Completed Today') {
-        query = query.eq('status', 'Completed').gte('completed_at', todayStr);
+        query = query.eq('status', 'Completed').gte('completed_at', startOfToday);
       } else if (activeTab === 'Urgent') {
         query = query.eq('priority', 'Urgent').neq('status', 'Completed');
       } else if (activeTab !== 'All') {
@@ -121,7 +121,7 @@ export default function MyJobsScreen() {
 
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      query = query.order('created_at', { ascending: false }).range(from, to);
+      query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to);
 
       const [jobsRes] = await Promise.all([query, fetchTabCounts()]);
 
@@ -132,7 +132,11 @@ export default function MyJobsScreen() {
         if (replace) {
           setJobs(jobsRes.data);
         } else {
-          setJobs(prev => [...prev, ...jobsRes.data]);
+          setJobs(prev => {
+            const seen = new Set(prev.map(j => j.id));
+            const newJobs = jobsRes.data.filter((j: any) => !seen.has(j.id));
+            return [...prev, ...newJobs];
+          });
         }
         setHasMore(jobsRes.data.length === PAGE_SIZE);
       }
@@ -203,6 +207,7 @@ export default function MyJobsScreen() {
       onRefresh={onRefresh}
       onLoadMore={onLoadMore}
       loadingMore={loadingMore}
+      hasMore={hasMore}
       onJobPress={handleJobPress}
       statusTabs={statusTabs}
       activeStatusTab={activeTab}

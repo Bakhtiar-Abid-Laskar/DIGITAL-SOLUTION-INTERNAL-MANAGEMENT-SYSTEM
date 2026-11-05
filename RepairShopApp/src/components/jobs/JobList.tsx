@@ -43,6 +43,8 @@ interface JobListProps {
   onLoadMore?: () => void;
   /** Shows a spinner in the footer while loading the next page */
   loadingMore?: boolean;
+  /** Whether there are more items to fetch; hides the button when false */
+  hasMore?: boolean;
 }
 
 export default function JobList({
@@ -69,6 +71,7 @@ export default function JobList({
   unreadCount = 0,
   onLoadMore,
   loadingMore = false,
+  hasMore = false,
 }: JobListProps) {
   const insets = useSafeAreaInsets();
   const bottomPadding = useBottomInsetPadding('nav');
@@ -195,7 +198,7 @@ export default function JobList({
           }
           renderItem={renderJobItem}
           ListFooterComponent={
-            onLoadMore ? (
+            onLoadMore && hasMore ? (
               <View style={styles.loadMoreContainer}>
                 {loadingMore ? (
                   <ActivityIndicator size="small" color={colors.textMuted} />

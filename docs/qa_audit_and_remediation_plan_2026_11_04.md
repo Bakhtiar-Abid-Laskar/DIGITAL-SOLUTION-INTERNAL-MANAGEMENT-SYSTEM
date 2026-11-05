@@ -235,3 +235,4 @@ The following 12 migrations exist locally in `supabase/migrations/` but were **n
 2. **Public Holidays**: Should dates listed in `public.holidays` be excluded from auto-absence?
 3. **Hire Date Boundary**: Should auto-absence strictly apply only on or after an employee's `hire_date`?
 4. **Full Migration Synchronization**: Would you like to run the entire batch of 12 unapplied migrations, or apply targeted migrations first?
+
