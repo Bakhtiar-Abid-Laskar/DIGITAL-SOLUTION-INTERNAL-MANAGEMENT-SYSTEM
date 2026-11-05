@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { User, useDebounceValue } from '@repairshop/shared';
-import { Check, Ban, CalendarDays, Users, Plus, Trash2, Lock } from "lucide-react";
+import { Check, Ban, CalendarDays, Users, Plus, Trash2, Lock, Pencil } from "lucide-react";
 
 import Link from 'next/link';
 import { AddStaffModal } from "@/components/staff/AddStaffModal";
+import { EditStaffModal } from "@/components/staff/EditStaffModal";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchFilterBar } from "@/components/common/SearchFilterBar";
 import { Card } from "@/components/common/Card";
@@ -40,6 +41,7 @@ export default function StaffPage() {
 
   const { showToast } = useToast();
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<User | null>(null);
 
   const fetchStaff = useCallback(async (cancelled = false) => {
     if (role !== 'admin') return;
@@ -154,34 +156,34 @@ export default function StaffPage() {
     setConfirmModal({
       isOpen: true,
       title: 'Delete Staff Member',
-      message: `Are you sure you want to permanently delete ${name}? This will hard-delete their account immediately. Any jobs, payments, or attendance records they are linked to will be preserved — their name will simply be cleared from those records. This action cannot be undone.`,
+      message: `Are you sure you want to delete ${name}? If this staff member has associated historical records (such as jobs, payments, or attendance), their account will be safely deactivated to preserve accounting records. If they have no records, their account will be permanently deleted.`,
       isDestructive: true,
       onConfirm: async () => {
-        // Dismiss modal immediately for snappy UX
         setConfirmModal(null);
         try {
-          const { data, error } = await supabase.functions.invoke('admin-delete-user', {
-            body: { userId: id, action: 'delete' }
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_manage_staff_status', {
+            p_user_id: id,
+            p_action: 'delete',
           });
 
-          if (error) {
-            const errorMsg = await parseEdgeFunctionError(error, `Failed to process ${name}`);
-            throw new Error(errorMsg);
+          if (rpcErr) {
+            const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+              body: { userId: id, action: 'delete' }
+            });
+            if (error) {
+              const errorMsg = await parseEdgeFunctionError(error, `Failed to process ${name}`);
+              throw new Error(errorMsg);
+            }
+            if (data?.error) throw new Error(data.error);
+            showToast(data?.message || `${name} processed successfully.`, 'success');
+          } else {
+            showToast(rpcData?.message || `${name} processed successfully.`, 'success');
           }
-
-          if (data?.error) {
-            throw new Error(data.error);
-          }
-
-          // Remove from local state immediately (optimistic update)
-          setStaff(prev => prev.filter(s => s.id !== id));
-          showToast(data?.message || `${name} has been permanently deleted.`, 'success');
-          // Background re-sync with server
           fetchStaff();
         } catch (err: any) {
           console.error(err);
           showToast(`Action failed: ${err.message}`, 'error');
-          fetchStaff(); // Re-fetch to restore correct state on failure
+          fetchStaff();
         }
       }
     });
@@ -264,6 +266,13 @@ export default function StaffPage() {
         onSuccess={fetchStaff} 
       />
 
+      <EditStaffModal
+        isOpen={Boolean(editingStaff)}
+        user={editingStaff}
+        onClose={() => setEditingStaff(null)}
+        onSuccess={fetchStaff}
+      />
+
       {loading ? (
         <DataTableSkeleton rows={6} cols={6} hasFilterBar={false} />
       ) : (
@@ -322,6 +331,15 @@ export default function StaffPage() {
                     <td className="px-6 py-4 text-admin-text-muted text-xs">{formatDate(user.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingStaff(user)}
+                          className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center cursor-pointer"
+                          title="Edit Staff Member"
+                          aria-label="Edit Staff Member"
+                        >
+                          <Pencil size={15} />
+                        </button>
+
                         <Link 
                           href={`/attendance?search=${encodeURIComponent(user.name)}`}
                           className="p-1.5 text-admin-text-secondary hover:text-admin-accent hover:bg-admin-bg-subtle rounded-md transition-colors inline-flex items-center justify-center"

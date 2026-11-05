@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TextInput } from 'react-native';
 import { AppPressable } from '../../components/common/AppPressable';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { User, ShieldCheck, Wrench, Headphones, MoreVertical, Plus } from 'lucide-react-native';
@@ -137,6 +137,13 @@ export default function StaffScreen() {
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [toggling, setToggling] = useState(false);
 
+  // Edit Staff Modal State
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'receptionist' | 'technician'>('technician');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Attendance modal
   const [attendanceVisible, setAttendanceVisible] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
@@ -266,6 +273,52 @@ export default function StaffScreen() {
       });
     } finally {
       setToggling(false);
+    }
+  };
+
+  const openEditModal = useCallback(() => {
+    if (!selectedUser) return;
+    setEditName(selectedUser.name);
+    setEditPhone(selectedUser.phone || '');
+    setEditRole(selectedUser.role);
+    setOptionsVisible(false);
+    setEditModalVisible(true);
+  }, [selectedUser]);
+
+  const handleSaveEdit = async () => {
+    if (!selectedUser) return;
+    if (!editName.trim()) {
+      showToast({ title: 'Validation Error', message: 'Staff name cannot be empty.', type: 'error' });
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_update_staff_details', {
+        p_user_id: selectedUser.id,
+        p_name: editName.trim(),
+        p_phone: editPhone.trim() || null,
+        p_role: editRole,
+      });
+
+      if (error) throw error;
+
+      showToast({
+        title: 'Staff Updated',
+        message: data?.message || 'Staff details updated successfully.',
+        type: 'success',
+      });
+      setEditModalVisible(false);
+      setPage(0);
+      fetchUsers(0, true, false, statusFilter);
+    } catch (err: any) {
+      console.error('Failed to update staff:', err);
+      showToast({
+        title: 'Update Failed',
+        message: err.message || 'Could not update staff member.',
+        type: 'error',
+      });
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -408,6 +461,11 @@ export default function StaffScreen() {
 
             <View style={{ gap: spacing.md }}>
               <Button
+                label="Edit Staff Details"
+                variant="primary"
+                onPress={openEditModal}
+              />
+              <Button
                 label="View Attendance"
                 variant="secondary"
                 onPress={viewAttendance}
@@ -418,27 +476,103 @@ export default function StaffScreen() {
                   onPress={confirmDeactivate}
                   loading={toggling}
                   variant="secondary"
-                  style={{ borderColor: colors.accentRed }}
+                  style={{ borderColor: colors.accentOrange }}
                 />
               ) : (
-                <>
-                  <Button
-                    label="Activate Staff"
-                    onPress={confirmActivate}
-                    loading={toggling}
-                    variant="primary"
-                    style={{ backgroundColor: colors.success }}
-                  />
-                  <Button
-                    label="Delete Staff"
-                    onPress={confirmDelete}
-                    loading={toggling}
-                    variant="secondary"
-                    style={{ borderColor: colors.accentRed }}
-                  />
-                </>
+                <Button
+                  label="Activate Staff"
+                  onPress={confirmActivate}
+                  loading={toggling}
+                  variant="primary"
+                  style={{ backgroundColor: colors.success }}
+                />
               )}
+              <Button
+                label="Delete Staff"
+                onPress={confirmDelete}
+                loading={toggling}
+                variant="secondary"
+                style={{ borderColor: colors.accentRed }}
+              />
               <Button label="Cancel" variant="secondary" onPress={() => setOptionsVisible(false)} />
+            </View>
+          </>
+        )}
+      </BottomSheet>
+
+      {/* Edit Staff Sheet */}
+      <BottomSheet visible={editModalVisible} onClose={() => setEditModalVisible(false)}>
+        {selectedUser && (
+          <>
+            <Text style={{ ...typography.h2, marginBottom: spacing.xs }}>Edit Staff Member</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary, marginBottom: spacing.lg }}>
+              {selectedUser.email}
+            </Text>
+
+            <View style={{ gap: spacing.md }}>
+              <View>
+                <Text style={styles.formLabel}>Full Name *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Staff Member Name"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View>
+                <Text style={styles.formLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  placeholder="e.g. 9876543210"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View>
+                <Text style={styles.formLabel}>Role *</Text>
+                <View style={styles.rolePickerRow}>
+                  {(['technician', 'receptionist', 'admin'] as const).map(r => {
+                    const isSelected = editRole === r;
+                    const rStyle = getRoleBadgeStyle(r);
+                    return (
+                      <AppPressable
+                        key={r}
+                        onPress={() => setEditRole(r)}
+                        style={[
+                          styles.roleChip,
+                          isSelected && { backgroundColor: rStyle.bg, borderColor: rStyle.fg, borderWidth: 1.5 }
+                        ]}
+                      >
+                        <Text style={[styles.roleChipText, isSelected && { color: rStyle.fg, fontWeight: '700' }]}>
+                          {r.toUpperCase()}
+                        </Text>
+                      </AppPressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
+                <Button
+                  label="Cancel"
+                  variant="secondary"
+                  onPress={() => setEditModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Save Changes"
+                  variant="primary"
+                  loading={savingEdit}
+                  onPress={handleSaveEdit}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </View>
           </>
         )}
@@ -601,5 +735,40 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: colors.border,
+  },
+  formLabel: {
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  textInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  rolePickerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  roleChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
 });
