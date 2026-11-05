@@ -20,6 +20,7 @@ type UserData = {
   phone: string | null;
   role: 'admin' | 'receptionist' | 'technician';
   is_active: boolean;
+  updated_at?: string;
 };
 
 type AttendanceRecord = {

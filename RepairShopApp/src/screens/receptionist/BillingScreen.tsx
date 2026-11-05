@@ -188,12 +188,8 @@ export default function BillingScreen() {
   const handleSaveBill = async () => {
     if (invoice?.id && invoice?.status === 'paid') {
       showAlert(
-        'Update Paid Invoice?',
-        `This will change the recorded rate/tax for this bill from ₹${Number(invoice.grand_total || 0).toFixed(2)} to ₹${grandTotal.toFixed(2)}. Continue?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => void executeSaveBill() },
-        ]
+        'Invoice Paid and Locked',
+        'This invoice has already been paid and finalized. For accounting integrity, paid bills cannot be modified. If a correction is required, please consult your administrator.'
       );
       return;
     }
@@ -325,7 +321,11 @@ export default function BillingScreen() {
       setInvoice(newInvoice);
       showToast({ title: 'Success', message: 'Itemized bill saved successfully.', type: 'success' });
     } catch (err: any) {
-      showToast({ title: 'Save Failed', message: err.message, type: 'error' });
+      let errorMsg = err?.message || 'Failed to save billing.';
+      if (errorMsg.includes('PAID_INVOICE_LOCKED') || errorMsg.includes('immutable')) {
+        errorMsg = 'This invoice is paid and locked. Paid invoices cannot be modified for accounting compliance.';
+      }
+      showToast({ title: 'Save Failed', message: errorMsg, type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -552,11 +552,11 @@ export default function BillingScreen() {
             </AppPressable>
           </View>
           <Button
-            label={invoice?.id ? 'Update Bill' : 'Save Bill'}
+            label={invoice?.status === 'paid' ? 'Bill Paid & Locked' : invoice?.id ? 'Update Bill' : 'Save Bill'}
             onPress={handleSaveBill}
             loading={saving}
-            disabled={saving}
-            variant="primary"
+            disabled={saving || invoice?.status === 'paid'}
+            variant={invoice?.status === 'paid' ? 'secondary' : 'primary'}
             style={styles.primaryBtn}
           />
         </View>

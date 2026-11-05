@@ -293,13 +293,21 @@ export function JobBillingCard({
       if (updatedInvoice) onUpdateBilling(updatedInvoice);
       showToast('Billing saved successfully', 'success');
     } catch (err: any) {
-      showToast(err.message, "error");
+      let errMsg = err?.message || 'Failed to save billing.';
+      if (errMsg.includes('PAID_INVOICE_LOCKED') || errMsg.includes('immutable')) {
+        errMsg = 'This invoice is paid and finalized. Line items cannot be modified for accounting compliance.';
+      }
+      showToast(errMsg, "error");
     } finally {
       onSetBillingSaving(false);
     }
   };
 
   const handleSaveBilling = () => {
+    if (billing?.status === 'paid') {
+      showToast('This invoice is paid and finalized. Line items cannot be modified for accounting compliance.', 'error');
+      return;
+    }
     // Compulsory serial check for all hardware materials
     const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
     if (missingSerialItems.length > 0) {
@@ -693,11 +701,12 @@ export function JobBillingCard({
                 variant="outline"
                 onClick={handleSaveBilling}
                 isLoading={billingSaving}
+                disabled={billingSaving || billing?.status === 'paid'}
                 leftIcon={<Save size={15} />}
                 className="w-full h-9 text-xs font-semibold justify-center"
-                title={billing?.id ? 'Update Bill' : 'Save Bill'}
+                title={billing?.status === 'paid' ? 'Bill Paid & Locked' : billing?.id ? 'Update Bill' : 'Save Bill'}
               >
-                <span className="truncate">{billing?.id ? 'Update Bill' : 'Save Bill'}</span>
+                <span className="truncate">{billing?.status === 'paid' ? 'Bill Paid & Locked' : billing?.id ? 'Update Bill' : 'Save Bill'}</span>
               </Button>
             </div>
           </div>
