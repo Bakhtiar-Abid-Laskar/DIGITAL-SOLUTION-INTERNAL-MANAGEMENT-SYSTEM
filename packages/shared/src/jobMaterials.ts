@@ -2,7 +2,8 @@ import { JobMaterial } from './types';
 
 /**
  * Validates a job material entry before insertion or update.
- * Enforces compulsory serial number, positive quantity, valid cost, and material name.
+ * Enforces positive quantity, valid cost, and material name.
+ * Serial number is purely optional.
  */
 export function validateJobMaterial(
   item: Partial<JobMaterial>
@@ -26,67 +27,35 @@ export function validateJobMaterial(
     return { valid: false, error: 'Unit cost cannot be negative.' };
   }
 
-  const serial = item.serial_number?.trim();
-  if (!serial) {
-    return {
-      valid: false,
-      error: `Compulsory serial number required for "${name}". Every part used on a job must have a recorded serial number.`,
-    };
-  }
-
+  // Serial number is purely optional everywhere
   return { valid: true };
 }
 
 /**
- * Validates whether all materials associated with a job have compulsory serial numbers
- * before the job can transition to 'Completed'.
+ * Validates whether materials prevent a job from transitioning to 'Completed'.
+ * Serial numbers are purely optional everywhere; completion is always permitted.
  */
 export function canCompleteJobMaterials(
   materials: JobMaterial[] | null | undefined
 ): { allowed: boolean; missingMaterials: string[] } {
-  if (!materials || materials.length === 0) {
-    return { allowed: true, missingMaterials: [] };
-  }
-
-  const missing: string[] = [];
-  for (const mat of materials) {
-    // Only check materials that are confirmed/used (ignore status === 'unused' or returned)
-    if (mat.status === 'unused') continue;
-    const serial = mat.serial_number?.trim();
-    if (!serial) {
-      missing.push(mat.material_name || 'Unnamed Material');
-    }
-  }
-
+  void materials;
   return {
-    allowed: missing.length === 0,
-    missingMaterials: missing,
+    allowed: true,
+    missingMaterials: [],
   };
 }
 
 /**
  * Validates whether a tax invoice can be generated for a job.
- * Disallows invoice generation if any material line is missing a compulsory serial number.
+ * Serial numbers are purely optional everywhere; invoice generation is always permitted.
  */
 export function canGenerateTaxInvoice(
   materials: JobMaterial[] | null | undefined
 ): { allowed: boolean; missingMaterials: string[] } {
-  if (!materials || materials.length === 0) {
-    return { allowed: true, missingMaterials: [] };
-  }
-
-  const missing: string[] = [];
-  for (const mat of materials) {
-    if (mat.status === 'unused') continue;
-    const serial = mat.serial_number?.trim();
-    if (!serial) {
-      missing.push(mat.material_name || 'Unnamed Material');
-    }
-  }
-
+  void materials;
   return {
-    allowed: missing.length === 0,
-    missingMaterials: missing,
+    allowed: true,
+    missingMaterials: [],
   };
 }
 
@@ -98,6 +67,5 @@ export function parseSerialNumbers(input: string | null | undefined): string[] {
   return input
     .split(/[\r\n,]+/)
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter((s) => s.length > 0);
 }
-

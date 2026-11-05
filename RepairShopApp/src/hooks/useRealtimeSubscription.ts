@@ -13,7 +13,6 @@ export function useRealtimeSubscription(
   const onPayloadRef = useRef(onPayload);
   useEffect(() => {
     onPayloadRef.current = onPayload;
-    return () => { onPayloadRef.current = () => {}; };
   }, [onPayload]);
 
   useEffect(() => {

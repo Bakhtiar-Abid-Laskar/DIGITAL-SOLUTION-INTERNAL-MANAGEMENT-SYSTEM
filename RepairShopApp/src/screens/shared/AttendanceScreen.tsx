@@ -217,7 +217,8 @@ export default function AttendanceScreen() {
   const [confirmAction, setConfirmAction] = useState<{status: 'Leave' | 'Halfday'} | null>(null);
 
   const todayStr = getAttendanceDateIST();
-  const todayDateObj = new Date(todayStr + 'T00:00:00.000Z');
+  const [todayYear, todayMonth, todayDay] = useMemo(() => todayStr.split('-').map(Number), [todayStr]);
+  const todayDateObj = useMemo(() => new Date(todayYear, todayMonth - 1, todayDay), [todayYear, todayMonth, todayDay]);
 
   const fetchAttendance = async () => {
     if (!user) return;

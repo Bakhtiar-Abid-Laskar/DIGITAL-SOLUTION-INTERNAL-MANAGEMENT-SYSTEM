@@ -31,21 +31,15 @@ export function JobMaterialsCard({
 
   const handleAddMaterial = async () => {
     const trimmedSerial = (newMaterial.serialNumber || '').trim();
-    if (!trimmedSerial) {
-      setSerialError(true);
-      showToast("Serial number is compulsory for all job materials.", "error");
-      return;
-    }
 
     const validation = validateJobMaterial({
       material_name: newMaterial.name,
-      serial_number: trimmedSerial,
+      serial_number: trimmedSerial || undefined,
       quantity: newMaterial.qty,
       unit_cost: newMaterial.unitCost,
     });
 
     if (!validation.valid) {
-      if (!trimmedSerial) setSerialError(true);
       showToast(validation.error || "Invalid material details.", "error");
       return;
     }
@@ -57,7 +51,7 @@ export function JobMaterialsCard({
       const { error } = await supabase.from('job_materials').insert({
         job_id: jobId,
         material_name: newMaterial.name.trim(),
-        serial_number: trimmedSerial,
+        serial_number: trimmedSerial || null,
         serial_id: newMaterial.serialId || null,
         quantity: newMaterial.qty,
         added_qty: newMaterial.qty,
@@ -104,7 +98,7 @@ export function JobMaterialsCard({
       <div className="p-6 border-b border-admin-border flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold leading-none tracking-tight">Materials & Parts Logged</h3>
-          <p className="text-xs text-admin-text-secondary mt-1">Every part used on this job must have a verified serial number.</p>
+          <p className="text-xs text-admin-text-secondary mt-1">Track parts used, serial numbers, and costs for this repair.</p>
         </div>
         <span className="text-xs font-semibold px-2 py-0.5 rounded bg-admin-bg-subtle text-admin-text-secondary border border-admin-border">
           {materials.length} {materials.length === 1 ? 'part' : 'parts'}
@@ -137,9 +131,8 @@ export function JobMaterialsCard({
                       </code>
                     </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-admin-danger font-medium">
-                      <AlertCircle size={13} />
-                      Missing Serial
+                    <span className="text-xs text-admin-text-muted">
+                      None
                     </span>
                   )}
                 </td>
@@ -156,7 +149,7 @@ export function JobMaterialsCard({
             {materials.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-admin-text-secondary">
-                  No materials logged for this job. Add parts below with compulsory serial numbers.
+                  No materials logged for this job. Add parts below.
                 </td>
               </tr>
             )}
@@ -174,13 +167,13 @@ export function JobMaterialsCard({
               <td className="px-4 py-3">
                 <div className="relative flex items-center">
                   <Input 
-                    placeholder="Serial Number * (compulsory)" 
+                    placeholder="Serial Number (optional)" 
                     value={newMaterial.serialNumber || ''} 
                     onChange={e => {
                       setSerialError(false);
                       onUpdateNewMaterial({ serialNumber: e.target.value });
                     }} 
-                    className={`h-9 text-sm font-mono pr-8 ${serialError ? 'border-admin-danger focus:ring-admin-danger' : ''}`}
+                    className="h-9 text-sm font-mono pr-8"
                   />
                   <button
                     type="button"
@@ -191,11 +184,6 @@ export function JobMaterialsCard({
                     <ScanLine size={15} />
                   </button>
                 </div>
-                {serialError && (
-                  <p className="text-[11px] text-admin-danger font-medium mt-1">
-                    Serial number is compulsory for all job materials
-                  </p>
-                )}
               </td>
               <td className="px-2 py-3 w-20">
                 <Input 

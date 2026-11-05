@@ -119,13 +119,6 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
   const submit = async () => {
     if (!name.trim()) return showToast({ title: 'Error', message: 'Material name is required.', type: 'error' });
     const trimmedSerial = (serialNumber || '').trim();
-    if (!trimmedSerial) {
-      return showToast({
-        title: 'Serial Number Required',
-        message: 'Serial number is compulsory for all job materials.',
-        type: 'error',
-      });
-    }
 
     const q = parseFloat(quantity), c = parseFloat(unitCost || '0');
     if (isNaN(q) || q <= 0) return showToast({ title: 'Error', message: 'Quantity must be > 0.', type: 'error' });
@@ -136,7 +129,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
 
     const validation = validateJobMaterial({
       material_name: name.trim(),
-      serial_number: trimmedSerial,
+      serial_number: trimmedSerial || undefined,
       quantity: q,
       unit_cost: c,
     });
@@ -149,7 +142,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
       const { error } = await supabase.from('job_materials').insert({
         job_id: jobId,
         material_name: name.trim(),
-        serial_number: trimmedSerial,
+        serial_number: trimmedSerial || null,
         qty_taken: q,
         quantity: q,
         added_qty: q,
@@ -162,7 +155,7 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
         checkout_status: 'checked_out',
       });
       if (error) throw error;
-      showToast({ title: 'Success', message: 'Material added with verified serial.', type: 'success' });
+      showToast({ title: 'Success', message: 'Material added successfully.', type: 'success' });
       handleClose(); onAdded();
     } catch (e: any) {
       showToast({ title: 'Error', message: mapErrorToUserMessage(e) || 'Failed to add material.', type: 'error' });
@@ -217,11 +210,11 @@ export default function AddMaterialModal({ visible, jobId, onClose, onAdded }: A
           ) : null}
         </View>
 
-        {/* Compulsory Serial Number Input + Camera Barcode Scanner */}
+        {/* Serial Number Input (Optional) + Camera Barcode Scanner */}
         <View style={styles.serialInputRow}>
           <TextInput
             style={[styles.input, styles.serialInput]}
-            placeholder="Serial Number (Compulsory) *"
+            placeholder="Serial Number (Optional)"
             placeholderTextColor={colors.textMuted}
             value={serialNumber}
             onChangeText={(val) => setState({ serialNumber: val })}

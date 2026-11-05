@@ -344,13 +344,6 @@ export default function UpdateWorkScreen() {
     try {
       setState({ updating: true });
 
-      if (selectedStatus === 'Completed') {
-        const serialCheck = canCompleteJobMaterials(materials);
-        if (!serialCheck.allowed) {
-          throw new Error(`Every part requires a compulsory serial number before completion: ${serialCheck.missingMaterials.join(', ')}`);
-        }
-      }
-
       const unconfirmed = materials.filter((m: any) => m.checkout_status === 'checked_out');
 
       if (selectedStatus === 'Completed' && unconfirmed.length > 0) {
@@ -416,18 +409,6 @@ export default function UpdateWorkScreen() {
     if (selectedStatus === 'Other' && !otherReasonText.trim() && !job.other_status_reason) {
       setState({ otherReasonModalVisible: true });
       return;
-    }
-
-    if (selectedStatus === 'Completed') {
-      const serialCheck = canCompleteJobMaterials(materials);
-      if (!serialCheck.allowed) {
-        showToast({
-          title: 'Compulsory Serial Required',
-          message: `Cannot complete job: The following parts are missing serial numbers: ${serialCheck.missingMaterials.join(', ')}`,
-          type: 'error',
-        });
-        return;
-      }
     }
 
     setState({ statusSelectorVisible: false });

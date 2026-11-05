@@ -91,27 +91,28 @@ serve(async (req: Request) => {
         }
       }
 
-      // 3. Notify Admins (for dashboard real-time tracking & urgent alerts)
-      const { data: adminUsers } = await supabase
+      // 3. Notify Admins & Receptionists (for dashboard real-time tracking & intake alerts)
+      const { data: staffUsers } = await supabase
         .from('users')
-        .select('id, expo_push_token, name')
-        .eq('role', 'admin')
+        .select('id, expo_push_token, name, role')
+        .in('role', ['admin', 'receptionist'])
         .eq('is_active', true);
 
-      if (adminUsers && adminUsers.length > 0) {
-        for (const admin of adminUsers) {
-          if (!notifiedTechIds.has(admin.id)) {
-            const adminTitle = isUrgent ? 'URGENT: New Job Intake' : 'New Job Created';
-            const adminBody = isUrgent
-              ? `High-priority repair ${job.job_code} (${job.customer_name || 'Customer'}) created.`
-              : `Job ${job.job_code} created for ${job.customer_name || 'Customer'}. Priority: ${job.priority || 'Normal'}.`;
+      if (staffUsers && staffUsers.length > 0) {
+        for (const staff of staffUsers) {
+          if (!notifiedTechIds.has(staff.id)) {
+            const deviceLabel = job.device_type_id || job.device_type || 'Device';
+            const staffTitle = isUrgent ? 'URGENT: New Job Received' : 'New Job Received';
+            const staffBody = isUrgent
+              ? `High-priority repair ${job.job_code} (${job.customer_name || 'Customer'} - ${deviceLabel}) received.`
+              : `Job ${job.job_code} received for ${job.customer_name || 'Customer'} (${deviceLabel}). Priority: ${job.priority || 'Normal'}.`;
 
             await sendPushNotification(supabase, {
-              userId: admin.id,
-              pushToken: admin.expo_push_token,
-              title: adminTitle,
-              body: adminBody,
-              data: { screen: 'JobDetail', jobId: job.id },
+              userId: staff.id,
+              pushToken: staff.expo_push_token,
+              title: staffTitle,
+              body: staffBody,
+              data: { screen: staff.role === 'admin' ? 'AdminJobDetail' : 'JobDetail', jobId: job.id },
               jobId: job.id,
             });
           }

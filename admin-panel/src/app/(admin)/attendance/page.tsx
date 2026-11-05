@@ -189,7 +189,8 @@ export default function AttendancePage() {
       const { data, error } = await query;
       if (error) throw error;
       if (data) {
-        exportAttendanceToCSV(data as any, `repairshop_attendance_all_${new Date().toISOString().split('T')[0]}.csv`);
+        const nowIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        exportAttendanceToCSV(data as any, `repairshop_attendance_all_${nowIST}.csv`);
       }
     } catch (err: any) {
       showToast(`Failed to export data: ${err.message}`, 'error');
@@ -234,7 +235,15 @@ export default function AttendancePage() {
         description="Verify staff daily attendance, selfie check-ins, and GPS location status."
         actions={
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => exportAttendanceToCSV(records, 'repairshop_attendance_page.csv')} disabled={records.length === 0}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const nowIST = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                exportAttendanceToCSV(records, `repairshop_attendance_page_${nowIST}.csv`);
+              }} 
+              disabled={records.length === 0}
+            >
               Export Page
             </Button>
             <Button variant="outline" size="sm" onClick={handleExportAll} isLoading={exporting} leftIcon={<Download size={14} />}>

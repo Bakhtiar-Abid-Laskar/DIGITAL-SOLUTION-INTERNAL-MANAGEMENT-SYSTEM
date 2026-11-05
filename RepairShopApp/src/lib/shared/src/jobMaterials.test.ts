@@ -6,38 +6,38 @@ import {
 } from './jobMaterials';
 import { JobMaterial } from './types';
 
-describe('Job Materials Compulsory Serial Number Rules', () => {
+describe('Job Materials Optional Serial Number Rules', () => {
   describe('validateJobMaterial', () => {
-    it('rejects a material with missing or blank serial number', () => {
+    it('accepts a material with missing or blank serial number (purely optional)', () => {
       const res = validateJobMaterial({
         material_name: 'SSD 512GB NVMe',
         quantity: 1,
         unit_cost: 2800,
         serial_number: '',
       });
-      expect(res.valid).toBe(false);
-      expect(res.error).toContain('Compulsory serial number required');
+      expect(res.valid).toBe(true);
+      expect(res.error).toBeUndefined();
     });
 
-    it('rejects a material with null or undefined serial number', () => {
+    it('accepts a material with null or undefined serial number', () => {
       const res = validateJobMaterial({
         material_name: 'Display Panel 15.6"',
         quantity: 1,
         unit_cost: 4500,
       });
-      expect(res.valid).toBe(false);
-      expect(res.error).toContain('Compulsory serial number required');
+      expect(res.valid).toBe(true);
+      expect(res.error).toBeUndefined();
     });
 
-    it('rejects a material with whitespace-only serial number', () => {
+    it('accepts a material with whitespace-only serial number', () => {
       const res = validateJobMaterial({
         material_name: 'RAM 16GB DDR4',
         quantity: 1,
         unit_cost: 2100,
         serial_number: '   ',
       });
-      expect(res.valid).toBe(false);
-      expect(res.error).toContain('Compulsory serial number required');
+      expect(res.valid).toBe(true);
+      expect(res.error).toBeUndefined();
     });
 
     it('rejects an invalid material without name', () => {
@@ -62,7 +62,7 @@ describe('Job Materials Compulsory Serial Number Rules', () => {
       expect(res.error).toContain('Quantity must be greater than zero');
     });
 
-    it('accepts a valid material with all compulsory fields including serial number', () => {
+    it('accepts a valid material with all fields including serial number', () => {
       const res = validateJobMaterial({
         material_name: 'Crucial 500GB SSD',
         quantity: 1,
@@ -109,7 +109,7 @@ describe('Job Materials Compulsory Serial Number Rules', () => {
       expect(res.missingMaterials).toHaveLength(0);
     });
 
-    it('blocks completion and lists missing parts if any material lacks a serial number', () => {
+    it('allows completion even if materials lack a serial number', () => {
       const materials: JobMaterial[] = [
         baseMaterial,
         {
@@ -123,8 +123,8 @@ describe('Job Materials Compulsory Serial Number Rules', () => {
         },
       ];
       const res = canCompleteJobMaterials(materials);
-      expect(res.allowed).toBe(false);
-      expect(res.missingMaterials).toContain('Graphics Card GTX 1650');
+      expect(res.allowed).toBe(true);
+      expect(res.missingMaterials).toHaveLength(0);
     });
 
     it('ignores materials marked with status "unused"', () => {
@@ -147,7 +147,7 @@ describe('Job Materials Compulsory Serial Number Rules', () => {
   });
 
   describe('canGenerateTaxInvoice', () => {
-    it('blocks invoice generation when any job part is missing a serial number', () => {
+    it('allows invoice generation when job parts lack serial numbers', () => {
       const materials: JobMaterial[] = [
         {
           id: 'mat-1',
@@ -160,8 +160,8 @@ describe('Job Materials Compulsory Serial Number Rules', () => {
         },
       ];
       const res = canGenerateTaxInvoice(materials);
-      expect(res.allowed).toBe(false);
-      expect(res.missingMaterials).toContain('Laptop Keyboard Replacement');
+      expect(res.allowed).toBe(true);
+      expect(res.missingMaterials).toHaveLength(0);
     });
 
     it('allows invoice generation when all job parts have valid serial numbers', () => {

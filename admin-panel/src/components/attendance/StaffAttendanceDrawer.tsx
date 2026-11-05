@@ -51,8 +51,12 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
     if (!staff) return;
     const fetchRecords = async () => {
       setLoading(true);
-      const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-      const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      const year = currentMonth.getFullYear();
+      const monthNum = currentMonth.getMonth() + 1;
+      const monthStr = `${year}-${String(monthNum).padStart(2, '0')}`;
+      const lastDay = new Date(year, monthNum, 0).getDate();
+      const startDate = `${monthStr}-01`;
+      const endDate = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
       
       const { data, error } = await supabase
         .from('attendance')
@@ -61,8 +65,8 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
           users!attendance_user_id_fkey(name, role, id)
         `)
         .eq('user_id', staff.id)
-        .gte('date', startOfMonth.toISOString().split('T')[0])
-        .lte('date', endOfMonth.toISOString().split('T')[0])
+        .gte('date', startDate)
+        .lte('date', endDate)
         .order('date', { ascending: false });
 
       if (!error && data) {
@@ -155,7 +159,10 @@ export function StaffAttendanceDrawer({ staff, onClose }: StaffAttendanceDrawerP
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => exportAttendanceToCSV(records, `${staff.name}_attendance_${monthYearStr}.csv`)}
+              onClick={() => exportAttendanceToCSV(
+                records.map(r => ({ ...r, staff_name: staff.name, staff_role: staff.role })), 
+                `${staff.name.replace(/\s+/g, '_')}_attendance_${monthYearStr.replace(/\s+/g, '_')}.csv`
+              )}
               disabled={records.length === 0}
               className="shadow-2xs text-xs font-medium"
             >

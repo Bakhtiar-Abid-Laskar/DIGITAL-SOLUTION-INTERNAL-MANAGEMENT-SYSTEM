@@ -157,6 +157,11 @@ export default function MyJobsScreen() {
     fetchJobs(0, true);
   }, user ? `technician_id=eq.${user.id}` : undefined);
 
+  useRealtimeSubscription('job_technicians', () => {
+    setPage(0);
+    fetchJobs(0, true);
+  }, user ? `technician_id=eq.${user.id}` : undefined);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;

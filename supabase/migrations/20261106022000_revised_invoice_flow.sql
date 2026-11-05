@@ -337,3 +337,4 @@ $$;
 GRANT EXECUTE ON FUNCTION public.create_revised_invoice(uuid, jsonb, numeric, text, text) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+

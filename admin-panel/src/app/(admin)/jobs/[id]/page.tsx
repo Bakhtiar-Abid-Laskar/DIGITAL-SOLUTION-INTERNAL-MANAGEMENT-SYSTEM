@@ -135,11 +135,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       };
 
       if (state.editForm.status === 'Completed' && state.job?.status !== 'Completed') {
-        const check = canCompleteJobMaterials(state.materials);
-        if (!check.allowed) {
-          showToast(`Cannot complete job: The following parts are missing compulsory serial numbers: ${check.missingMaterials.join(', ')}`, "error");
-          return;
-        }
         updateData.completed_at = new Date().toISOString();
       }
 

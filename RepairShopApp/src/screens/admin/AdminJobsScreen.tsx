@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Job } from '../../types/job';
 import { useDebounceValue } from '@repairshop/shared';
 import JobList, { TabDefinition } from '../../components/jobs/JobList';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 
 const PAGE_SIZE = 20;
 
@@ -136,6 +137,13 @@ export default function AdminJobsScreen() {
       setLoadingMore(false);
     }
   };
+
+  // ── Realtime updates on jobs table ──
+  useRealtimeSubscription('jobs', () => {
+    setPage(0);
+    fetchTabCounts();
+    fetchJobs(0, true);
+  });
 
   // ── Initial load / focus refresh ──
   useFocusEffect(

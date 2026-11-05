@@ -33,9 +33,7 @@ export default function MaterialList({ materials, onDelete, canEdit, hidePricing
                   <Text style={styles.serialLabel}>S/N: </Text>
                   <Text style={styles.serialValue}>{mat.serial_number}</Text>
                 </View>
-              ) : (
-                <Text style={styles.missingSerialWarning}>⚠️ Missing Serial Number</Text>
-              )}
+              ) : null}
 
               {!hidePricing && (
                 <Text style={styles.cost}>@ {formatCurrency(mat.unit_cost)} = {formatCurrency(mat.total_cost)}</Text>

@@ -74,17 +74,25 @@ export async function playNotificationSound(): Promise<void> {
       isSoundInitialized = true;
     }
 
-    const { sound } = await Audio.Sound.createAsync(
+    // Wrap remote sound creation in a race to prevent hanging on slow networks
+    const soundPromise = Audio.Sound.createAsync(
       { uri: 'https://notificationsounds.com/storage/sounds/file-sounds-1150-pristine.mp3' },
       { shouldPlay: true, volume: 0.8 }
     );
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Audio playback timed out')), 2500);
+    });
+
+    const result = (await Promise.race([soundPromise, timeoutPromise])) as { sound: Audio.Sound };
+    const sound = result.sound;
 
     sound.setOnPlaybackStatusUpdate((status) => {
       if ('didJustFinish' in status && status.didJustFinish) {
         sound.unloadAsync().catch(() => {});
       }
     });
-  } catch (err) {
-    console.warn('Could not play notification sound:', err);
+  } catch (_err) {
+    // Non-fatal; foreground notifications already ring system alerts
   }
 }

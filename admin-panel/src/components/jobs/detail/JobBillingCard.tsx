@@ -316,13 +316,6 @@ export function JobBillingCard({
 
   const handleSaveBilling = () => {
     const isPaid = billing?.status === 'paid';
-    // Compulsory serial check for all hardware materials
-    const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
-    if (missingSerialItems.length > 0) {
-      const names = missingSerialItems.map(i => `"${i.item_name}"`).join(', ');
-      showToast(`Serial number is compulsory for all billed parts. Missing on: ${names}`, 'error');
-      return;
-    }
 
     setConfirmModal({
       isOpen: true,
@@ -339,14 +332,6 @@ export function JobBillingCard({
   };
 
   const handlePrint = async () => {
-    // Compulsory serial check for all hardware materials
-    const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
-    if (missingSerialItems.length > 0) {
-      const names = missingSerialItems.map(i => `"${i.item_name}"`).join(', ');
-      showToast(`Cannot generate Tax Invoice: Every part requires a verified serial number. Missing on: ${names}`, 'error');
-      return;
-    }
-
     setPrintState({ isOpen: true, percent: 15, message: 'Preparing invoice...' });
 
     try {
@@ -511,9 +496,8 @@ export function JobBillingCard({
                                 </code>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-admin-danger font-medium">
-                                <AlertCircle size={11} />
-                                Serial number missing (compulsory)
+                              <span className="inline-flex items-center gap-1 text-[11px] text-admin-text-muted">
+                                S/N: (optional)
                               </span>
                             )}
                           </div>
