@@ -188,15 +188,19 @@ export default function BillingScreen() {
   const handleSaveBill = async () => {
     if (invoice?.id && invoice?.status === 'paid') {
       showAlert(
-        'Invoice Paid and Locked',
-        'This invoice has already been paid and finalized. For accounting integrity, paid bills cannot be modified. If a correction is required, please consult your administrator.'
+        'Create Revised Invoice?',
+        `This invoice is paid and finalized. Saving changes will issue a new revised invoice (e.g. ${invoice.invoice_code}-R1) and mark the original as amended for accounting compliance. Continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Create Revision', onPress: () => void executeSaveBill(true) },
+        ]
       );
       return;
     }
-    await executeSaveBill();
+    await executeSaveBill(false);
   };
 
-  const executeSaveBill = async () => {
+  const executeSaveBill = async (isRevision = false) => {
     try {
       setSaving(true);
       const itemsToBill = itemizedLines.map(line => {
@@ -217,7 +221,25 @@ export default function BillingScreen() {
       });
 
       let newInvoice = invoice;
-      if (!invoice?.id) {
+      if (isRevision && invoice?.id) {
+        // Issue revised invoice atomically via create_revised_invoice RPC
+        const { data: revData, error: revErr } = await supabase.rpc('create_revised_invoice', {
+          p_original_invoice_id: invoice.id,
+          p_items: itemsToBill,
+          p_discount: 0,
+          p_payment_method: invoice?.payment_method || 'Cash',
+          p_notes: `Revision for Job ${job?.job_code || ''}`,
+        });
+        if (revErr) throw revErr;
+
+        const { data: fetchInv } = await supabase
+          .from('invoices')
+          .select('*, invoice_items(*)')
+          .eq('id', revData?.new_invoice_id)
+          .single();
+        newInvoice = fetchInv;
+        showToast({ title: 'Revision Issued', message: `Revised invoice ${revData?.new_invoice_code} issued successfully.`, type: 'success' });
+      } else if (!invoice?.id) {
         // Resolve or create customer record — required by the new create_invoice signature
         let customerId: string | null = null;
         if (job?.customer_name) {
@@ -552,10 +574,10 @@ export default function BillingScreen() {
             </AppPressable>
           </View>
           <Button
-            label={invoice?.status === 'paid' ? 'Bill Paid & Locked' : invoice?.id ? 'Update Bill' : 'Save Bill'}
+            label={invoice?.status === 'paid' ? 'Revise Bill' : invoice?.id ? 'Update Bill' : 'Save Bill'}
             onPress={handleSaveBill}
             loading={saving}
-            disabled={saving || invoice?.status === 'paid'}
+            disabled={saving}
             variant={invoice?.status === 'paid' ? 'secondary' : 'primary'}
             style={styles.primaryBtn}
           />

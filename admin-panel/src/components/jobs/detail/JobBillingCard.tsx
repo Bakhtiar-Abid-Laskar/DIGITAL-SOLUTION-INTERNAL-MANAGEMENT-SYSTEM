@@ -178,7 +178,7 @@ export function JobBillingCard({
   const totalTax = billingTotals.taxAmount;
   const grandTotalPreview = billingTotals.grandTotal;
 
-  const executeSaveBilling = async () => {
+  const executeSaveBilling = async (isRevision = false) => {
     onSetBillingSaving(true);
     try {
       const itemsToBill = lines.map(line => ({
@@ -194,7 +194,18 @@ export function JobBillingCard({
       }));
 
       let createdInvoiceId: string | null = null;
-      if (!billing?.id) {
+      if (isRevision && billing?.id) {
+        // Issue revised invoice atomically via create_revised_invoice RPC
+        const { data: revData, error: revError } = await supabase.rpc('create_revised_invoice', {
+          p_original_invoice_id: billing.id,
+          p_items: itemsToBill,
+          p_discount: 0,
+          p_payment_method: 'Cash',
+          p_notes: `Revision for job ${jobCode}`,
+        });
+        if (revError) throw new Error(revError.message);
+        createdInvoiceId = revData?.new_invoice_id || null;
+      } else if (!billing?.id) {
         // Resolve or create the customer record so create_invoice gets a valid customer_id
         let customerId: string | null = job?.customer_id || null;
         if (!customerId && job?.customer_name) {
@@ -304,10 +315,7 @@ export function JobBillingCard({
   };
 
   const handleSaveBilling = () => {
-    if (billing?.status === 'paid') {
-      showToast('This invoice is paid and finalized. Line items cannot be modified for accounting compliance.', 'error');
-      return;
-    }
+    const isPaid = billing?.status === 'paid';
     // Compulsory serial check for all hardware materials
     const missingSerialItems = lines.filter(l => !l.is_labour && (!l.serial_number || !l.serial_number.trim()));
     if (missingSerialItems.length > 0) {
@@ -318,12 +326,14 @@ export function JobBillingCard({
 
     setConfirmModal({
       isOpen: true,
-      title: 'Confirm Billing Statement',
-      message: `Save itemized billing for job ${jobCode}? Grand Total: ${formatCurrency(grandTotalPreview)}.`,
+      title: isPaid ? 'Issue Revised Invoice?' : 'Confirm Billing Statement',
+      message: isPaid
+        ? `This invoice is paid and finalized. Saving changes will issue a revised invoice (e.g. ${billing.invoice_code}-R1) and mark the original invoice as amended. Grand Total: ${formatCurrency(grandTotalPreview)}. Continue?`
+        : `Save itemized billing for job ${jobCode}? Grand Total: ${formatCurrency(grandTotalPreview)}.`,
       isDestructive: false,
       onConfirm: async () => {
         setConfirmModal(null);
-        await executeSaveBilling();
+        await executeSaveBilling(isPaid);
       }
     });
   };
@@ -701,12 +711,12 @@ export function JobBillingCard({
                 variant="outline"
                 onClick={handleSaveBilling}
                 isLoading={billingSaving}
-                disabled={billingSaving || billing?.status === 'paid'}
+                disabled={billingSaving}
                 leftIcon={<Save size={15} />}
                 className="w-full h-9 text-xs font-semibold justify-center"
-                title={billing?.status === 'paid' ? 'Bill Paid & Locked' : billing?.id ? 'Update Bill' : 'Save Bill'}
+                title={billing?.status === 'paid' ? 'Revise Bill' : billing?.id ? 'Update Bill' : 'Save Bill'}
               >
-                <span className="truncate">{billing?.status === 'paid' ? 'Bill Paid & Locked' : billing?.id ? 'Update Bill' : 'Save Bill'}</span>
+                <span className="truncate">{billing?.status === 'paid' ? 'Revise Bill' : billing?.id ? 'Update Bill' : 'Save Bill'}</span>
               </Button>
             </div>
           </div>
