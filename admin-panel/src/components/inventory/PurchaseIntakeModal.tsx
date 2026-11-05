@@ -352,6 +352,7 @@ export default function PurchaseIntakeModal({
         selling_rate: Number(it.selling_rate) || 0,
         is_serial_tracked: it.is_serial_tracked,
         serials: it.is_serial_tracked ? it.serials : [],
+        serial_numbers: it.is_serial_tracked ? it.serials : [],
       }));
 
       const { data, error: rpcErr } = await supabase.rpc('log_multi_item_purchase', {

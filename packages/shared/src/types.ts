@@ -469,6 +469,7 @@ export interface MultiItemPurchaseLinePayload {
   selling_rate: number;
   is_serial_tracked: boolean;
   serials: string[];
+  serial_numbers?: string[];
 }
 
 export interface MultiItemPurchasePayload {
